@@ -31,13 +31,12 @@ export default function App() {
   const [settings, setSettings] = useState<AppSettings>({
     siteName: 'Trip Sea Tour Phuket',
     companyName: 'บริษัท ทริปซีทัวร์ ภูเก็ต จำกัด',
-    promptPayId: '0812345678',
+    promptPayId: '0979241399',
     promptPayName: 'บริษัท ทริปซีทัวร์ ภูเก็ต จำกัด',
     lineNotifyToken: 'SIMULATED_LINE_NOTIFY_TOKEN_XYZ123',
-    lineOaId: '@tripseatourphuket',
-    contactPhone: '+66 (0) 76 390 123 / +66 (0) 81 234 5678',
-    contactEmail: 'booking@tripseatourphuket.com',
-    address: '124/8 หมู่ 5 ต.รัษฎา อ.เมือง จ.ภูเก็ต 83000'
+    lineOaId: '@056hxinu',
+    contactPhone: '+66 (0) 62 681 6494 / +66 (0) 97 924 1399',
+    contactEmail: 'tripseatourphuket@gmail.com',
   });
   const [lineLogs, setLineLogs] = useState<LineNotificationLog[]>([]);
 

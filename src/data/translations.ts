@@ -90,7 +90,7 @@ export const translations: Record<Language, Record<string, string>> = {
     // Footer & Contact
     bestServiceGuarantee: 'รับประกันบริการคุณภาพ ความปลอดภัยสูง ไกด์มืออาชีพ',
     instantConfirmation: 'ยืนยันตั๋วพร้อมเอกสาร Voucher ทันทีหลังโอนชำระเงิน',
-    addressText: 'ทริปซีทัวร์ ภูเก็ต - Trip Sea Tour Phuket 124/8 หมู่ 5 ต.รัษฎา อ.เมือง จ.ภูเก็ต 83000',
+    addressText: 'ทริปซีทัวร์ ภูเก็ต - Trip Sea Tour Phuket',
     callUs: 'โทรสอบถาม',
     lineOfficial: 'LINE Official Account',
     copyright: '© 2026 Trip Sea Tour Phuket. All rights reserved.'
@@ -181,7 +181,7 @@ export const translations: Record<Language, Record<string, string>> = {
     
     bestServiceGuarantee: 'Guaranteed Quality Service & Professional Guides',
     instantConfirmation: 'Instant e-Voucher confirmation upon payment verification',
-    addressText: 'Trip Sea Tour Phuket, 124/8 Moo 5, Ratsada, Muang, Phuket 83000 Thailand',
+    addressText: 'Trip Sea Tour Phuket',
     callUs: 'Call Us',
     lineOfficial: 'LINE Official',
     copyright: '© 2026 Trip Sea Tour Phuket. All rights reserved.'
@@ -272,7 +272,7 @@ export const translations: Record<Language, Record<string, string>> = {
     
     bestServiceGuarantee: '品质保障 导游全程优质服务',
     instantConfirmation: '确认支付后快速发放电子确认单',
-    addressText: 'Trip Sea Tour Phuket, 124/8 Moo 5, Ratsada, Muang, Phuket 83000 Thailand',
+    addressText: 'Trip Sea Tour Phuket',
     callUs: '电话咨询',
     lineOfficial: 'LINE 官方客服',
     copyright: '© 2026 Trip Sea Tour Phuket. 版权所有。'
@@ -363,7 +363,7 @@ export const translations: Record<Language, Record<string, string>> = {
     
     bestServiceGuarantee: 'Гарантия качества и гиды с лицензией',
     instantConfirmation: 'Быстрая выдача ваучера после оплаты',
-    addressText: 'Trip Sea Tour Phuket, 124/8 Moo 5, Ratsada, Muang, Phuket 83000 Thailand',
+    addressText: 'Trip Sea Tour Phuket',
     callUs: 'Позвонить',
     lineOfficial: 'LINE Official',
     copyright: '© 2026 Trip Sea Tour Phuket. Все права защищены.'

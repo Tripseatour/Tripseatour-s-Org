@@ -558,14 +558,13 @@ export const initialCustomers: Customer[] = [
 export const initialSettings: AppSettings = {
   siteName: 'Trip Sea Tour Phuket',
   companyName: 'ทริปซีทัวร์ ภูเก็ต จำกัด (Trip Sea Tour Phuket Co., Ltd.)',
-  promptPayId: '0812345678', // PromptPay Phone Number or Tax ID
+  promptPayId: '0979241399', // PromptPay Phone Number or Tax ID
   promptPayName: 'บริษัท ทริปซีทัวร์ ภูเก็ต จำกัด',
   lineMessagingChannelAccessToken: 'Na3ekdkIyTshDZwZItjOQGv4MXBqo/j6zzXfoES2K6Od6HEjLXDjookdpV5QzuUA6FqXknMZL3MwgiPNmupdAy9oZweKN5QKlTjdloODikwIgrlJEeyrWJW7vAzydq38jHDmKR1NZE58ji2oYNy9VwdB04t89/1O/w1cDnyilFU=',
   lineMessagingUserId: 'C1bb0d71ad5dbb960801dad6bd5208afa',
   lineNotifyToken: 'SIMULATED_LINE_NOTIFY_TOKEN_XYZ123',
-  lineOaId: '@tripseatourphuket',
+  lineOaId: '@056hxinu',
   contactPhone: '+66 (0) 62 681 6494 / +66 (0) 97 924 1399',
   contactEmail: 'tripseatourphuket@gmail.com',
-  address: '124/8 หมู่ 5 ต.รัษฎา อ.เมือง จ.ภูเก็ต 83000 (ท่าเรือรัษฎา)',
   adminPin: '1234'
 };

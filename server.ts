@@ -1,6 +1,7 @@
 import express from 'express';
 import path from 'path';
 import { createServer as createViteServer } from 'vite';
+import { createClient } from '@supabase/supabase-js';
 import { initialTours, initialBookings, initialReviews, initialCustomers, initialSettings } from './src/data/mockData';
 import { Tour, Booking, Review, Customer, AppSettings, LineNotificationLog, SalesStats } from './src/types';
 
@@ -8,9 +9,16 @@ const app = express();
 const PORT = 3000;
 const SITE_URL = process.env.APP_URL || 'https://tripseatour-s-org.vercel.app';
 
+const SUPABASE_URL = process.env.VITE_SUPABASE_URL || process.env.SUPABASE_URL || 'https://tljofqremlconawmtndd.supabase.co';
+const SUPABASE_ANON_KEY = process.env.VITE_SUPABASE_ANON_KEY || process.env.SUPABASE_ANON_KEY || 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InRsam9mcXJlbWxjb25hd210bmRkIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODY2MTE1MTYsImV4cCI6MjEwMjE4NzUxNn0.lUUYnc0jOMl6JU1SS8RLoxZu2mir70qgcO2J8kvSHn0';
+
+const supabase = (SUPABASE_URL && SUPABASE_ANON_KEY)
+  ? createClient(SUPABASE_URL, SUPABASE_ANON_KEY)
+  : null;
+
 app.use(express.json({ limit: '10mb' }));
 
-// Memory DB State
+// Memory DB State with Supabase persistence
 let tours: Tour[] = [...initialTours];
 let bookings: Booking[] = [...initialBookings];
 let reviews: Review[] = [...initialReviews];
@@ -41,6 +49,144 @@ let lineLogs: LineNotificationLog[] = [
     timestamp: new Date().toISOString()
   }
 ];
+
+let isStateLoaded = false;
+
+async function loadStateFromSupabase() {
+  if (!supabase) return;
+  try {
+    // 1. Settings
+    const { data: settingsData } = await supabase.from('settings').select('*').limit(1);
+    if (settingsData && settingsData.length > 0) {
+      const s = settingsData[0];
+      settings = {
+        siteName: s.site_name || settings.siteName,
+        companyName: s.company_name || settings.companyName,
+        promptPayId: s.promptpay_id || settings.promptPayId,
+        promptPayName: s.promptpay_name || settings.promptPayName,
+        lineMessagingChannelAccessToken: s.line_messaging_channel_access_token || s.line_notify_token || settings.lineMessagingChannelAccessToken,
+        lineMessagingUserId: s.line_messaging_user_id || settings.lineMessagingUserId,
+        lineNotifyToken: s.line_notify_token || settings.lineNotifyToken,
+        lineOaId: s.line_oa_id || settings.lineOaId,
+        contactPhone: s.contact_phone || settings.contactPhone,
+        contactEmail: s.contact_email || settings.contactEmail,
+        address: s.address || settings.address,
+        adminPin: s.admin_pin || settings.adminPin
+      };
+    } else {
+      const { data: kvSettings } = await supabase.from('app_store').select('value').eq('key', 'settings').single();
+      if (kvSettings && kvSettings.value) settings = JSON.parse(kvSettings.value);
+    }
+
+    // 2. Tours
+    const { data: kvTours } = await supabase.from('app_store').select('value').eq('key', 'tours').single();
+    if (kvTours && kvTours.value) {
+      tours = JSON.parse(kvTours.value);
+    }
+
+    // 3. Bookings
+    const { data: bkData } = await supabase.from('bookings').select('*').order('created_at', { ascending: false });
+    if (bkData && bkData.length > 0) {
+      bookings = bkData.map((b: any) => ({
+        id: b.id,
+        bookingRef: b.booking_ref,
+        tourId: b.tour_id,
+        tourTitle: b.tour_title,
+        tourImage: b.tour_image || '',
+        customerName: b.customer_name,
+        customerEmail: b.customer_email,
+        customerPhone: b.customer_phone,
+        customerLineId: b.customer_line_id,
+        nationality: b.nationality || 'Thai',
+        travelDate: b.travel_date,
+        pickupHotel: b.pickup_hotel,
+        pickupZone: b.pickup_zone,
+        roomNumber: b.room_number,
+        specialRequests: b.special_requests,
+        adults: Number(b.adults) || 1,
+        children: Number(b.children) || 0,
+        infants: Number(b.infants) || 0,
+        totalAmount: Number(b.total_amount) || 0,
+        paymentMethod: b.payment_method || 'promptpay',
+        promptPayIdUsed: b.promptpay_id_used,
+        paymentStatus: b.payment_status || 'pending',
+        orderStatus: b.order_status || 'pending',
+        slipUrl: b.slip_url,
+        slipUploadedAt: b.slip_uploaded_at,
+        paidAt: b.paid_at,
+        createdAt: b.created_at,
+        lineNotifySent: b.line_notify_sent,
+        reminderSent: b.reminder_sent,
+        notes: b.notes
+      }));
+    } else {
+      const { data: kvBookings } = await supabase.from('app_store').select('value').eq('key', 'bookings').single();
+      if (kvBookings && kvBookings.value) bookings = JSON.parse(kvBookings.value);
+    }
+
+    // 4. Reviews
+    const { data: kvReviews } = await supabase.from('app_store').select('value').eq('key', 'reviews').single();
+    if (kvReviews && kvReviews.value) reviews = JSON.parse(kvReviews.value);
+
+    // 5. Customers
+    const { data: kvCustomers } = await supabase.from('app_store').select('value').eq('key', 'customers').single();
+    if (kvCustomers && kvCustomers.value) customers = JSON.parse(kvCustomers.value);
+
+  } catch (err) {
+    console.error('Error loading state from Supabase:', err);
+  }
+}
+
+async function persistState(key: 'tours' | 'bookings' | 'settings' | 'reviews' | 'customers') {
+  if (!supabase) return;
+  try {
+    let val = '';
+    if (key === 'tours') val = JSON.stringify(tours);
+    if (key === 'bookings') val = JSON.stringify(bookings);
+    if (key === 'settings') val = JSON.stringify(settings);
+    if (key === 'reviews') val = JSON.stringify(reviews);
+    if (key === 'customers') val = JSON.stringify(customers);
+
+    try {
+      await supabase.from('app_store').upsert({ key, value: val, updated_at: new Date().toISOString() }, { onConflict: 'key' });
+    } catch (e) {
+      // Ignore if app_store table not present
+    }
+
+    if (key === 'settings') {
+      try {
+        await supabase.from('settings').upsert({
+          id: 1,
+          site_name: settings.siteName,
+          company_name: settings.companyName,
+          promptpay_id: settings.promptPayId,
+          promptpay_name: settings.promptPayName,
+          line_messaging_channel_access_token: settings.lineMessagingChannelAccessToken,
+          line_messaging_user_id: settings.lineMessagingUserId,
+          line_notify_token: settings.lineNotifyToken,
+          line_oa_id: settings.lineOaId,
+          contact_phone: settings.contactPhone,
+          contact_email: settings.contactEmail,
+          address: settings.address,
+          updated_at: new Date().toISOString()
+        }, { onConflict: 'id' });
+      } catch (e) {
+        // Ignore if settings table not present
+      }
+    }
+  } catch (err) {
+    console.error(`Error persisting ${key} to Supabase:`, err);
+  }
+}
+
+// Middleware to ensure persistent state is loaded on every API call on Vercel
+app.use(async (req, res, next) => {
+  if (!isStateLoaded && supabase) {
+    await loadStateFromSupabase();
+    isStateLoaded = true;
+  }
+  next();
+});
 
 // Helper: Trigger LINE Notification via Messaging API
 async function sendLineNotification(message: string, bookingRef: string = 'N/A', type: 'NEW_ORDER' | 'PAYMENT_VERIFIED' | 'ORDER_CONFIRMED' | 'REMINDER_24H' | 'TEST' = 'NEW_ORDER') {
@@ -152,30 +298,33 @@ app.get('/api/tours', (req, res) => {
   res.json(tours);
 });
 
-app.post('/api/tours', (req, res) => {
+app.post('/api/tours', async (req, res) => {
   const newTour: Tour = {
     ...req.body,
     id: `tour-${Date.now()}`,
     slug: req.body.slug || `tour-${Date.now()}`
   };
   tours.unshift(newTour);
+  await persistState('tours');
   res.json(newTour);
 });
 
-app.put('/api/tours/:id', (req, res) => {
+app.put('/api/tours/:id', async (req, res) => {
   const { id } = req.params;
   const index = tours.findIndex(t => t.id === id);
   if (index !== -1) {
     tours[index] = { ...tours[index], ...req.body };
+    await persistState('tours');
     res.json(tours[index]);
   } else {
     res.status(404).json({ error: 'Tour not found' });
   }
 });
 
-app.delete('/api/tours/:id', (req, res) => {
+app.delete('/api/tours/:id', async (req, res) => {
   const { id } = req.params;
   tours = tours.filter(t => t.id !== id);
+  await persistState('tours');
   res.json({ success: true, id });
 });
 
@@ -259,6 +408,9 @@ app.post('/api/bookings', async (req, res) => {
   await sendLineNotification(lineMsg, bookingRef, 'NEW_ORDER');
   newBooking.lineNotifySent = true;
 
+  await persistState('bookings');
+  await persistState('customers');
+
   res.json(newBooking);
 });
 
@@ -281,6 +433,7 @@ app.post('/api/bookings/:id/upload-slip', async (req, res) => {
     `🌐 ตรวจสอบที่: ${SITE_URL}`;
 
   await sendLineNotification(msg, booking.bookingRef, 'NEW_ORDER');
+  await persistState('bookings');
 
   res.json(booking);
 });
@@ -311,16 +464,19 @@ app.put('/api/bookings/:id/status', async (req, res) => {
     await sendLineNotification(msg, booking.bookingRef, 'PAYMENT_VERIFIED');
   }
 
+  await persistState('bookings');
+
   res.json(booking);
 });
 
 // Delete Booking Order API
-app.delete('/api/bookings/:id', (req, res) => {
+app.delete('/api/bookings/:id', async (req, res) => {
   const { id } = req.params;
   const initialLength = bookings.length;
   bookings = bookings.filter(b => b.id !== id && b.bookingRef !== id);
 
   if (bookings.length < initialLength) {
+    await persistState('bookings');
     res.json({ success: true, message: 'Deleted booking successfully' });
   } else {
     res.status(404).json({ success: false, error: 'Booking not found' });
@@ -332,7 +488,7 @@ app.get('/api/reviews', (req, res) => {
   res.json(reviews);
 });
 
-app.post('/api/reviews', (req, res) => {
+app.post('/api/reviews', async (req, res) => {
   const { tourId, userName, rating, comment, nationality, photo } = req.body;
   const newRev: Review = {
     id: `rev-${Date.now()}`,
@@ -355,18 +511,22 @@ app.post('/api/reviews', (req, res) => {
     const avg = tourRevs.reduce((acc, curr) => acc + curr.rating, 0) / tourRevs.length;
     tour.rating = Number(avg.toFixed(2));
     tour.reviewCount = tourRevs.length;
+    await persistState('tours');
   }
+
+  await persistState('reviews');
 
   res.json(newRev);
 });
 
-app.put('/api/reviews/:id/reply', (req, res) => {
+app.put('/api/reviews/:id/reply', async (req, res) => {
   const { id } = req.params;
   const { reply } = req.body;
   const rev = reviews.find(r => r.id === id);
   if (rev) {
     rev.adminReply = reply;
     rev.adminReplyDate = new Date().toISOString().split('T')[0];
+    await persistState('reviews');
     res.json(rev);
   } else {
     res.status(404).json({ error: 'Review not found' });
@@ -439,8 +599,9 @@ app.get('/api/settings', (req, res) => {
   res.json(settings);
 });
 
-app.put('/api/settings', (req, res) => {
+app.put('/api/settings', async (req, res) => {
   settings = { ...settings, ...req.body };
+  await persistState('settings');
   res.json(settings);
 });
 
