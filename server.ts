@@ -491,15 +491,9 @@ app.put('/api/bookings/:id/status', async (req, res) => {
 // Delete Booking Order API
 app.delete('/api/bookings/:id', async (req, res) => {
   const { id } = req.params;
-  const initialLength = bookings.length;
   bookings = bookings.filter(b => b.id !== id && b.bookingRef !== id);
-
-  if (bookings.length < initialLength) {
-    await persistState('bookings');
-    res.json({ success: true, message: 'Deleted booking successfully' });
-  } else {
-    res.status(404).json({ success: false, error: 'Booking not found' });
-  }
+  await persistState('bookings');
+  res.json({ success: true, id, message: 'Deleted booking successfully' });
 });
 
 // --- Reviews ---

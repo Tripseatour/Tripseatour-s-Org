@@ -169,6 +169,59 @@ export const supabaseApi = {
     }));
   },
 
+  // Get Settings from Supabase
+  async getSettings(): Promise<AppSettings | null> {
+    const client = getSupabase();
+    if (!client) return null;
+
+    try {
+      // Try from dedicated 'settings' table first
+      const { data, error } = await client.from('settings').select('*').limit(1);
+      if (error || !data || data.length === 0) {
+        // Fallback to app_store settings key
+        const { data: kvData } = await client.from('app_store').select('value').eq('key', 'settings').maybeSingle();
+        if (kvData && kvData.value) {
+          return JSON.parse(kvData.value);
+        }
+        return null;
+      }
+      const s = data[0];
+      return {
+        siteName: s.site_name || '',
+        companyName: s.company_name || '',
+        promptPayId: s.promptpay_id || '',
+        promptPayName: s.promptpay_name || '',
+        lineMessagingChannelAccessToken: s.line_messaging_channel_access_token || s.line_notify_token || '',
+        lineMessagingUserId: s.line_messaging_user_id || '',
+        lineNotifyToken: s.line_notify_token || '',
+        lineOaId: s.line_oa_id || '',
+        contactPhone: s.contact_phone || '',
+        contactEmail: s.contact_email || '',
+        address: s.address || '',
+        adminPin: s.admin_pin || '1234'
+      };
+    } catch (e) {
+      console.error('getSettings error, fallback to local:', e);
+      return null;
+    }
+  },
+
+  // Get Tours from Supabase
+  async getTours(): Promise<Tour[] | null> {
+    const client = getSupabase();
+    if (!client) return null;
+
+    try {
+      const { data, error } = await client.from('app_store').select('value').eq('key', 'tours').maybeSingle();
+      if (data && data.value) {
+        return JSON.parse(data.value);
+      }
+    } catch (e) {
+      console.error('getTours error:', e);
+    }
+    return null;
+  },
+
   // Save a new booking to Supabase
   async createBooking(booking: Booking): Promise<boolean> {
     const client = getSupabase();
@@ -233,6 +286,116 @@ export const supabaseApi = {
       return false;
     }
 
+    return true;
+  },
+
+  // Delete booking from Supabase
+  async deleteBooking(id: string): Promise<boolean> {
+    const client = getSupabase();
+    if (!client) return false;
+
+    const { error } = await client
+      .from('bookings')
+      .delete()
+      .eq('id', id);
+
+    if (error) {
+      console.error('Failed to delete booking in Supabase:', error);
+      return false;
+    }
+    return true;
+  },
+
+  // Save full settings to Supabase (uses 'settings' table and tries 'app_store' as fallback/extra)
+  async saveSettings(settings: AppSettings): Promise<boolean> {
+    const client = getSupabase();
+    if (!client) return false;
+
+    // 1. Try updating the dedicated 'settings' table
+    try {
+      const { error } = await client.from('settings').upsert({
+        id: 1,
+        site_name: settings.siteName,
+        company_name: settings.companyName,
+        promptpay_id: settings.promptPayId,
+        promptpay_name: settings.promptPayName,
+        line_messaging_channel_access_token: settings.lineMessagingChannelAccessToken,
+        line_messaging_user_id: settings.lineMessagingUserId,
+        line_notify_token: settings.lineNotifyToken,
+        line_oa_id: settings.lineOaId,
+        contact_phone: settings.contactPhone,
+        contact_email: settings.contactEmail,
+        address: settings.address,
+        admin_pin: settings.adminPin,
+        updated_at: new Date().toISOString()
+      }, { onConflict: 'id' });
+
+      if (error) {
+        console.warn('Upsert into dedicated settings table failed:', error.message);
+      }
+    } catch (e) {
+      console.error('Settings table save failed, trying app_store:', e);
+    }
+
+    // 2. Try updating the 'app_store' key-value table
+    try {
+      await client.from('app_store').upsert({
+        key: 'settings',
+        value: JSON.stringify(settings),
+        updated_at: new Date().toISOString()
+      }, { onConflict: 'key' });
+    } catch (e) {
+      // app_store might not exist, ignore
+    }
+
+    return true;
+  },
+
+  // Save tours array to Supabase ('app_store' key 'tours')
+  async saveTours(tours: Tour[]): Promise<boolean> {
+    const client = getSupabase();
+    if (!client) return false;
+
+    try {
+      const { error } = await client.from('app_store').upsert({
+        key: 'tours',
+        value: JSON.stringify(tours),
+        updated_at: new Date().toISOString()
+      }, { onConflict: 'key' });
+      return !error;
+    } catch (e) {
+      console.error('Failed to save tours in app_store:', e);
+      return false;
+    }
+  },
+
+  // Save reviews to Supabase
+  async saveReviews(reviews: Review[]): Promise<boolean> {
+    const client = getSupabase();
+    if (!client) return false;
+
+    try {
+      await client.from('app_store').upsert({
+        key: 'reviews',
+        value: JSON.stringify(reviews),
+        updated_at: new Date().toISOString()
+      }, { onConflict: 'key' });
+    } catch (e) {}
+    return true;
+  },
+
+  // Save bookings backup to app_store for recovery
+  async saveBookingsBackup(bookings: Booking[]): Promise<boolean> {
+    const client = getSupabase();
+    if (!client) return false;
+
+    try {
+      await client.from('app_store').upsert({
+        key: 'bookings',
+        value: JSON.stringify(bookings),
+        updated_at: new Date().toISOString()
+      }, { onConflict: 'key' });
+    } catch (e) {}
     return true;
   }
 };

@@ -60,6 +60,8 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
   const [editingTour, setEditingTour] = useState<Tour | null>(null);
   const [isTourModalOpen, setIsTourModalOpen] = useState(false);
   const [testLineMsg, setTestLineMsg] = useState('🧪 [ทดสอบการแจ้งเตือน LINE Notify จากระบบแอดมิน]\n🌐 เว็บไซต์: https://tripseatour-s-org.vercel.app');
+  const [deleteBookingTarget, setDeleteBookingTarget] = useState<Booking | null>(null);
+  const [deleteTourTarget, setDeleteTourTarget] = useState<Tour | null>(null);
 
   // Settings State
   const [formSettings, setFormSettings] = useState<AppSettings>({ ...settings });
@@ -631,11 +633,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                           {onDeleteBooking && (
                             <button
                               type="button"
-                              onClick={() => {
-                                if (confirm(`คุณต้องการลบออเดอร์คำสั่งซื้อรหัส ${b.bookingRef} (${b.customerName}) ใช่หรือไม่?`)) {
-                                  onDeleteBooking(b.id);
-                                }
-                              }}
+                              onClick={() => setDeleteBookingTarget(b)}
                               className="w-full mt-1 bg-rose-950/80 hover:bg-rose-900 text-rose-300 border border-rose-800/80 font-bold px-2 py-1 rounded-lg text-[10px] transition flex items-center justify-center gap-1 shadow-sm"
                               title="ลบออเดอร์นี้ออกจากระบบ"
                             >
@@ -722,7 +720,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                     </button>
 
                     <button
-                      onClick={() => onDeleteTour(t.id)}
+                      onClick={() => setDeleteTourTarget(t)}
                       className="bg-rose-500/20 text-rose-300 border border-rose-500/30 hover:bg-rose-500/30 py-2 rounded-xl text-xs font-semibold transition flex items-center justify-center gap-1"
                     >
                       <Trash2 className="w-3.5 h-3.5 text-rose-400" />
@@ -1141,6 +1139,94 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                 className="bg-slate-800 hover:bg-slate-700 text-slate-300 px-6 py-2 rounded-xl text-xs font-bold transition"
               >
                 ปิดหน้าต่างตั๋ว
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Custom Confirm Delete Booking Modal */}
+      {deleteBookingTarget && (
+        <div className="fixed inset-0 z-50 bg-slate-950/85 backdrop-blur-md flex items-center justify-center p-4 animate-in fade-in">
+          <div className="bg-slate-900 border border-rose-800/80 max-w-md w-full rounded-3xl p-6 shadow-2xl relative space-y-4 text-center">
+            <div className="w-12 h-12 bg-rose-500/20 rounded-full flex items-center justify-center mx-auto border border-rose-500/40 text-rose-400">
+              <Trash2 className="w-6 h-6" />
+            </div>
+            <div>
+              <h3 className="text-lg font-extrabold text-white">ยืนยันลบคำสั่งซื้อทัวร์</h3>
+              <p className="text-xs text-slate-300 mt-1 leading-relaxed">
+                คุณต้องการลบออเดอร์ <strong className="text-cyan-300 font-mono">#{deleteBookingTarget.bookingRef}</strong> คุณ <strong className="text-amber-300">{deleteBookingTarget.customerName}</strong> ใช่หรือไม่?
+              </p>
+              <p className="text-[11px] text-rose-400 mt-2 bg-rose-950/50 p-2.5 rounded-xl border border-rose-900">
+                ⚠️ การลบนี้จะมีผลทันทีในระบบและฐานข้อมูล
+              </p>
+            </div>
+
+            <div className="grid grid-cols-2 gap-3 pt-2">
+              <button
+                type="button"
+                onClick={() => setDeleteBookingTarget(null)}
+                className="w-full bg-slate-800 hover:bg-slate-700 text-slate-300 font-bold py-2.5 rounded-xl text-xs transition border border-slate-700"
+              >
+                ยกเลิก
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  const targetId = deleteBookingTarget.id;
+                  setDeleteBookingTarget(null);
+                  if (onDeleteBooking) {
+                    onDeleteBooking(targetId);
+                  }
+                }}
+                className="w-full bg-rose-600 hover:bg-rose-500 text-white font-bold py-2.5 rounded-xl text-xs transition shadow-lg shadow-rose-900/40 flex items-center justify-center gap-1.5"
+              >
+                <Trash2 className="w-4 h-4" />
+                <span>ยืนยันลบออเดอร์</span>
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Custom Confirm Delete Tour Modal */}
+      {deleteTourTarget && (
+        <div className="fixed inset-0 z-50 bg-slate-950/85 backdrop-blur-md flex items-center justify-center p-4 animate-in fade-in">
+          <div className="bg-slate-900 border border-rose-800/80 max-w-md w-full rounded-3xl p-6 shadow-2xl relative space-y-4 text-center">
+            <div className="w-12 h-12 bg-rose-500/20 rounded-full flex items-center justify-center mx-auto border border-rose-500/40 text-rose-400">
+              <Trash2 className="w-6 h-6" />
+            </div>
+            <div>
+              <h3 className="text-lg font-extrabold text-white">ยืนยันลบโปรแกรมทัวร์</h3>
+              <p className="text-xs text-slate-300 mt-1 leading-relaxed">
+                คุณต้องการลบโปรแกรมทัวร์ <strong className="text-cyan-300">{deleteTourTarget.title.TH}</strong> ใช่หรือไม่?
+              </p>
+              <p className="text-[11px] text-rose-400 mt-2 bg-rose-950/50 p-2.5 rounded-xl border border-rose-900">
+                ⚠️ รายการทัวร์จะถูกลบออกจากหน้าเว็บและฐานข้อมูล
+              </p>
+            </div>
+
+            <div className="grid grid-cols-2 gap-3 pt-2">
+              <button
+                type="button"
+                onClick={() => setDeleteTourTarget(null)}
+                className="w-full bg-slate-800 hover:bg-slate-700 text-slate-300 font-bold py-2.5 rounded-xl text-xs transition border border-slate-700"
+              >
+                ยกเลิก
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  const targetId = deleteTourTarget.id;
+                  setDeleteTourTarget(null);
+                  if (onDeleteTour) {
+                    onDeleteTour(targetId);
+                  }
+                }}
+                className="w-full bg-rose-600 hover:bg-rose-500 text-white font-bold py-2.5 rounded-xl text-xs transition shadow-lg shadow-rose-900/40 flex items-center justify-center gap-1.5"
+              >
+                <Trash2 className="w-4 h-4" />
+                <span>ยืนยันลบทัวร์</span>
               </button>
             </div>
           </div>

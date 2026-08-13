@@ -4,6 +4,7 @@ import { Tour, Booking, Language, AppSettings } from '../types';
 import { translations } from '../data/translations';
 import { generatePromptPayQRDataUrl } from '../utils/promptpay';
 import { TicketVoucher } from './TicketVoucher';
+import { supabaseApi } from '../lib/supabase';
 
 interface BookingModalProps {
   tour: Tour | null;
@@ -109,25 +110,78 @@ export const BookingModal: React.FC<BookingModalProps> = ({
         totalAmount,
       };
 
-      const res = await fetch('/api/bookings', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload),
-      });
+      let bookingData: Booking;
 
-      if (!res.ok) throw new Error('Booking request failed');
+      try {
+        const res = await fetch('/api/bookings', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload),
+        });
 
-      const bookingData: Booking = await res.json();
+        if (!res.ok) throw new Error('Booking request failed');
+        bookingData = await res.json();
+      } catch (apiErr) {
+        console.warn('Vercel API endpoint for booking creation failed, falling back to direct client-side Supabase write:', apiErr);
+        
+        // Generate robust booking payload client-side
+        const refNum = Math.floor(1000 + Math.random() * 9000);
+        const bookingRef = `TST-${new Date().toISOString().slice(0, 7).replace('-', '')}-${refNum}`;
+        
+        bookingData = {
+          id: `bk-${Date.now()}`,
+          bookingRef,
+          tourId: tour.id,
+          tourTitle: tour.title.TH || 'ทัวร์ภูเก็ต',
+          tourImage: tour.images && tour.images.length ? tour.images[0] : '',
+          customerName,
+          customerEmail: customerEmail || 'guest@phukettrip.com',
+          customerPhone,
+          customerLineId,
+          nationality: nationality || 'Thai',
+          travelDate,
+          pickupHotel,
+          pickupZone: pickupZone || 'General Zone',
+          roomNumber,
+          specialRequests,
+          adults: Number(adults) || 1,
+          children: Number(children) || 0,
+          infants: Number(infants) || 0,
+          totalAmount: Number(totalAmount) || 0,
+          paymentMethod: 'promptpay',
+          promptPayIdUsed: settings.promptPayId || '0825257914',
+          paymentStatus: 'pending',
+          orderStatus: 'pending',
+          createdAt: new Date().toISOString(),
+          lineNotifySent: false
+        };
+
+        // Write directly to Supabase client-side
+        const success = await supabaseApi.createBooking(bookingData);
+        if (!success) {
+          throw new Error('Supabase direct booking creation failed');
+        }
+      }
 
       // If slip uploaded, upload slip
       if (slipFile) {
+        bookingData.paymentStatus = 'slip_uploaded';
+        bookingData.slipUrl = slipFile;
+        bookingData.slipUploadedAt = new Date().toISOString();
+
+        // 1. Double-write slip info direct to Supabase
+        await supabaseApi.updateBooking(bookingData.id, {
+          paymentStatus: 'slip_uploaded',
+          slipUrl: slipFile,
+          slipUploadedAt: bookingData.slipUploadedAt
+        }).catch(() => {});
+
+        // 2. Fallback push to API in background
         await fetch(`/api/bookings/${bookingData.id}/upload-slip`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ slipUrl: slipFile }),
-        });
-        bookingData.paymentStatus = 'slip_uploaded';
-        bookingData.slipUrl = slipFile;
+        }).catch(() => {});
       }
 
       setCompletedBooking(bookingData);
