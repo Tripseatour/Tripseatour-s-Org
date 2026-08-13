@@ -1,6 +1,5 @@
 import express from 'express';
 import path from 'path';
-import { createServer as createViteServer } from 'vite';
 import { createClient } from '@supabase/supabase-js';
 import { initialTours, initialBookings, initialReviews, initialCustomers, initialSettings } from './src/data/mockData';
 import { Tour, Booking, Review, Customer, AppSettings, LineNotificationLog, SalesStats } from './src/types';
@@ -826,6 +825,7 @@ app.get('/api/line/logs', (req, res) => {
 // Vite & Static file serving
 async function startServer() {
   if (process.env.NODE_ENV !== 'production') {
+    const { createServer: createViteServer } = await import('vite');
     const vite = await createViteServer({
       server: { middlewareMode: true },
       appType: 'spa',
