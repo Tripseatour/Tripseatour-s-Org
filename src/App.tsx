@@ -188,6 +188,12 @@ export default function App() {
           serverTours = directTours;
         }
       }
+      if (!serverCustomers || serverCustomers.length === 0) {
+        const directCustomers = await supabaseApi.getCustomers();
+        if (directCustomers && directCustomers.length > 0) {
+          serverCustomers = directCustomers;
+        }
+      }
 
       // Intelligent merging: Prefer custom edited values, don't overwrite with mock defaults
       let finalTours = initialToursState;
@@ -195,68 +201,157 @@ export default function App() {
       let finalSettings = initialSettingsState;
       let finalCustomers = initialCustomersState;
 
-      // 1. Settings Merger
-      const isServerSettingsDefault = !serverSettings || 
-        (serverSettings.promptPayId === '0812345678' && serverSettings.companyName === 'บริษัท ทริป ซี ทัวร์ จำกัด (สำนักงานใหญ่)');
-      const isLocalSettingsCustom = initialSettingsState.promptPayId !== '0812345678' || 
-        initialSettingsState.companyName !== 'บริษัท ทริป ซี ทัวร์ จำกัด (สำนักงานใหญ่)';
+      // --- Helper Functions to Detect Default Mock State vs Customized State ---
+      const isSettingsDefault = (s: AppSettings | null | undefined) => {
+        if (!s) return true;
+        return (
+          (!s.companyName || s.companyName === 'บริษัท ทริป ซี ทัวร์ จำกัด (สำนักงานใหญ่)') &&
+          (!s.promptPayId || s.promptPayId === '0812345678') &&
+          (!s.address || s.address.includes('123/45 ถนนรัษฎา')) &&
+          (!s.contactPhone || s.contactPhone === '081-234-5678') &&
+          (!s.lineNotifyToken || s.lineNotifyToken === 'MOCK_LINE_NOTIFY_TOKEN_1234567890')
+        );
+      };
 
-      if (isServerSettingsDefault && isLocalSettingsCustom) {
+      const isToursDefault = (tList: Tour[] | null | undefined) => {
+        if (!tList || tList.length === 0) return true;
+        if (tList.length !== 3) return false;
+        const defaultTitles = [
+          'เกาะพีพี - มายา - ไข่ (Speedboat)',
+          'อ่าวพังงา - เจมส์บอนด์ (Yacht Catamaran)',
+          'เกาะราชา - เกาะเฮ - ซันเซ็ท (Yacht Catamaran)'
+        ];
+        return tList.every(t => defaultTitles.includes(t.title.TH) || t.id === 'tour-1' || t.id === 'tour-2' || t.id === 'tour-3');
+      };
+
+      const isBookingsDefault = (bList: Booking[] | null | undefined) => {
+        if (!bList || bList.length === 0) return true;
+        if (bList.length > 2) return false;
+        return bList.every(b => b.id === 'bk-1' || b.id === 'bk-2');
+      };
+
+      const isCustomersDefault = (cList: Customer[] | null | undefined) => {
+        if (!cList || cList.length === 0) return true;
+        if (cList.length > 2) return false;
+        return cList.every(c => c.id === 'cust-1' || c.id === 'cust-2');
+      };
+
+      // --- 1. Settings Merger ---
+      const isLocalSettingsCustom = !isSettingsDefault(initialSettingsState);
+      const isServerSettingsCustom = serverSettings ? !isSettingsDefault(serverSettings) : false;
+
+      if (isLocalSettingsCustom && !isServerSettingsCustom) {
         finalSettings = initialSettingsState;
         setSettings(initialSettingsState);
-      } else if (serverSettings) {
-        finalSettings = serverSettings;
-        setSettings(serverSettings);
+        // Self-heal: upload custom local settings back to Supabase
+        supabaseApi.saveSettings(initialSettingsState).catch(() => {});
+      } else if (isServerSettingsCustom && !isLocalSettingsCustom) {
+        finalSettings = serverSettings!;
+        setSettings(serverSettings!);
         localStorage.setItem('tst_settings', JSON.stringify(serverSettings));
+      } else if (isServerSettingsCustom && isLocalSettingsCustom) {
+        // Both custom: Keep local device edits, update Supabase backup
+        finalSettings = initialSettingsState;
+        setSettings(initialSettingsState);
+        supabaseApi.saveSettings(initialSettingsState).catch(() => {});
+      } else {
+        // Both are default or empty
+        if (serverSettings) {
+          finalSettings = serverSettings;
+          setSettings(serverSettings);
+          localStorage.setItem('tst_settings', JSON.stringify(serverSettings));
+        }
       }
 
-      // 2. Tours Merger
-      const isServerToursDefault = !serverTours || 
-        (serverTours.length === 3 && serverTours.every((t: any) => t.id === 'tour-1' || t.id === 'tour-2' || t.id === 'tour-3'));
-      const isLocalToursCustom = initialToursState.length !== 3 || 
-        initialToursState.some((t: any) => t.id !== 'tour-1' && t.id !== 'tour-2' && t.id !== 'tour-3');
+      // --- 2. Tours Merger ---
+      const isLocalToursCustom = !isToursDefault(initialToursState);
+      const isServerToursCustom = serverTours ? !isToursDefault(serverTours) : false;
 
-      if (isServerToursDefault && isLocalToursCustom) {
+      if (isLocalToursCustom && !isServerToursCustom) {
         finalTours = initialToursState;
         setTours(initialToursState);
-      } else if (serverTours && serverTours.length > 0) {
-        finalTours = serverTours;
-        setTours(serverTours);
+        // Self-heal
+        supabaseApi.saveTours(initialToursState).catch(() => {});
+      } else if (isServerToursCustom && !isLocalToursCustom) {
+        finalTours = serverTours!;
+        setTours(serverTours!);
         localStorage.setItem('tst_tours', JSON.stringify(serverTours));
+      } else if (isServerToursCustom && isLocalToursCustom) {
+        finalTours = initialToursState;
+        setTours(initialToursState);
+        supabaseApi.saveTours(initialToursState).catch(() => {});
+      } else {
+        if (serverTours && serverTours.length > 0) {
+          finalTours = serverTours;
+          setTours(serverTours);
+          localStorage.setItem('tst_tours', JSON.stringify(serverTours));
+        }
       }
 
-      // 3. Bookings Merger
-      const isServerBookingsDefault = !serverBookings || 
-        (serverBookings.length <= 2 && serverBookings.every((b: any) => b.id === 'bk-1' || b.id === 'bk-2'));
-      const isLocalBookingsCustom = initialBookingsState.length > 2 || 
-        initialBookingsState.some((b: any) => b.id !== 'bk-1' && b.id !== 'bk-2') ||
-        initialBookingsState.some((b: any) => {
-          const defaultBk = b.id === 'bk-1' ? 'pending' : b.id === 'bk-2' ? 'verified' : '';
-          return defaultBk && b.paymentStatus !== defaultBk;
-        });
+      // --- 3. Bookings Merger ---
+      const isLocalBookingsCustom = !isBookingsDefault(initialBookingsState);
+      const isServerBookingsCustom = serverBookings ? !isBookingsDefault(serverBookings) : false;
 
-      if (isServerBookingsDefault && isLocalBookingsCustom) {
+      if (isLocalBookingsCustom && !isServerBookingsCustom) {
         finalBookings = initialBookingsState;
         setBookings(initialBookingsState);
-      } else if (serverBookings) {
-        finalBookings = serverBookings;
-        setBookings(serverBookings);
+        // Self-heal
+        supabaseApi.saveBookingsBackup(initialBookingsState).catch(() => {});
+      } else if (isServerBookingsCustom && !isLocalBookingsCustom) {
+        finalBookings = serverBookings!;
+        setBookings(serverBookings!);
         localStorage.setItem('tst_bookings', JSON.stringify(serverBookings));
+      } else if (isServerBookingsCustom && isLocalBookingsCustom) {
+        // Combine uniquely by ID/Ref to avoid losing client or server bookings
+        const combined = [...initialBookingsState];
+        serverBookings!.forEach(sb => {
+          if (!combined.some(lb => lb.id === sb.id || lb.bookingRef === sb.bookingRef)) {
+            combined.push(sb);
+          }
+        });
+        finalBookings = combined;
+        setBookings(combined);
+        localStorage.setItem('tst_bookings', JSON.stringify(combined));
+        supabaseApi.saveBookingsBackup(combined).catch(() => {});
+      } else {
+        if (serverBookings) {
+          finalBookings = serverBookings;
+          setBookings(serverBookings);
+          localStorage.setItem('tst_bookings', JSON.stringify(serverBookings));
+        }
       }
 
-      // 4. Customers Merger
-      const isServerCustomersDefault = !serverCustomers || 
-        (serverCustomers.length <= 2 && serverCustomers.every((c: any) => c.id === 'cust-1' || c.id === 'cust-2'));
-      const isLocalCustomersCustom = initialCustomersState.length > 2 || 
-        initialCustomersState.some((c: any) => c.id !== 'cust-1' && c.id !== 'cust-2');
+      // --- 4. Customers Merger ---
+      const isLocalCustomersCustom = !isCustomersDefault(initialCustomersState);
+      const isServerCustomersCustom = serverCustomers ? !isCustomersDefault(serverCustomers) : false;
 
-      if (isServerCustomersDefault && isLocalCustomersCustom) {
+      if (isLocalCustomersCustom && !isServerCustomersCustom) {
         finalCustomers = initialCustomersState;
         setCustomers(initialCustomersState);
-      } else if (serverCustomers) {
-        finalCustomers = serverCustomers;
-        setCustomers(serverCustomers);
+        // Self-heal
+        supabaseApi.saveCustomers(initialCustomersState).catch(() => {});
+      } else if (isServerCustomersCustom && !isLocalCustomersCustom) {
+        finalCustomers = serverCustomers!;
+        setCustomers(serverCustomers!);
         localStorage.setItem('tst_customers', JSON.stringify(serverCustomers));
+      } else if (isServerCustomersCustom && isLocalCustomersCustom) {
+        // Combine customers uniquely
+        const combined = [...initialCustomersState];
+        serverCustomers!.forEach(sc => {
+          if (!combined.some(lc => lc.id === sc.id || lc.email === sc.email)) {
+            combined.push(sc);
+          }
+        });
+        finalCustomers = combined;
+        setCustomers(combined);
+        localStorage.setItem('tst_customers', JSON.stringify(combined));
+        supabaseApi.saveCustomers(combined).catch(() => {});
+      } else {
+        if (serverCustomers) {
+          finalCustomers = serverCustomers;
+          setCustomers(serverCustomers);
+          localStorage.setItem('tst_customers', JSON.stringify(serverCustomers));
+        }
       }
 
       if (serverReviews && serverReviews.length > 0) {

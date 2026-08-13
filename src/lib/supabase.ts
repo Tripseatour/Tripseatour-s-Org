@@ -276,10 +276,15 @@ export const supabaseApi = {
     if (updates.paidAt) payload.paid_at = updates.paidAt;
     if (updates.notes !== undefined) payload.notes = updates.notes;
 
-    const { error } = await client
-      .from('bookings')
-      .update(payload)
-      .eq('id', id);
+    const isUUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id);
+    let query = client.from('bookings').update(payload);
+    if (isUUID) {
+      query = query.eq('id', id);
+    } else {
+      query = query.eq('booking_ref', id);
+    }
+
+    const { error } = await query;
 
     if (error) {
       console.error('Failed to update booking in Supabase:', error);
@@ -294,10 +299,15 @@ export const supabaseApi = {
     const client = getSupabase();
     if (!client) return false;
 
-    const { error } = await client
-      .from('bookings')
-      .delete()
-      .eq('id', id);
+    const isUUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id);
+    let query = client.from('bookings').delete();
+    if (isUUID) {
+      query = query.eq('id', id);
+    } else {
+      query = query.eq('booking_ref', id);
+    }
+
+    const { error } = await query;
 
     if (error) {
       console.error('Failed to delete booking in Supabase:', error);
@@ -415,6 +425,22 @@ export const supabaseApi = {
       console.error('Failed to save customers in app_store:', e);
       return false;
     }
+  },
+
+  // Get Customers from Supabase ('app_store' key 'customers')
+  async getCustomers(): Promise<Customer[] | null> {
+    const client = getSupabase();
+    if (!client) return null;
+
+    try {
+      const { data, error } = await client.from('app_store').select('value').eq('key', 'customers').maybeSingle();
+      if (data && data.value) {
+        return JSON.parse(data.value);
+      }
+    } catch (e) {
+      console.error('getCustomers error:', e);
+    }
+    return null;
   }
 };
 
