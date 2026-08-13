@@ -195,27 +195,65 @@ export default function App() {
       let finalSettings = initialSettingsState;
       let finalCustomers = initialCustomersState;
 
-      if (serverTours && serverTours.length > 0) {
-        finalTours = serverTours;
-        setTours(serverTours);
-        localStorage.setItem('tst_tours', JSON.stringify(serverTours));
-      }
+      // 1. Settings Merger
+      const isServerSettingsDefault = !serverSettings || 
+        (serverSettings.promptPayId === '0812345678' && serverSettings.companyName === 'บริษัท ทริป ซี ทัวร์ จำกัด (สำนักงานใหญ่)');
+      const isLocalSettingsCustom = initialSettingsState.promptPayId !== '0812345678' || 
+        initialSettingsState.companyName !== 'บริษัท ทริป ซี ทัวร์ จำกัด (สำนักงานใหญ่)';
 
-      // Use whichever has more bookings (prevent data loss)
-      if (serverBookings && serverBookings.length >= initialBookingsState.length) {
-        finalBookings = serverBookings;
-        setBookings(serverBookings);
-        localStorage.setItem('tst_bookings', JSON.stringify(serverBookings));
-      }
-
-      // Check if server settings has been customized (not default initial mock values)
-      if (serverSettings && serverSettings.companyName && serverSettings.companyName !== 'บริษัท ทริป ซี ทัวร์ จำกัด (สำนักงานใหญ่)') {
+      if (isServerSettingsDefault && isLocalSettingsCustom) {
+        finalSettings = initialSettingsState;
+        setSettings(initialSettingsState);
+      } else if (serverSettings) {
         finalSettings = serverSettings;
         setSettings(serverSettings);
         localStorage.setItem('tst_settings', JSON.stringify(serverSettings));
       }
 
-      if (serverCustomers && serverCustomers.length >= initialCustomersState.length) {
+      // 2. Tours Merger
+      const isServerToursDefault = !serverTours || 
+        (serverTours.length === 3 && serverTours.every((t: any) => t.id === 'tour-1' || t.id === 'tour-2' || t.id === 'tour-3'));
+      const isLocalToursCustom = initialToursState.length !== 3 || 
+        initialToursState.some((t: any) => t.id !== 'tour-1' && t.id !== 'tour-2' && t.id !== 'tour-3');
+
+      if (isServerToursDefault && isLocalToursCustom) {
+        finalTours = initialToursState;
+        setTours(initialToursState);
+      } else if (serverTours && serverTours.length > 0) {
+        finalTours = serverTours;
+        setTours(serverTours);
+        localStorage.setItem('tst_tours', JSON.stringify(serverTours));
+      }
+
+      // 3. Bookings Merger
+      const isServerBookingsDefault = !serverBookings || 
+        (serverBookings.length <= 2 && serverBookings.every((b: any) => b.id === 'bk-1' || b.id === 'bk-2'));
+      const isLocalBookingsCustom = initialBookingsState.length > 2 || 
+        initialBookingsState.some((b: any) => b.id !== 'bk-1' && b.id !== 'bk-2') ||
+        initialBookingsState.some((b: any) => {
+          const defaultBk = b.id === 'bk-1' ? 'pending' : b.id === 'bk-2' ? 'verified' : '';
+          return defaultBk && b.paymentStatus !== defaultBk;
+        });
+
+      if (isServerBookingsDefault && isLocalBookingsCustom) {
+        finalBookings = initialBookingsState;
+        setBookings(initialBookingsState);
+      } else if (serverBookings) {
+        finalBookings = serverBookings;
+        setBookings(serverBookings);
+        localStorage.setItem('tst_bookings', JSON.stringify(serverBookings));
+      }
+
+      // 4. Customers Merger
+      const isServerCustomersDefault = !serverCustomers || 
+        (serverCustomers.length <= 2 && serverCustomers.every((c: any) => c.id === 'cust-1' || c.id === 'cust-2'));
+      const isLocalCustomersCustom = initialCustomersState.length > 2 || 
+        initialCustomersState.some((c: any) => c.id !== 'cust-1' && c.id !== 'cust-2');
+
+      if (isServerCustomersDefault && isLocalCustomersCustom) {
+        finalCustomers = initialCustomersState;
+        setCustomers(initialCustomersState);
+      } else if (serverCustomers) {
         finalCustomers = serverCustomers;
         setCustomers(serverCustomers);
         localStorage.setItem('tst_customers', JSON.stringify(serverCustomers));

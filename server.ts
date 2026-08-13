@@ -53,8 +53,9 @@ let isStateLoaded = false;
 
 async function loadStateFromSupabase() {
   if (!supabase) return;
+  
+  // 1. Settings
   try {
-    // 1. Settings (Check app_store first for full state)
     const { data: kvSettings } = await supabase.from('app_store').select('value').eq('key', 'settings').maybeSingle();
     if (kvSettings && kvSettings.value) {
       try {
@@ -81,16 +82,24 @@ async function loadStateFromSupabase() {
         };
       }
     }
+  } catch (e) {
+    console.warn('Could not load settings from Supabase:', e);
+  }
 
-    // 2. Tours
+  // 2. Tours
+  try {
     const { data: kvTours } = await supabase.from('app_store').select('value').eq('key', 'tours').maybeSingle();
     if (kvTours && kvTours.value) {
       try {
         tours = JSON.parse(kvTours.value);
       } catch (e) {}
     }
+  } catch (e) {
+    console.warn('Could not load tours from Supabase:', e);
+  }
 
-    // 3. Bookings
+  // 3. Bookings
+  try {
     const { data: kvBookings } = await supabase.from('app_store').select('value').eq('key', 'bookings').maybeSingle();
     if (kvBookings && kvBookings.value) {
       try {
@@ -133,25 +142,32 @@ async function loadStateFromSupabase() {
         }));
       }
     }
+  } catch (e) {
+    console.warn('Could not load bookings from Supabase:', e);
+  }
 
-    // 4. Reviews
+  // 4. Reviews
+  try {
     const { data: kvReviews } = await supabase.from('app_store').select('value').eq('key', 'reviews').maybeSingle();
     if (kvReviews && kvReviews.value) {
       try {
         reviews = JSON.parse(kvReviews.value);
       } catch (e) {}
     }
+  } catch (e) {
+    console.warn('Could not load reviews from Supabase:', e);
+  }
 
-    // 5. Customers
+  // 5. Customers
+  try {
     const { data: kvCustomers } = await supabase.from('app_store').select('value').eq('key', 'customers').maybeSingle();
     if (kvCustomers && kvCustomers.value) {
       try {
         customers = JSON.parse(kvCustomers.value);
       } catch (e) {}
     }
-
-  } catch (err) {
-    console.error('Error loading state from Supabase:', err);
+  } catch (e) {
+    console.warn('Could not load customers from Supabase:', e);
   }
 }
 
