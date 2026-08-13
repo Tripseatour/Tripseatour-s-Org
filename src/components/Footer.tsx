@@ -6,7 +6,7 @@ import { translations } from '../data/translations';
 interface FooterProps {
   currentLang: Language;
   settings: AppSettings;
-  onNavigate: (view: 'home' | 'tours' | 'reviews' | 'admin') => void;
+  onNavigate: (view: 'home' | 'how-to-book' | 'about-me' | 'admin') => void;
 }
 
 export const Footer: React.FC<FooterProps> = ({ currentLang, settings, onNavigate }) => {
@@ -41,32 +41,22 @@ export const Footer: React.FC<FooterProps> = ({ currentLang, settings, onNavigat
           {/* Col 2: Quick Links */}
           <div className="space-y-3">
             <h4 className="text-xs font-bold text-slate-200 uppercase tracking-wider">
-              {t.tours}
+              Menu
             </h4>
             <ul className="space-y-2 text-xs">
               <li>
-                <button onClick={() => onNavigate('tours')} className="hover:text-blue-400 transition">
-                  {t.islandTours}
+                <button onClick={() => onNavigate('home')} className="hover:text-blue-400 text-left transition">
+                  {t.home}
                 </button>
               </li>
               <li>
-                <button onClick={() => onNavigate('tours')} className="hover:text-blue-400 transition">
-                  {t.sunsetCruises}
+                <button onClick={() => onNavigate('how-to-book')} className="hover:text-blue-400 text-left transition">
+                  {t.howToBook}
                 </button>
               </li>
               <li>
-                <button onClick={() => onNavigate('tours')} className="hover:text-blue-400 transition">
-                  {t.luxuryYacht}
-                </button>
-              </li>
-              <li>
-                <button onClick={() => onNavigate('tours')} className="hover:text-blue-400 transition">
-                  {t.ecoWildlife}
-                </button>
-              </li>
-              <li>
-                <button onClick={() => onNavigate('tours')} className="hover:text-blue-400 transition">
-                  {t.sightseeing}
+                <button onClick={() => onNavigate('about-me')} className="hover:text-blue-400 text-left transition">
+                  {t.aboutMe}
                 </button>
               </li>
             </ul>

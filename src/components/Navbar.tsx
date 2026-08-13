@@ -7,7 +7,7 @@ import tripSeaLogo from '../assets/images/trip_sea_tour_logo_1786613886795.jpg';
 interface NavbarProps {
   currentLang: Language;
   onLanguageChange: (lang: Language) => void;
-  onNavigate: (view: 'home' | 'tours' | 'reviews' | 'admin') => void;
+  onNavigate: (view: 'home' | 'how-to-book' | 'about-me' | 'admin') => void;
   activeView: string;
   onOpenLookup: () => void;
   promptPayId: string;
@@ -103,24 +103,24 @@ export const Navbar: React.FC<NavbarProps> = ({
             {t.home}
           </button>
           <button
-            onClick={() => onNavigate('tours')}
+            onClick={() => onNavigate('how-to-book')}
             className={`px-3.5 py-1.5 rounded-lg text-xs font-bold transition ${
-              activeView === 'tours'
+              activeView === 'how-to-book'
                 ? 'bg-white text-blue-600 shadow-sm'
                 : 'text-slate-600 hover:text-slate-900'
             }`}
           >
-            {t.tours}
+            {t.howToBook}
           </button>
           <button
-            onClick={() => onNavigate('reviews')}
+            onClick={() => onNavigate('about-me')}
             className={`px-3.5 py-1.5 rounded-lg text-xs font-bold transition ${
-              activeView === 'reviews'
+              activeView === 'about-me'
                 ? 'bg-white text-blue-600 shadow-sm'
                 : 'text-slate-600 hover:text-slate-900'
             }`}
           >
-            {t.reviews}
+            {t.aboutMe}
           </button>
         </nav>
 
