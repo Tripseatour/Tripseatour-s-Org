@@ -55,82 +55,101 @@ let isStateLoaded = false;
 async function loadStateFromSupabase() {
   if (!supabase) return;
   try {
-    // 1. Settings
-    const { data: settingsData } = await supabase.from('settings').select('*').limit(1);
-    if (settingsData && settingsData.length > 0) {
-      const s = settingsData[0];
-      settings = {
-        siteName: s.site_name || settings.siteName,
-        companyName: s.company_name || settings.companyName,
-        promptPayId: s.promptpay_id || settings.promptPayId,
-        promptPayName: s.promptpay_name || settings.promptPayName,
-        lineMessagingChannelAccessToken: s.line_messaging_channel_access_token || s.line_notify_token || settings.lineMessagingChannelAccessToken,
-        lineMessagingUserId: s.line_messaging_user_id || settings.lineMessagingUserId,
-        lineNotifyToken: s.line_notify_token || settings.lineNotifyToken,
-        lineOaId: s.line_oa_id || settings.lineOaId,
-        contactPhone: s.contact_phone || settings.contactPhone,
-        contactEmail: s.contact_email || settings.contactEmail,
-        address: s.address || settings.address,
-        adminPin: s.admin_pin || settings.adminPin
-      };
+    // 1. Settings (Check app_store first for full state)
+    const { data: kvSettings } = await supabase.from('app_store').select('value').eq('key', 'settings').maybeSingle();
+    if (kvSettings && kvSettings.value) {
+      try {
+        const parsed = JSON.parse(kvSettings.value);
+        settings = { ...settings, ...parsed };
+      } catch (e) {}
     } else {
-      const { data: kvSettings } = await supabase.from('app_store').select('value').eq('key', 'settings').single();
-      if (kvSettings && kvSettings.value) settings = JSON.parse(kvSettings.value);
+      const { data: settingsData } = await supabase.from('settings').select('*').limit(1);
+      if (settingsData && settingsData.length > 0) {
+        const s = settingsData[0];
+        settings = {
+          siteName: s.site_name || settings.siteName,
+          companyName: s.company_name || settings.companyName,
+          promptPayId: s.promptpay_id || settings.promptPayId,
+          promptPayName: s.promptpay_name || settings.promptPayName,
+          lineMessagingChannelAccessToken: s.line_messaging_channel_access_token || s.line_notify_token || settings.lineMessagingChannelAccessToken,
+          lineMessagingUserId: s.line_messaging_user_id || settings.lineMessagingUserId,
+          lineNotifyToken: s.line_notify_token || settings.lineNotifyToken,
+          lineOaId: s.line_oa_id || settings.lineOaId,
+          contactPhone: s.contact_phone || settings.contactPhone,
+          contactEmail: s.contact_email || settings.contactEmail,
+          address: s.address || settings.address,
+          adminPin: s.admin_pin || settings.adminPin
+        };
+      }
     }
 
     // 2. Tours
-    const { data: kvTours } = await supabase.from('app_store').select('value').eq('key', 'tours').single();
+    const { data: kvTours } = await supabase.from('app_store').select('value').eq('key', 'tours').maybeSingle();
     if (kvTours && kvTours.value) {
-      tours = JSON.parse(kvTours.value);
+      try {
+        tours = JSON.parse(kvTours.value);
+      } catch (e) {}
     }
 
     // 3. Bookings
-    const { data: bkData } = await supabase.from('bookings').select('*').order('created_at', { ascending: false });
-    if (bkData && bkData.length > 0) {
-      bookings = bkData.map((b: any) => ({
-        id: b.id,
-        bookingRef: b.booking_ref,
-        tourId: b.tour_id,
-        tourTitle: b.tour_title,
-        tourImage: b.tour_image || '',
-        customerName: b.customer_name,
-        customerEmail: b.customer_email,
-        customerPhone: b.customer_phone,
-        customerLineId: b.customer_line_id,
-        nationality: b.nationality || 'Thai',
-        travelDate: b.travel_date,
-        pickupHotel: b.pickup_hotel,
-        pickupZone: b.pickup_zone,
-        roomNumber: b.room_number,
-        specialRequests: b.special_requests,
-        adults: Number(b.adults) || 1,
-        children: Number(b.children) || 0,
-        infants: Number(b.infants) || 0,
-        totalAmount: Number(b.total_amount) || 0,
-        paymentMethod: b.payment_method || 'promptpay',
-        promptPayIdUsed: b.promptpay_id_used,
-        paymentStatus: b.payment_status || 'pending',
-        orderStatus: b.order_status || 'pending',
-        slipUrl: b.slip_url,
-        slipUploadedAt: b.slip_uploaded_at,
-        paidAt: b.paid_at,
-        createdAt: b.created_at,
-        lineNotifySent: b.line_notify_sent,
-        reminderSent: b.reminder_sent,
-        notes: b.notes
-      }));
+    const { data: kvBookings } = await supabase.from('app_store').select('value').eq('key', 'bookings').maybeSingle();
+    if (kvBookings && kvBookings.value) {
+      try {
+        bookings = JSON.parse(kvBookings.value);
+      } catch (e) {}
     } else {
-      const { data: kvBookings } = await supabase.from('app_store').select('value').eq('key', 'bookings').single();
-      if (kvBookings && kvBookings.value) bookings = JSON.parse(kvBookings.value);
+      const { data: bkData } = await supabase.from('bookings').select('*').order('created_at', { ascending: false });
+      if (bkData && bkData.length > 0) {
+        bookings = bkData.map((b: any) => ({
+          id: b.id,
+          bookingRef: b.booking_ref,
+          tourId: b.tour_id,
+          tourTitle: b.tour_title,
+          tourImage: b.tour_image || '',
+          customerName: b.customer_name,
+          customerEmail: b.customer_email,
+          customerPhone: b.customer_phone,
+          customerLineId: b.customer_line_id,
+          nationality: b.nationality || 'Thai',
+          travelDate: b.travel_date,
+          pickupHotel: b.pickup_hotel,
+          pickupZone: b.pickup_zone,
+          roomNumber: b.room_number,
+          specialRequests: b.special_requests,
+          adults: Number(b.adults) || 1,
+          children: Number(b.children) || 0,
+          infants: Number(b.infants) || 0,
+          totalAmount: Number(b.total_amount) || 0,
+          paymentMethod: b.payment_method || 'promptpay',
+          promptPayIdUsed: b.promptpay_id_used,
+          paymentStatus: b.payment_status || 'pending',
+          orderStatus: b.order_status || 'pending',
+          slipUrl: b.slip_url,
+          slipUploadedAt: b.slip_uploaded_at,
+          paidAt: b.paid_at,
+          createdAt: b.created_at,
+          lineNotifySent: b.line_notify_sent,
+          reminderSent: b.reminder_sent,
+          notes: b.notes
+        }));
+      }
     }
 
     // 4. Reviews
-    const { data: kvReviews } = await supabase.from('app_store').select('value').eq('key', 'reviews').single();
-    if (kvReviews && kvReviews.value) reviews = JSON.parse(kvReviews.value);
+    const { data: kvReviews } = await supabase.from('app_store').select('value').eq('key', 'reviews').maybeSingle();
+    if (kvReviews && kvReviews.value) {
+      try {
+        reviews = JSON.parse(kvReviews.value);
+      } catch (e) {}
+    }
 
     // 5. Customers
-    const { data: kvCustomers } = await supabase.from('app_store').select('value').eq('key', 'customers').single();
-    if (kvCustomers && kvCustomers.value) customers = JSON.parse(kvCustomers.value);
+    const { data: kvCustomers } = await supabase.from('app_store').select('value').eq('key', 'customers').maybeSingle();
+    if (kvCustomers && kvCustomers.value) {
+      try {
+        customers = JSON.parse(kvCustomers.value);
+      } catch (e) {}
+    }
 
   } catch (err) {
     console.error('Error loading state from Supabase:', err);

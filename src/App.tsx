@@ -37,6 +37,7 @@ export default function App() {
     lineOaId: '@056hxinu',
     contactPhone: '+66 (0) 62 681 6494 / +66 (0) 97 924 1399',
     contactEmail: 'tripseatourphuket@gmail.com',
+    address: 'ภูเก็ต ประเทศไทย',
   });
   const [lineLogs, setLineLogs] = useState<LineNotificationLog[]>([]);
 
@@ -106,7 +107,9 @@ export default function App() {
 
   // Handlers
   const handleBookingCreated = (newBooking: Booking) => {
-    setBookings([newBooking, ...bookings]);
+    const nextBookings = [newBooking, ...bookings];
+    setBookings(nextBookings);
+    localStorage.setItem('tst_bookings', JSON.stringify(nextBookings));
     showToast(`🟢 สั่งจองทัวร์สำเร็จ! รหัส ${newBooking.bookingRef} - แจ้งเตือนไปยัง LINE แล้ว`);
   };
 
@@ -119,7 +122,9 @@ export default function App() {
       });
       if (res.ok) {
         const updated = await res.json();
-        setBookings(bookings.map(b => b.id === id ? updated : b));
+        const nextBookings = bookings.map(b => b.id === id ? updated : b);
+        setBookings(nextBookings);
+        localStorage.setItem('tst_bookings', JSON.stringify(nextBookings));
         showToast(`✅ อนุมัติการชำระเงินของ ${updated.customerName} เรียบร้อยแล้ว`);
       }
     } catch (err) {
@@ -131,7 +136,9 @@ export default function App() {
     try {
       const res = await fetch(`/api/bookings/${id}`, { method: 'DELETE' });
       if (res.ok) {
-        setBookings(bookings.filter(b => b.id !== id && b.bookingRef !== id));
+        const nextBookings = bookings.filter(b => b.id !== id && b.bookingRef !== id);
+        setBookings(nextBookings);
+        localStorage.setItem('tst_bookings', JSON.stringify(nextBookings));
         showToast('🗑️ ลบคำสั่งซื้อทัวร์เรียบร้อยแล้ว');
       }
     } catch (err) {
@@ -141,13 +148,17 @@ export default function App() {
 
   const handleSaveSettings = async (newSettings: AppSettings) => {
     try {
+      setSettings(newSettings);
+      localStorage.setItem('tst_settings', JSON.stringify(newSettings));
       const res = await fetch('/api/settings', {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(newSettings),
       });
       if (res.ok) {
-        setSettings(await res.json());
+        const saved = await res.json();
+        setSettings(saved);
+        localStorage.setItem('tst_settings', JSON.stringify(saved));
         showToast('💾 บันทึกการตั้งค่า PromptPay & LINE Notify แล้ว');
       }
     } catch (err) {
@@ -181,7 +192,11 @@ export default function App() {
           fetch('/api/bookings'),
           fetch('/api/line/logs')
         ]);
-        if (bkRes.ok) setBookings(await bkRes.json());
+        if (bkRes.ok) {
+          const bks = await bkRes.json();
+          setBookings(bks);
+          localStorage.setItem('tst_bookings', JSON.stringify(bks));
+        }
         if (logRes.ok) setLineLogs(await logRes.json());
         showToast(`⏰ รันระบบตรวจสอบแจ้งเตือน 24 ชม. เรียบร้อย (ส่งแจ้งเตือนแล้ว ${data.sentCount} รายการ)`);
       }
@@ -196,7 +211,9 @@ export default function App() {
       if (res.ok) {
         const data = await res.json();
         if (data.booking) {
-          setBookings(bookings.map(b => b.id === bookingId ? data.booking : b));
+          const nextBookings = bookings.map(b => b.id === bookingId ? data.booking : b);
+          setBookings(nextBookings);
+          localStorage.setItem('tst_bookings', JSON.stringify(nextBookings));
         }
         const logRes = await fetch('/api/line/logs');
         if (logRes.ok) setLineLogs(await logRes.json());
@@ -209,6 +226,9 @@ export default function App() {
 
   const handleAddTour = async (newTour: Tour) => {
     try {
+      const nextTours = [newTour, ...tours];
+      setTours(nextTours);
+      localStorage.setItem('tst_tours', JSON.stringify(nextTours));
       const res = await fetch('/api/tours', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -216,7 +236,9 @@ export default function App() {
       });
       if (res.ok) {
         const created = await res.json();
-        setTours([created, ...tours]);
+        const updatedTours = [created, ...tours.filter(t => t.id !== created.id)];
+        setTours(updatedTours);
+        localStorage.setItem('tst_tours', JSON.stringify(updatedTours));
         showToast('🏝️ เพิ่มโปรแกรมทัวร์ใหม่เรียบร้อย');
       }
     } catch (err) {
@@ -226,6 +248,9 @@ export default function App() {
 
   const handleUpdateTour = async (id: string, updatedTourData: Partial<Tour>) => {
     try {
+      const nextTours = tours.map(t => t.id === id ? { ...t, ...updatedTourData } : t);
+      setTours(nextTours);
+      localStorage.setItem('tst_tours', JSON.stringify(nextTours));
       const res = await fetch(`/api/tours/${id}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
@@ -233,7 +258,9 @@ export default function App() {
       });
       if (res.ok) {
         const updated = await res.json();
-        setTours(tours.map(t => t.id === id ? updated : t));
+        const finalTours = tours.map(t => t.id === id ? updated : t);
+        setTours(finalTours);
+        localStorage.setItem('tst_tours', JSON.stringify(finalTours));
         showToast('💾 บันทึกการแก้ไขโปรแกรมทัวร์เรียบร้อย');
       }
     } catch (err) {
@@ -244,9 +271,11 @@ export default function App() {
   const handleDeleteTour = async (id: string) => {
     if (!confirm('ยืนยันลบโปรแกรมทัวร์นี้?')) return;
     try {
+      const nextTours = tours.filter(t => t.id !== id);
+      setTours(nextTours);
+      localStorage.setItem('tst_tours', JSON.stringify(nextTours));
       const res = await fetch(`/api/tours/${id}`, { method: 'DELETE' });
       if (res.ok) {
-        setTours(tours.filter(t => t.id !== id));
         showToast('🗑️ ลบโปรแกรมทัวร์เรียบร้อย');
       }
     } catch (err) {

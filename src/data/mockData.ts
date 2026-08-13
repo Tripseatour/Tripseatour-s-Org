@@ -566,5 +566,6 @@ export const initialSettings: AppSettings = {
   lineOaId: '@056hxinu',
   contactPhone: '+66 (0) 62 681 6494 / +66 (0) 97 924 1399',
   contactEmail: 'tripseatourphuket@gmail.com',
+  address: 'ภูเก็ต ประเทศไทย',
   adminPin: '1234'
 };
