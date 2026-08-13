@@ -197,6 +197,38 @@ export default function App() {
 
   useEffect(() => {
     loadInitialData();
+    
+    // Auto-sync local fallback bookings to Supabase in the background
+    const syncLocalFallbacks = async () => {
+      try {
+        const savedFallbacks = localStorage.getItem('local_fallback_bookings');
+        if (savedFallbacks) {
+          const list = JSON.parse(savedFallbacks);
+          if (list.length > 0) {
+            console.log(`Syncing ${list.length} local fallback bookings back to Supabase...`);
+            let successCount = 0;
+            for (const bk of list) {
+              const res = await supabaseApi.createBooking(bk);
+              if (res) {
+                successCount++;
+              }
+            }
+            if (successCount === list.length) {
+              localStorage.removeItem('local_fallback_bookings');
+              console.log('Successfully synchronized all local fallback bookings!');
+            } else {
+              const remaining = list.slice(successCount);
+              localStorage.setItem('local_fallback_bookings', JSON.stringify(remaining));
+            }
+          }
+        }
+      } catch (err) {
+        console.error('Error syncing local fallback bookings:', err);
+      }
+    };
+    
+    const timeout = setTimeout(syncLocalFallbacks, 2500);
+    return () => clearTimeout(timeout);
   }, []);
 
   // Filter & Sort Tours

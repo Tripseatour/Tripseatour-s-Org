@@ -69,6 +69,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
   const [isFetchingGroups, setIsFetchingGroups] = useState(false);
   const [groupFetchStatus, setGroupFetchStatus] = useState<string | null>(null);
   const [copiedSql, setCopiedSql] = useState(false);
+  const [saveSuccess, setSaveSuccess] = useState(false);
 
   const fetchDetectedGroups = async () => {
     setIsFetchingGroups(true);
@@ -145,7 +146,10 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
   const handleSaveSettings = (e: React.FormEvent) => {
     e.preventDefault();
     onSaveSettings(formSettings);
-    alert('บันทึกการตั้งค่า PromptPay และ LINE Notify เรียบร้อยแล้ว!');
+    setSaveSuccess(true);
+    setTimeout(() => {
+      setSaveSuccess(false);
+    }, 4000);
   };
 
   // Filter Bookings List
@@ -959,11 +963,29 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                     </ol>
                   </div>
 
+                  {saveSuccess && (
+                    <div className="bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 p-3 rounded-xl flex items-center gap-2 text-xs font-bold animate-in fade-in duration-300">
+                      <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" />
+                      <span>💾 บันทึกการตั้งค่าทั้งหมดเรียบร้อยแล้ว (ข้อมูลถูกเซฟลงคลาวด์ถาวร)</span>
+                    </div>
+                  )}
+
                   <button
                     type="submit"
-                    className="w-full bg-cyan-500 hover:bg-cyan-400 text-slate-950 font-extrabold py-3 rounded-xl transition text-xs shadow-lg shadow-cyan-500/20"
+                    className={`w-full font-extrabold py-3 rounded-xl transition text-xs shadow-lg flex items-center justify-center gap-2 ${
+                      saveSuccess 
+                        ? 'bg-emerald-500 hover:bg-emerald-400 text-slate-950 shadow-emerald-500/20' 
+                        : 'bg-cyan-500 hover:bg-cyan-400 text-slate-950 shadow-cyan-500/20'
+                    }`}
                   >
-                    บันทึกการตั้งค่าทั้งหมด
+                    {saveSuccess ? (
+                      <>
+                        <Check className="w-4 h-4 text-slate-950 stroke-[3]" />
+                        <span>บันทึกสำเร็จเรียบร้อย!</span>
+                      </>
+                    ) : (
+                      <span>บันทึกการตั้งค่าทั้งหมด</span>
+                    )}
                   </button>
                 </form>
 

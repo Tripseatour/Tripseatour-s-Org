@@ -157,9 +157,21 @@ export const BookingModal: React.FC<BookingModalProps> = ({
         };
 
         // Write directly to Supabase client-side
-        const success = await supabaseApi.createBooking(bookingData);
-        if (!success) {
-          throw new Error('Supabase direct booking creation failed');
+        try {
+          const success = await supabaseApi.createBooking(bookingData);
+          if (!success) {
+            throw new Error('Supabase direct booking creation returned false');
+          }
+        } catch (dbErr) {
+          console.error('Supabase write failed, falling back to localStorage database backup:', dbErr);
+          try {
+            const savedFallbacks = localStorage.getItem('local_fallback_bookings');
+            const list = savedFallbacks ? JSON.parse(savedFallbacks) : [];
+            list.push(bookingData);
+            localStorage.setItem('local_fallback_bookings', JSON.stringify(list));
+          } catch (storageErr) {
+            console.error('Failed to write to localStorage fallback:', storageErr);
+          }
         }
       }
 
@@ -174,7 +186,22 @@ export const BookingModal: React.FC<BookingModalProps> = ({
           paymentStatus: 'slip_uploaded',
           slipUrl: slipFile,
           slipUploadedAt: bookingData.slipUploadedAt
-        }).catch(() => {});
+        }).catch((dbErr) => {
+          console.warn('Direct Supabase update for slip failed, updating local fallback copy:', dbErr);
+          try {
+            const savedFallbacks = localStorage.getItem('local_fallback_bookings');
+            if (savedFallbacks) {
+              const list = JSON.parse(savedFallbacks);
+              const idx = list.findIndex((b: any) => b.id === bookingData.id);
+              if (idx !== -1) {
+                list[idx].paymentStatus = 'slip_uploaded';
+                list[idx].slipUrl = slipFile;
+                list[idx].slipUploadedAt = bookingData.slipUploadedAt;
+                localStorage.setItem('local_fallback_bookings', JSON.stringify(list));
+              }
+            }
+          } catch (storageErr) {}
+        });
 
         // 2. Fallback push to API in background
         await fetch(`/api/bookings/${bookingData.id}/upload-slip`, {
