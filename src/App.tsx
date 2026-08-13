@@ -347,11 +347,19 @@ export default function App() {
       if (res.ok) {
         const log = await res.json();
         setLineLogs([log, ...lineLogs]);
-        showToast('📱 ส่งการแจ้งเตือนทดสอบเข้า LINE เรียบร้อย');
+        
+        if (log.status === 'failed') {
+          showToast(`❌ ส่งแจ้งเตือนไม่สำเร็จ: ${log.message}`);
+        } else if (log.status === 'simulated') {
+          showToast('📱 ส่งการแจ้งเตือนจำลองสำเร็จ (เนื่องจากยังไม่ได้ตั้งค่าคีย์ LINE ในระบบ)');
+        } else {
+          showToast('📱 ส่งการแจ้งเตือนทดสอบเข้า LINE เรียบร้อย');
+        }
       } else {
-        throw new Error('Test line fail');
+        const errorText = await res.text().catch(() => 'Unknown error');
+        throw new Error(`HTTP ${res.status}: ${errorText}`);
       }
-    } catch (err) {
+    } catch (err: any) {
       console.warn('LINE Notify API failed on Vercel backend, showing simulated notification log:', err);
       const simulatedLog: LineNotificationLog = {
         id: `log-sim-${Date.now()}`,
@@ -362,7 +370,13 @@ export default function App() {
         timestamp: new Date().toISOString()
       };
       setLineLogs(prev => [simulatedLog, ...prev]);
-      showToast('📱 ส่งการแจ้งเตือนจำลองสำเร็จ (เนื่องจากเซิร์ฟเวอร์หลักไม่ได้รันแบบเต็มใน Vercel)');
+      
+      // If we got a specific HTTP/Server error, display it to the user so they can diagnose it
+      if (err?.message && (err.message.includes('HTTP ') || err.message.includes('Fetch'))) {
+        showToast(`❌ เซิร์ฟเวอร์หลังบ้านตอบกลับผิดพลาด: ${err.message}`);
+      } else {
+        showToast('📱 ส่งการแจ้งเตือนจำลองสำเร็จ (เนื่องจากเซิร์ฟเวอร์หลักไม่ได้รันแบบเต็มใน Vercel)');
+      }
     }
   };
 
