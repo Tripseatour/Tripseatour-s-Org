@@ -552,6 +552,36 @@ app.get('/api/customers', (req, res) => {
   res.json(customers);
 });
 
+app.put('/api/customers/:id', async (req, res) => {
+  const { id } = req.params;
+  const { name, email, phone, lineId, nationality } = req.body;
+  const cust = customers.find(c => c.id === id);
+  if (cust) {
+    if (name !== undefined) cust.name = name;
+    if (email !== undefined) cust.email = email;
+    if (phone !== undefined) cust.phone = phone;
+    if (lineId !== undefined) cust.lineId = lineId;
+    if (nationality !== undefined) cust.nationality = nationality;
+    
+    await persistState('customers');
+    res.json(cust);
+  } else {
+    res.status(404).json({ error: 'Customer not found' });
+  }
+});
+
+app.delete('/api/customers/:id', async (req, res) => {
+  const { id } = req.params;
+  const initialLen = customers.length;
+  customers = customers.filter(c => c.id !== id);
+  if (customers.length < initialLen) {
+    await persistState('customers');
+    res.json({ success: true, message: 'Customer deleted successfully' });
+  } else {
+    res.status(404).json({ error: 'Customer not found' });
+  }
+});
+
 // --- Stats Dashboard ---
 app.get('/api/stats', (req, res) => {
   const totalRevenue = bookings

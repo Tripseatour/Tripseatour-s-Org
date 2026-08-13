@@ -98,7 +98,52 @@ export default function App() {
       const localToursRaw = localStorage.getItem('tst_tours');
       const localSettingsRaw = localStorage.getItem('tst_settings');
       const localBookingsRaw = localStorage.getItem('tst_bookings');
+      const localCustomersRaw = localStorage.getItem('tst_customers');
 
+      // Populate UI with localStorage values immediately (so it's instant and not wiped out by defaults)
+      let initialToursState = tours;
+      let initialBookingsState = bookings;
+      let initialSettingsState = settings;
+      let initialCustomersState = customers;
+
+      if (localToursRaw) {
+        try {
+          const parsed = JSON.parse(localToursRaw);
+          if (parsed && parsed.length > 0) {
+            initialToursState = parsed;
+            setTours(parsed);
+          }
+        } catch (e) {}
+      }
+      if (localBookingsRaw) {
+        try {
+          const parsed = JSON.parse(localBookingsRaw);
+          if (parsed) {
+            initialBookingsState = parsed;
+            setBookings(parsed);
+          }
+        } catch (e) {}
+      }
+      if (localSettingsRaw) {
+        try {
+          const parsed = JSON.parse(localSettingsRaw);
+          if (parsed && parsed.promptPayId) {
+            initialSettingsState = parsed;
+            setSettings(parsed);
+          }
+        } catch (e) {}
+      }
+      if (localCustomersRaw) {
+        try {
+          const parsed = JSON.parse(localCustomersRaw);
+          if (parsed) {
+            initialCustomersState = parsed;
+            setCustomers(parsed);
+          }
+        } catch (e) {}
+      }
+
+      // Fetch latest from API
       const [resTours, resBookings, resReviews, resCustomers, resSettings, resLogs] = await Promise.all([
         fetch('/api/tours').catch(() => null),
         fetch('/api/bookings').catch(() => null),
@@ -144,52 +189,55 @@ export default function App() {
         }
       }
 
-      // If client has custom edits in localStorage, push them to server to sync
-      if (localToursRaw || localSettingsRaw || localBookingsRaw) {
-        const localTours = localToursRaw ? JSON.parse(localToursRaw) : tours;
-        const localBookings = localBookingsRaw ? JSON.parse(localBookingsRaw) : bookings;
-        const localSettings = localSettingsRaw ? JSON.parse(localSettingsRaw) : settings;
+      // Intelligent merging: Prefer custom edited values, don't overwrite with mock defaults
+      let finalTours = initialToursState;
+      let finalBookings = initialBookingsState;
+      let finalSettings = initialSettingsState;
+      let finalCustomers = initialCustomersState;
 
-        // If server/Supabase returns data, merge or prefer non-empty server data
-        if (serverTours && serverTours.length > 0) {
-          setTours(serverTours);
-          localStorage.setItem('tst_tours', JSON.stringify(serverTours));
-        } else if (localTours && localTours.length > 0) {
-          setTours(localTours);
-        }
-
-        if (serverSettings && serverSettings.promptPayId) {
-          setSettings(serverSettings);
-          localStorage.setItem('tst_settings', JSON.stringify(serverSettings));
-        } else if (localSettings) {
-          setSettings(localSettings);
-        }
-
-        if (serverBookings) {
-          setBookings(serverBookings);
-          localStorage.setItem('tst_bookings', JSON.stringify(serverBookings));
-        } else if (localBookings) {
-          setBookings(localBookings);
-        }
-
-        // Sync local changes to server & Supabase
-        await fetch('/api/sync', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            tours: localTours,
-            bookings: localBookings,
-            settings: localSettings,
-          })
-        }).catch(() => {});
-      } else {
-        // No local edits, use server/Supabase data directly
-        if (serverTours) { setTours(serverTours); localStorage.setItem('tst_tours', JSON.stringify(serverTours)); }
-        if (serverBookings) { setBookings(serverBookings); localStorage.setItem('tst_bookings', JSON.stringify(serverBookings)); }
-        if (serverReviews) { setReviews(serverReviews); localStorage.setItem('tst_reviews', JSON.stringify(serverReviews)); }
-        if (serverCustomers) { setCustomers(serverCustomers); localStorage.setItem('tst_customers', JSON.stringify(serverCustomers)); }
-        if (serverSettings) { setSettings(serverSettings); localStorage.setItem('tst_settings', JSON.stringify(serverSettings)); }
+      if (serverTours && serverTours.length > 0) {
+        finalTours = serverTours;
+        setTours(serverTours);
+        localStorage.setItem('tst_tours', JSON.stringify(serverTours));
       }
+
+      // Use whichever has more bookings (prevent data loss)
+      if (serverBookings && serverBookings.length >= initialBookingsState.length) {
+        finalBookings = serverBookings;
+        setBookings(serverBookings);
+        localStorage.setItem('tst_bookings', JSON.stringify(serverBookings));
+      }
+
+      // Check if server settings has been customized (not default initial mock values)
+      if (serverSettings && serverSettings.companyName && serverSettings.companyName !== 'บริษัท ทริป ซี ทัวร์ จำกัด (สำนักงานใหญ่)') {
+        finalSettings = serverSettings;
+        setSettings(serverSettings);
+        localStorage.setItem('tst_settings', JSON.stringify(serverSettings));
+      }
+
+      if (serverCustomers && serverCustomers.length >= initialCustomersState.length) {
+        finalCustomers = serverCustomers;
+        setCustomers(serverCustomers);
+        localStorage.setItem('tst_customers', JSON.stringify(serverCustomers));
+      }
+
+      if (serverReviews && serverReviews.length > 0) {
+        setReviews(serverReviews);
+        localStorage.setItem('tst_reviews', JSON.stringify(serverReviews));
+      }
+
+      // Send the merged, robust local data back to the server to ensure its memory database is accurate
+      await fetch('/api/sync', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          tours: finalTours,
+          bookings: finalBookings,
+          settings: finalSettings,
+          customers: finalCustomers
+        })
+      }).catch(() => {});
+
     } catch (err) {
       console.error('Error loading data from server/Supabase:', err);
     }
@@ -330,6 +378,48 @@ export default function App() {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(newSettings),
+      }).catch(() => {});
+    } catch (err) {
+      console.error(err);
+    }
+  };
+
+  const handleUpdateCustomer = async (id: string, updatedCustomerData: Partial<Customer>) => {
+    try {
+      // 1. Instantly update local state & localStorage
+      const nextCustomers = customers.map(c => c.id === id ? { ...c, ...updatedCustomerData } : c);
+      setCustomers(nextCustomers);
+      localStorage.setItem('tst_customers', JSON.stringify(nextCustomers));
+      showToast('💾 อัปเดตข้อมูลลูกค้าใน CRM เรียบร้อยแล้ว');
+
+      // 2. Backup to Supabase key-value store
+      await supabaseApi.saveCustomers(nextCustomers).catch(() => {});
+
+      // 3. Inform backend API in background
+      await fetch(`/api/customers/${id}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(updatedCustomerData),
+      }).catch(() => {});
+    } catch (err) {
+      console.error(err);
+    }
+  };
+
+  const handleDeleteCustomer = async (id: string) => {
+    try {
+      // 1. Instantly update local state & localStorage
+      const nextCustomers = customers.filter(c => c.id !== id);
+      setCustomers(nextCustomers);
+      localStorage.setItem('tst_customers', JSON.stringify(nextCustomers));
+      showToast('🗑️ ลบข้อมูลลูกค้าเรียบร้อยแล้ว');
+
+      // 2. Backup to Supabase key-value store
+      await supabaseApi.saveCustomers(nextCustomers).catch(() => {});
+
+      // 3. Inform backend API in background
+      await fetch(`/api/customers/${id}`, {
+        method: 'DELETE',
       }).catch(() => {});
     } catch (err) {
       console.error(err);
@@ -576,6 +666,8 @@ export default function App() {
           onLogoutAdmin={handleLogoutAdmin}
           onTrigger24hReminders={handleTrigger24hReminders}
           onSendSingleReminder={handleSendSingleReminder}
+          onUpdateCustomer={handleUpdateCustomer}
+          onDeleteCustomer={handleDeleteCustomer}
         />
       ) : (
         <main className="flex-1 space-y-12 pb-16">

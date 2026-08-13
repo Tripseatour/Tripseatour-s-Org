@@ -28,6 +28,8 @@ interface AdminDashboardProps {
   onLogoutAdmin?: () => void;
   onTrigger24hReminders?: () => void;
   onSendSingleReminder?: (bookingId: string) => void;
+  onUpdateCustomer?: (id: string, customerData: Partial<Customer>) => void;
+  onDeleteCustomer?: (id: string) => void;
 }
 
 export const AdminDashboard: React.FC<AdminDashboardProps> = ({
@@ -46,6 +48,8 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
   onLogoutAdmin,
   onTrigger24hReminders,
   onSendSingleReminder,
+  onUpdateCustomer,
+  onDeleteCustomer,
 }) => {
   const [activeTab, setActiveTab] = useState<'overview' | 'orders' | 'tours' | 'customers' | 'settings'>('overview');
   const [stats, setStats] = useState<SalesStats | null>(null);
@@ -62,6 +66,11 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
   const [testLineMsg, setTestLineMsg] = useState('🧪 [ทดสอบการแจ้งเตือน LINE Notify จากระบบแอดมิน]\n');
   const [deleteBookingTarget, setDeleteBookingTarget] = useState<Booking | null>(null);
   const [deleteTourTarget, setDeleteTourTarget] = useState<Tour | null>(null);
+
+  // Customer Edit State
+  const [editingCustomer, setEditingCustomer] = useState<Customer | null>(null);
+  const [isCustomerModalOpen, setIsCustomerModalOpen] = useState(false);
+  const [deleteCustomerTarget, setDeleteCustomerTarget] = useState<Customer | null>(null);
 
   // Settings State
   const [formSettings, setFormSettings] = useState<AppSettings>({ ...settings });
@@ -756,6 +765,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                       <th className="p-3.5">จำนวนทริปที่เคยจอง</th>
                       <th className="p-3.5">ยอดใช้จ่ายรวม (THB)</th>
                       <th className="p-3.5">จองล่าสุดเมื่อ</th>
+                      <th className="p-3.5 text-center">จัดการ</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-slate-700/50 text-slate-300">
@@ -765,11 +775,35 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                         <td className="p-3.5 space-y-0.5">
                           <div>📞 {c.phone}</div>
                           <div className="text-slate-400 text-[11px]">✉️ {c.email}</div>
+                          {c.lineId && <div className="text-emerald-400 text-[10px]">🟢 LINE: {c.lineId}</div>}
                         </td>
                         <td className="p-3.5">{c.nationality}</td>
                         <td className="p-3.5 font-bold text-cyan-400">{c.totalBookings} ทริป</td>
                         <td className="p-3.5 font-extrabold text-amber-400">฿{c.totalSpent.toLocaleString()}</td>
                         <td className="p-3.5 text-slate-400">{c.lastBookingDate}</td>
+                        <td className="p-3.5 text-center">
+                          <div className="flex items-center justify-center gap-2">
+                            <button
+                              onClick={() => {
+                                setEditingCustomer(c);
+                                setIsCustomerModalOpen(true);
+                              }}
+                              className="inline-flex items-center gap-1 bg-cyan-600/30 border border-cyan-500/50 hover:bg-cyan-600/50 text-cyan-300 px-2.5 py-1.5 rounded-lg text-xs font-semibold transition"
+                            >
+                              <Edit3 className="w-3.5 h-3.5" />
+                              <span>แก้ไข</span>
+                            </button>
+                            <button
+                              onClick={() => {
+                                setDeleteCustomerTarget(c);
+                              }}
+                              className="inline-flex items-center gap-1 bg-rose-600/30 border border-rose-500/50 hover:bg-rose-600/50 text-rose-300 px-2.5 py-1.5 rounded-lg text-xs font-semibold transition"
+                            >
+                              <Trash2 className="w-3.5 h-3.5" />
+                              <span>ลบ</span>
+                            </button>
+                          </div>
+                        </td>
                       </tr>
                     ))}
                   </tbody>
@@ -1249,6 +1283,161 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
               >
                 <Trash2 className="w-4 h-4" />
                 <span>ยืนยันลบทัวร์</span>
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Customer Edit Modal */}
+      {isCustomerModalOpen && editingCustomer && (
+        <div className="fixed inset-0 z-50 bg-slate-950/85 backdrop-blur-md flex items-center justify-center p-4 animate-in fade-in">
+          <div className="bg-slate-900 border border-slate-700 max-w-lg w-full rounded-3xl p-6 shadow-2xl relative space-y-4">
+            <button
+              onClick={() => {
+                setIsCustomerModalOpen(false);
+                setEditingCustomer(null);
+              }}
+              className="absolute top-4 right-4 text-slate-400 hover:text-white transition"
+            >
+              <X className="w-5 h-5" />
+            </button>
+
+            <div>
+              <h3 className="text-lg font-extrabold text-white flex items-center gap-2">
+                <Users className="w-5 h-5 text-cyan-400" />
+                <span>แก้ไขข้อมูลลูกค้า (Edit Customer)</span>
+              </h3>
+              <p className="text-xs text-slate-400">แก้ไขข้อมูลการติดต่อและรายละเอียดของลูกค้า</p>
+            </div>
+
+            <form
+              onSubmit={(e) => {
+                e.preventDefault();
+                if (onUpdateCustomer && editingCustomer) {
+                  onUpdateCustomer(editingCustomer.id, {
+                    name: editingCustomer.name,
+                    phone: editingCustomer.phone,
+                    email: editingCustomer.email,
+                    lineId: editingCustomer.lineId,
+                    nationality: editingCustomer.nationality,
+                  });
+                }
+                setIsCustomerModalOpen(false);
+                setEditingCustomer(null);
+              }}
+              className="space-y-4 text-xs"
+            >
+              <div>
+                <label className="text-slate-300 font-bold block mb-1">ชื่อลูกค้า</label>
+                <input
+                  type="text"
+                  required
+                  value={editingCustomer.name}
+                  onChange={(e) => setEditingCustomer({ ...editingCustomer, name: e.target.value })}
+                  className="w-full bg-slate-950 border border-slate-700 rounded-xl p-3 text-white text-xs font-bold focus:ring-2 focus:ring-cyan-500"
+                />
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="text-slate-300 font-bold block mb-1">เบอร์โทรศัพท์</label>
+                  <input
+                    type="text"
+                    required
+                    value={editingCustomer.phone}
+                    onChange={(e) => setEditingCustomer({ ...editingCustomer, phone: e.target.value })}
+                    className="w-full bg-slate-950 border border-slate-700 rounded-xl p-3 text-white text-xs font-bold focus:ring-2 focus:ring-cyan-500"
+                  />
+                </div>
+                <div>
+                  <label className="text-slate-300 font-bold block mb-1">LINE ID</label>
+                  <input
+                    type="text"
+                    value={editingCustomer.lineId || ''}
+                    onChange={(e) => setEditingCustomer({ ...editingCustomer, lineId: e.target.value })}
+                    className="w-full bg-slate-950 border border-slate-700 rounded-xl p-3 text-white text-xs font-bold focus:ring-2 focus:ring-cyan-500"
+                  />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="text-slate-300 font-bold block mb-1">อีเมล</label>
+                  <input
+                    type="email"
+                    required
+                    value={editingCustomer.email}
+                    onChange={(e) => setEditingCustomer({ ...editingCustomer, email: e.target.value })}
+                    className="w-full bg-slate-950 border border-slate-700 rounded-xl p-3 text-white text-xs font-bold focus:ring-2 focus:ring-cyan-500"
+                  />
+                </div>
+                <div>
+                  <label className="text-slate-300 font-bold block mb-1">สัญชาติ</label>
+                  <input
+                    type="text"
+                    required
+                    value={editingCustomer.nationality}
+                    onChange={(e) => setEditingCustomer({ ...editingCustomer, nationality: e.target.value })}
+                    className="w-full bg-slate-950 border border-slate-700 rounded-xl p-3 text-white text-xs font-bold focus:ring-2 focus:ring-cyan-500"
+                  />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-3 pt-4">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setIsCustomerModalOpen(false);
+                    setEditingCustomer(null);
+                  }}
+                  className="w-full bg-slate-800 hover:bg-slate-700 text-slate-300 font-bold py-2.5 rounded-xl text-xs transition border border-slate-700"
+                >
+                  ยกเลิก
+                </button>
+                <button
+                  type="submit"
+                  className="w-full bg-cyan-600 hover:bg-cyan-500 text-white font-bold py-2.5 rounded-xl text-xs transition shadow-lg shadow-cyan-900/40 flex items-center justify-center gap-1.5"
+                >
+                  <Check className="w-4 h-4" />
+                  <span>บันทึกข้อมูล</span>
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* Delete Customer Confirmation Modal */}
+      {deleteCustomerTarget && (
+        <div className="fixed inset-0 z-50 bg-slate-950/85 backdrop-blur-md flex items-center justify-center p-4 animate-in fade-in">
+          <div className="bg-slate-900 border border-slate-700 max-w-sm w-full rounded-3xl p-6 shadow-2xl relative text-center space-y-4">
+            <div className="w-12 h-12 bg-rose-500/20 border border-rose-500/30 text-rose-400 rounded-2xl flex items-center justify-center mx-auto text-xl">
+              ⚠️
+            </div>
+            <div>
+              <h3 className="text-sm font-bold text-white">ต้องการลบลูกค้าคนนี้หรือไม่?</h3>
+              <p className="text-xs text-slate-400 mt-1">
+                คุณกำลังจะลบข้อมูลลูกค้า <span className="text-white font-semibold">"{deleteCustomerTarget.name}"</span> ออกจากระบบ CRM
+              </p>
+            </div>
+            <div className="grid grid-cols-2 gap-3 pt-2">
+              <button
+                onClick={() => setDeleteCustomerTarget(null)}
+                className="bg-slate-800 hover:bg-slate-700 text-slate-300 font-bold py-2 rounded-xl text-xs transition border border-slate-700"
+              >
+                ยกเลิก
+              </button>
+              <button
+                onClick={() => {
+                  if (onDeleteCustomer) {
+                    onDeleteCustomer(deleteCustomerTarget.id);
+                  }
+                  setDeleteCustomerTarget(null);
+                }}
+                className="bg-rose-600 hover:bg-rose-500 text-white font-bold py-2 rounded-xl text-xs transition shadow-lg shadow-rose-950/40"
+              >
+                ยืนยันการลบ
               </button>
             </div>
           </div>

@@ -1,5 +1,5 @@
 import { createClient, SupabaseClient } from '@supabase/supabase-js';
-import { Booking, Tour, Review, AppSettings, LineNotificationLog } from '../types';
+import { Booking, Tour, Review, AppSettings, LineNotificationLog, Customer } from '../types';
 
 // Retrieve Supabase environment variables
 const DEFAULT_SUPABASE_URL = 'https://tljofqremlconawmtndd.supabase.co';
@@ -397,10 +397,54 @@ export const supabaseApi = {
       }, { onConflict: 'key' });
     } catch (e) {}
     return true;
+  },
+
+  // Save customers array to Supabase ('app_store' key 'customers')
+  async saveCustomers(customers: Customer[]): Promise<boolean> {
+    const client = getSupabase();
+    if (!client) return false;
+
+    try {
+      const { error } = await client.from('app_store').upsert({
+        key: 'customers',
+        value: JSON.stringify(customers),
+        updated_at: new Date().toISOString()
+      }, { onConflict: 'key' });
+      return !error;
+    } catch (e) {
+      console.error('Failed to save customers in app_store:', e);
+      return false;
+    }
   }
 };
 
 export const SUPABASE_SQL_SCHEMA = `-- Supabase SQL Setup for TripSeaTour Phuket
+-- 1. APP_STORE KEY-VALUE TABLE (Crucial for storing general settings, tours, customers and reviews)
+CREATE TABLE IF NOT EXISTS public.app_store (
+  key TEXT PRIMARY KEY,
+  value TEXT NOT NULL,
+  updated_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- 2. SETTINGS TABLE
+CREATE TABLE IF NOT EXISTS public.settings (
+  id INT PRIMARY KEY DEFAULT 1,
+  site_name TEXT,
+  company_name TEXT,
+  promptpay_id TEXT,
+  promptpay_name TEXT,
+  line_messaging_channel_access_token TEXT,
+  line_messaging_user_id TEXT,
+  line_notify_token TEXT,
+  line_oa_id TEXT,
+  contact_phone TEXT,
+  contact_email TEXT,
+  address TEXT,
+  admin_pin TEXT,
+  updated_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- 3. BOOKINGS TABLE
 CREATE TABLE IF NOT EXISTS public.bookings (
   id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
   booking_ref TEXT UNIQUE NOT NULL,
@@ -434,6 +478,7 @@ CREATE TABLE IF NOT EXISTS public.bookings (
   notes TEXT
 );
 
+-- 4. REVIEWS TABLE
 CREATE TABLE IF NOT EXISTS public.reviews (
   id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
   tour_id TEXT NOT NULL,
@@ -452,15 +497,27 @@ CREATE TABLE IF NOT EXISTS public.reviews (
 );
 
 -- Enable RLS
+ALTER TABLE public.app_store ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.settings ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.bookings ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.reviews ENABLE ROW LEVEL SECURITY;
 
 -- Public RLS policies (Safe drop & create)
+DROP POLICY IF EXISTS "Allow public read app_store" ON public.app_store;
+DROP POLICY IF EXISTS "Allow public write app_store" ON public.app_store;
+DROP POLICY IF EXISTS "Allow public read settings" ON public.settings;
+DROP POLICY IF EXISTS "Allow public write settings" ON public.settings;
 DROP POLICY IF EXISTS "Allow public read bookings" ON public.bookings;
 DROP POLICY IF EXISTS "Allow public insert bookings" ON public.bookings;
 DROP POLICY IF EXISTS "Allow public update bookings" ON public.bookings;
 DROP POLICY IF EXISTS "Allow public read reviews" ON public.reviews;
 DROP POLICY IF EXISTS "Allow public insert reviews" ON public.reviews;
+
+CREATE POLICY "Allow public read app_store" ON public.app_store FOR SELECT USING (true);
+CREATE POLICY "Allow public write app_store" ON public.app_store FOR ALL USING (true);
+
+CREATE POLICY "Allow public read settings" ON public.settings FOR SELECT USING (true);
+CREATE POLICY "Allow public write settings" ON public.settings FOR ALL USING (true);
 
 CREATE POLICY "Allow public read bookings" ON public.bookings FOR SELECT USING (true);
 CREATE POLICY "Allow public insert bookings" ON public.bookings FOR INSERT WITH CHECK (true);
