@@ -2,10 +2,16 @@ import { createClient, SupabaseClient } from '@supabase/supabase-js';
 import { Booking, Tour, Review, AppSettings, LineNotificationLog } from '../types';
 
 // Retrieve Supabase environment variables
-const supabaseUrl = import.meta.env.VITE_SUPABASE_URL || '';
-const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY || '';
+const DEFAULT_SUPABASE_URL = 'https://tljofqremlconawmtndd.supabase.co';
+const DEFAULT_SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InRsam9mcXJlbWxjb25hd210bmRkIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODY2MTE1MTYsImV4cCI6MjEwMjE4NzUxNn0.lUUYnc0jOMl6JU1SS8RLoxZu2mir70qgcO2J8kvSHn0';
 
-export const isSupabaseConfigured = Boolean(supabaseUrl && supabaseAnonKey && !supabaseUrl.includes('your-supabase-project-id'));
+const envUrl = import.meta.env.VITE_SUPABASE_URL || '';
+const envKey = import.meta.env.VITE_SUPABASE_ANON_KEY || '';
+
+const supabaseUrl = (envUrl && !envUrl.includes('your-supabase-project-id')) ? envUrl : DEFAULT_SUPABASE_URL;
+const supabaseAnonKey = (envKey && !envKey.includes('your-supabase-anon-key')) ? envKey : DEFAULT_SUPABASE_ANON_KEY;
+
+export const isSupabaseConfigured = Boolean(supabaseUrl && supabaseAnonKey);
 
 let supabaseClient: SupabaseClient | null = null;
 
@@ -286,7 +292,13 @@ CREATE TABLE IF NOT EXISTS public.reviews (
 ALTER TABLE public.bookings ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.reviews ENABLE ROW LEVEL SECURITY;
 
--- Public RLS policies
+-- Public RLS policies (Safe drop & create)
+DROP POLICY IF EXISTS "Allow public read bookings" ON public.bookings;
+DROP POLICY IF EXISTS "Allow public insert bookings" ON public.bookings;
+DROP POLICY IF EXISTS "Allow public update bookings" ON public.bookings;
+DROP POLICY IF EXISTS "Allow public read reviews" ON public.reviews;
+DROP POLICY IF EXISTS "Allow public insert reviews" ON public.reviews;
+
 CREATE POLICY "Allow public read bookings" ON public.bookings FOR SELECT USING (true);
 CREATE POLICY "Allow public insert bookings" ON public.bookings FOR INSERT WITH CHECK (true);
 CREATE POLICY "Allow public update bookings" ON public.bookings FOR UPDATE USING (true);

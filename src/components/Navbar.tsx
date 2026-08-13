@@ -53,7 +53,7 @@ export const Navbar: React.FC<NavbarProps> = ({
               className="inline-flex items-center gap-1 text-slate-300 hover:text-white transition"
             >
               <Phone className="w-3 h-3 text-blue-400" />
-              <span>081-234-5678</span>
+              <span>062-681-6494</span>
             </a>
             <span className="text-slate-700">|</span>
             <button

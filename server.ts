@@ -6,6 +6,7 @@ import { Tour, Booking, Review, Customer, AppSettings, LineNotificationLog, Sale
 
 const app = express();
 const PORT = 3000;
+const SITE_URL = process.env.APP_URL || 'https://tripseatour-s-org.vercel.app';
 
 app.use(express.json({ limit: '10mb' }));
 
@@ -130,7 +131,8 @@ async function checkAndSend24hReminders() {
           `📅 วันเดินทาง: ${booking.travelDate}\n` +
           `🏨 โรงแรมรับส่ง: ${booking.pickupHotel} (ห้อง ${booking.roomNumber || 'ยังไม่ระบุ'})\n` +
           `👥 จำนวน: ผู้ใหญ่ ${booking.adults} / เด็ก ${booking.children}\n` +
-          `📌 สถานะ: ยืนยันเรียบร้อยแล้ว (พร้อมต้อนรับลูกค้า!)`;
+          `📌 สถานะ: ยืนยันเรียบร้อยแล้ว (พร้อมต้อนรับลูกค้า!)\n` +
+          `🌐 เว็บไซต์: ${SITE_URL}`;
 
         await sendLineNotification(lineMsg, booking.bookingRef, 'REMINDER_24H');
         booking.reminderSent = true;
@@ -251,7 +253,8 @@ app.post('/api/bookings', async (req, res) => {
     `📅 วันเดินทาง: ${travelDate}\n` +
     `🏨 โรงแรม: ${pickupHotel}\n` +
     `👥 จำนวน: ผู้ใหญ่ ${adults} / เด็ก ${children}\n` +
-    `💰 ยอดรวม: ${totalAmount.toLocaleString()} บาท (PromptPay QR)`;
+    `💰 ยอดรวม: ${totalAmount.toLocaleString()} บาท (PromptPay QR)\n` +
+    `🌐 เว็บไซต์: ${SITE_URL}`;
 
   await sendLineNotification(lineMsg, bookingRef, 'NEW_ORDER');
   newBooking.lineNotifySent = true;
@@ -275,7 +278,7 @@ app.post('/api/bookings/:id/upload-slip', async (req, res) => {
   const msg = `\n📄 [สลิปแจ้งชำระเงิน] ${booking.bookingRef}\n` +
     `👤 ${booking.customerName} อัปโหลดสลิปเรียบร้อยแล้ว\n` +
     `💰 ยอดชำระ: ${booking.totalAmount.toLocaleString()} บาท\n` +
-    `🔍 โปรดตรวจสอบสลิปในหลังบ้านเพื่อยืนยันออเดอร์`;
+    `🌐 ตรวจสอบที่: ${SITE_URL}`;
 
   await sendLineNotification(msg, booking.bookingRef, 'NEW_ORDER');
 
@@ -302,7 +305,8 @@ app.put('/api/bookings/:id/status', async (req, res) => {
       `👤 ลูกค้า: ${booking.customerName}\n` +
       `📍 ทัวร์: ${booking.tourTitle}\n` +
       `📅 วันเดินทาง: ${booking.travelDate}\n` +
-      `🎉 สถานะ: ออกตั๋ว Voucher เรียบร้อยแล้ว`;
+      `🎉 สถานะ: ออกตั๋ว Voucher เรียบร้อยแล้ว\n` +
+      `🌐 ดูเว็บไซต์: ${SITE_URL}`;
 
     await sendLineNotification(msg, booking.bookingRef, 'PAYMENT_VERIFIED');
   }
@@ -467,6 +471,7 @@ app.post('/api/bookings/:id/send-line-ticket', async (req, res) => {
     `👥 จำนวน: ผู้ใหญ่ ${booking.adults} ท่าน / เด็ก ${booking.children} ท่าน\n` +
     `💰 ยอดชำระสุทธิ: ฿${booking.totalAmount.toLocaleString()} (ชำระแล้ว)\n` +
     `═════════════════════════\n` +
+    `🌐 เว็บไซต์: https://tripseatour-s-org.vercel.app\n` +
     `🔗 สแกนตรวจตั๋ว: ${qrUrl}\n` +
     `ℹ️ ลูกค้าสามารถแสดงตั๋วนี้ให้คนขับรถ/ไกด์ดูในวันเดินทางได้ทันที`;
 

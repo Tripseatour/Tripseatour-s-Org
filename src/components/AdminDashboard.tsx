@@ -59,7 +59,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
   const [selectedTicketBooking, setSelectedTicketBooking] = useState<Booking | null>(null);
   const [editingTour, setEditingTour] = useState<Tour | null>(null);
   const [isTourModalOpen, setIsTourModalOpen] = useState(false);
-  const [testLineMsg, setTestLineMsg] = useState('🧪 [ทดสอบการแจ้งเตือน LINE Notify จากระบบแอดมิน]');
+  const [testLineMsg, setTestLineMsg] = useState('🧪 [ทดสอบการแจ้งเตือน LINE Notify จากระบบแอดมิน]\n🌐 เว็บไซต์: https://tripseatour-s-org.vercel.app');
 
   // Settings State
   const [formSettings, setFormSettings] = useState<AppSettings>({ ...settings });
