@@ -6,7 +6,7 @@ import { Tour, Booking, Review, Customer, AppSettings, LineNotificationLog, Sale
 
 const app = express();
 const PORT = 3000;
-const SITE_URL = process.env.APP_URL || 'https://tripseatour-s-org.vercel.app';
+const SITE_URL = process.env.APP_URL || 'https://tripseatourphuket.vercel.app';
 
 const SUPABASE_URL = process.env.VITE_SUPABASE_URL || process.env.SUPABASE_URL || 'https://tljofqremlconawmtndd.supabase.co';
 const SUPABASE_ANON_KEY = process.env.VITE_SUPABASE_ANON_KEY || process.env.SUPABASE_ANON_KEY || 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InRsam9mcXJlbWxjb25hd210bmRkIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODY2MTE1MTYsImV4cCI6MjEwMjE4NzUxNn0.lUUYnc0jOMl6JU1SS8RLoxZu2mir70qgcO2J8kvSHn0';
