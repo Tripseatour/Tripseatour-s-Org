@@ -710,7 +710,6 @@ app.get('/api/line/detected-groups', (req, res) => {
 
 // LINE Webhook Endpoint to auto-detect Group ID
 app.post('/api/line/webhook', async (req, res) => {
-  res.status(200).send('OK');
   try {
     const events = req.body?.events || [];
     for (const event of events) {
@@ -734,6 +733,8 @@ app.post('/api/line/webhook', async (req, res) => {
         // Auto-assign group ID if empty or simulated
         if (!settings.lineMessagingUserId || settings.lineMessagingUserId.startsWith('U1234') || settings.lineMessagingUserId === 'C1234567890abcdef1234567890abcdef') {
           settings.lineMessagingUserId = detectedGroupId;
+          // IMPORTANT: Persist settings to Supabase so it is saved permanently (crucial for Vercel Serverless)
+          await persistState('settings');
         }
 
         // Auto reply back into the LINE Group with its Group ID
@@ -758,6 +759,7 @@ app.post('/api/line/webhook', async (req, res) => {
   } catch (err) {
     console.error('Webhook processing error:', err);
   }
+  res.status(200).send('OK');
 });
 
 // Force Bot to send Group ID Identification Message into the active Group
