@@ -1,0 +1,6 @@
+{
+  "name": "Trip Sea Tour Phuket - ทัวร์ภูเก็ต จองและชำระเงินออนไลน์",
+  "description": "ระบบจองทัวร์ภูเก็ตออนไลน์ ชำระเงินผ่าน PromptPay QR Code พร้อมหลังบ้านแอดมิน แดชบอร์ดยอดขาย และระบบแจ้งเตือน LINE Notify / OA",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
