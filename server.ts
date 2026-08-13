@@ -166,15 +166,14 @@ async function persistState(key: 'tours' | 'bookings' | 'settings' | 'reviews' |
     if (key === 'reviews') val = JSON.stringify(reviews);
     if (key === 'customers') val = JSON.stringify(customers);
 
-    try {
-      await supabase.from('app_store').upsert({ key, value: val, updated_at: new Date().toISOString() }, { onConflict: 'key' });
-    } catch (e) {
-      // Ignore if app_store table not present
+    const { error: kvError } = await supabase.from('app_store').upsert({ key, value: val, updated_at: new Date().toISOString() }, { onConflict: 'key' });
+    if (kvError) {
+      console.log(`[Supabase app_store upsert info for ${key}]:`, kvError.message);
     }
 
     if (key === 'settings') {
       try {
-        await supabase.from('settings').upsert({
+        const { error: setErr } = await supabase.from('settings').upsert({
           id: 1,
           site_name: settings.siteName,
           company_name: settings.companyName,
@@ -189,6 +188,7 @@ async function persistState(key: 'tours' | 'bookings' | 'settings' | 'reviews' |
           address: settings.address,
           updated_at: new Date().toISOString()
         }, { onConflict: 'id' });
+        if (setErr) console.log('[Supabase settings upsert info]:', setErr.message);
       } catch (e) {
         // Ignore if settings table not present
       }
@@ -611,6 +611,52 @@ app.get('/api/stats', (req, res) => {
   };
 
   res.json(stats);
+});
+
+// --- State Auto Sync ---
+app.post('/api/sync', async (req, res) => {
+  try {
+    const {
+      tours: clientTours,
+      bookings: clientBookings,
+      settings: clientSettings,
+      reviews: clientReviews,
+      customers: clientCustomers
+    } = req.body;
+
+    let updated = false;
+
+    if (Array.isArray(clientTours) && clientTours.length > 0) {
+      tours = clientTours;
+      await persistState('tours');
+      updated = true;
+    }
+    if (Array.isArray(clientBookings)) {
+      bookings = clientBookings;
+      await persistState('bookings');
+      updated = true;
+    }
+    if (clientSettings && clientSettings.promptPayId) {
+      settings = { ...settings, ...clientSettings };
+      await persistState('settings');
+      updated = true;
+    }
+    if (Array.isArray(clientReviews)) {
+      reviews = clientReviews;
+      await persistState('reviews');
+      updated = true;
+    }
+    if (Array.isArray(clientCustomers)) {
+      customers = clientCustomers;
+      await persistState('customers');
+      updated = true;
+    }
+
+    res.json({ success: true, updated, settings, toursCount: tours.length, bookingsCount: bookings.length });
+  } catch (err) {
+    console.error('Error in /api/sync:', err);
+    res.status(500).json({ error: 'Failed to sync state' });
+  }
 });
 
 // --- Settings & LINE Notify ---

@@ -110,6 +110,10 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
     fetchDetectedGroups();
   }, []);
 
+  useEffect(() => {
+    setFormSettings({ ...settings });
+  }, [settings]);
+
   // New Tour Form State
   const [newTourTitle, setNewTourTitle] = useState('');
   const [newTourCategory, setNewTourCategory] = useState<'island' | 'sunset' | 'yacht' | 'eco' | 'sightseeing'>('island');

@@ -13,6 +13,7 @@ import { AdminAuthModal } from './components/AdminAuthModal';
 
 import { Tour, Booking, Review, Customer, AppSettings, LineNotificationLog, Language } from './types';
 import { translations } from './data/translations';
+import { initialTours, initialBookings, initialReviews, initialCustomers, initialSettings } from './data/mockData';
 import { Compass, Sparkles, Filter, Ticket, QrCode, Phone, MessageCircle, ShieldCheck } from 'lucide-react';
 
 export default function App() {
@@ -23,22 +24,52 @@ export default function App() {
   const [isAdminAuthenticated, setIsAdminAuthenticated] = useState<boolean>(false);
   const [isAdminAuthModalOpen, setIsAdminAuthModalOpen] = useState<boolean>(false);
 
-  // Backend Data
-  const [tours, setTours] = useState<Tour[]>([]);
-  const [bookings, setBookings] = useState<Booking[]>([]);
-  const [reviews, setReviews] = useState<Review[]>([]);
-  const [customers, setCustomers] = useState<Customer[]>([]);
-  const [settings, setSettings] = useState<AppSettings>({
-    siteName: 'Trip Sea Tour Phuket',
-    companyName: 'บริษัท ทริปซีทัวร์ ภูเก็ต จำกัด',
-    promptPayId: '0979241399',
-    promptPayName: 'บริษัท ทริปซีทัวร์ ภูเก็ต จำกัด',
-    lineNotifyToken: 'SIMULATED_LINE_NOTIFY_TOKEN_XYZ123',
-    lineOaId: '@056hxinu',
-    contactPhone: '+66 (0) 62 681 6494 / +66 (0) 97 924 1399',
-    contactEmail: 'tripseatourphuket@gmail.com',
-    address: 'ภูเก็ต ประเทศไทย',
+  // Backend Data with localStorage state memory
+  const [tours, setTours] = useState<Tour[]>(() => {
+    try {
+      const saved = localStorage.getItem('tst_tours');
+      return saved ? JSON.parse(saved) : initialTours;
+    } catch {
+      return initialTours;
+    }
   });
+
+  const [bookings, setBookings] = useState<Booking[]>(() => {
+    try {
+      const saved = localStorage.getItem('tst_bookings');
+      return saved ? JSON.parse(saved) : initialBookings;
+    } catch {
+      return initialBookings;
+    }
+  });
+
+  const [reviews, setReviews] = useState<Review[]>(() => {
+    try {
+      const saved = localStorage.getItem('tst_reviews');
+      return saved ? JSON.parse(saved) : initialReviews;
+    } catch {
+      return initialReviews;
+    }
+  });
+
+  const [customers, setCustomers] = useState<Customer[]>(() => {
+    try {
+      const saved = localStorage.getItem('tst_customers');
+      return saved ? JSON.parse(saved) : initialCustomers;
+    } catch {
+      return initialCustomers;
+    }
+  });
+
+  const [settings, setSettings] = useState<AppSettings>(() => {
+    try {
+      const saved = localStorage.getItem('tst_settings');
+      return saved ? JSON.parse(saved) : initialSettings;
+    } catch {
+      return initialSettings;
+    }
+  });
+
   const [lineLogs, setLineLogs] = useState<LineNotificationLog[]>([]);
 
   // Search & Filters
@@ -60,9 +91,13 @@ export default function App() {
     setTimeout(() => setToastMessage(null), 4000);
   };
 
-  // Fetch initial data
+  // Fetch initial data & auto-sync
   const loadInitialData = async () => {
     try {
+      const localToursRaw = localStorage.getItem('tst_tours');
+      const localSettingsRaw = localStorage.getItem('tst_settings');
+      const localBookingsRaw = localStorage.getItem('tst_bookings');
+
       const [resTours, resBookings, resReviews, resCustomers, resSettings, resLogs] = await Promise.all([
         fetch('/api/tours'),
         fetch('/api/bookings'),
@@ -72,12 +107,65 @@ export default function App() {
         fetch('/api/line/logs')
       ]);
 
-      if (resTours.ok) setTours(await resTours.json());
-      if (resBookings.ok) setBookings(await resBookings.json());
-      if (resReviews.ok) setReviews(await resReviews.json());
-      if (resCustomers.ok) setCustomers(await resCustomers.json());
-      if (resSettings.ok) setSettings(await resSettings.json());
+      let serverTours: Tour[] | null = null;
+      let serverBookings: Booking[] | null = null;
+      let serverReviews: Review[] | null = null;
+      let serverCustomers: Customer[] | null = null;
+      let serverSettings: AppSettings | null = null;
+
+      if (resTours.ok) serverTours = await resTours.json();
+      if (resBookings.ok) serverBookings = await resBookings.json();
+      if (resReviews.ok) serverReviews = await resReviews.json();
+      if (resCustomers.ok) serverCustomers = await resCustomers.json();
+      if (resSettings.ok) serverSettings = await resSettings.json();
       if (resLogs.ok) setLineLogs(await resLogs.json());
+
+      // If client has custom edits in localStorage, push them to server to sync
+      if (localToursRaw || localSettingsRaw || localBookingsRaw) {
+        const localTours = localToursRaw ? JSON.parse(localToursRaw) : tours;
+        const localBookings = localBookingsRaw ? JSON.parse(localBookingsRaw) : bookings;
+        const localSettings = localSettingsRaw ? JSON.parse(localSettingsRaw) : settings;
+
+        // If server returns data, merge or prefer non-empty server data
+        if (serverTours && serverTours.length > 0) {
+          setTours(serverTours);
+          localStorage.setItem('tst_tours', JSON.stringify(serverTours));
+        } else if (localTours && localTours.length > 0) {
+          setTours(localTours);
+        }
+
+        if (serverSettings && serverSettings.promptPayId) {
+          setSettings(serverSettings);
+          localStorage.setItem('tst_settings', JSON.stringify(serverSettings));
+        } else if (localSettings) {
+          setSettings(localSettings);
+        }
+
+        if (serverBookings) {
+          setBookings(serverBookings);
+          localStorage.setItem('tst_bookings', JSON.stringify(serverBookings));
+        } else if (localBookings) {
+          setBookings(localBookings);
+        }
+
+        // Sync local changes to server & Supabase
+        await fetch('/api/sync', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            tours: localTours,
+            bookings: localBookings,
+            settings: localSettings,
+          })
+        }).catch(() => {});
+      } else {
+        // No local edits, use server data directly
+        if (serverTours) { setTours(serverTours); localStorage.setItem('tst_tours', JSON.stringify(serverTours)); }
+        if (serverBookings) { setBookings(serverBookings); localStorage.setItem('tst_bookings', JSON.stringify(serverBookings)); }
+        if (serverReviews) { setReviews(serverReviews); localStorage.setItem('tst_reviews', JSON.stringify(serverReviews)); }
+        if (serverCustomers) { setCustomers(serverCustomers); localStorage.setItem('tst_customers', JSON.stringify(serverCustomers)); }
+        if (serverSettings) { setSettings(serverSettings); localStorage.setItem('tst_settings', JSON.stringify(serverSettings)); }
+      }
     } catch (err) {
       console.error('Error loading data from server:', err);
     }
