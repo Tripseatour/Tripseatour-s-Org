@@ -257,10 +257,12 @@ async function sendLineNotification(message: string, bookingRef: string = 'N/A',
         const errorText = await response.text();
         console.error('LINE Messaging API Error:', response.status, errorText);
         logItem.status = 'failed';
+        logItem.message = `${logItem.message} ❌ (Error ${response.status}: ${errorText})`;
       }
-    } catch (err) {
+    } catch (err: any) {
       console.error('Error sending LINE Messaging API:', err);
       logItem.status = 'failed';
+      logItem.message = `${logItem.message} ❌ (Network Error: ${err?.message || err})`;
     }
   }
 
@@ -714,45 +716,53 @@ app.post('/api/line/webhook', async (req, res) => {
     const events = req.body?.events || [];
     for (const event of events) {
       const source = event.source;
-      if (source && (source.type === 'group' || source.type === 'room')) {
-        const detectedGroupId = source.groupId || source.roomId;
-        console.log('📌 Detected LINE Group ID:', detectedGroupId);
-
-        // Record or update in memory list
-        const existingIndex = detectedLineGroups.findIndex(g => g.groupId === detectedGroupId);
-        if (existingIndex >= 0) {
-          detectedLineGroups[existingIndex].lastSeen = new Date().toISOString();
-        } else {
-          detectedLineGroups.unshift({
-            groupId: detectedGroupId,
-            groupName: `กลุ่ม LINE (ตรวจพบเมื่อ ${new Date().toLocaleTimeString('th-TH')})`,
-            lastSeen: new Date().toISOString()
-          });
-        }
+      if (source) {
+        const isGroup = source.type === 'group' || source.type === 'room';
+        const isUser = source.type === 'user';
         
-        // Auto-assign group ID if empty or simulated
-        if (!settings.lineMessagingUserId || settings.lineMessagingUserId.startsWith('U1234') || settings.lineMessagingUserId === 'C1234567890abcdef1234567890abcdef') {
-          settings.lineMessagingUserId = detectedGroupId;
-          // IMPORTANT: Persist settings to Supabase so it is saved permanently (crucial for Vercel Serverless)
-          await persistState('settings');
-        }
+        if (isGroup || isUser) {
+          const detectedGroupId = isGroup ? (source.groupId || source.roomId) : source.userId;
+          if (detectedGroupId) {
+            console.log('📌 Detected LINE ID:', detectedGroupId);
 
-        // Auto reply back into the LINE Group with its Group ID
-        if (event.replyToken && settings.lineMessagingChannelAccessToken && !settings.lineMessagingChannelAccessToken.startsWith('SIMULATED')) {
-          await fetch('https://api.line.me/v2/bot/message/reply', {
-            method: 'POST',
-            headers: {
-              'Content-Type': 'application/json',
-              'Authorization': `Bearer ${settings.lineMessagingChannelAccessToken.trim()}`
-            },
-            body: JSON.stringify({
-              replyToken: event.replyToken,
-              messages: [{
-                type: 'text',
-                text: `🤖 [ระบบแจ้งเตือนอัตโนมัติ]\n\n✅ เชื่อมต่อกลุ่มแอดมินรับแจ้งเตือนจองทัวร์เรียบร้อยแล้ว!\n\n📌 LINE Group ID สำหรับบันทึกลงในระบบคือ:\n${detectedGroupId}\n\n💡 ระบบได้บันทึก Group ID นี้ลงใน AppSettings ของเว็บไซต์เรียบร้อยแล้ว`
-              }]
-            })
-          });
+            // Record or update in memory list
+            const existingIndex = detectedLineGroups.findIndex(g => g.groupId === detectedGroupId);
+            const label = isGroup ? 'กลุ่ม LINE' : 'ผู้ใช้งานเดี่ยว (1-on-1)';
+            if (existingIndex >= 0) {
+              detectedLineGroups[existingIndex].lastSeen = new Date().toISOString();
+            } else {
+              detectedLineGroups.unshift({
+                groupId: detectedGroupId,
+                groupName: `${label} (ตรวจพบเมื่อ ${new Date().toLocaleTimeString('th-TH')})`,
+                lastSeen: new Date().toISOString()
+              });
+            }
+            
+            // Auto-assign group ID if empty or simulated
+            if (!settings.lineMessagingUserId || settings.lineMessagingUserId.startsWith('U1234') || settings.lineMessagingUserId === 'C1234567890abcdef1234567890abcdef') {
+              settings.lineMessagingUserId = detectedGroupId;
+              // IMPORTANT: Persist settings to Supabase so it is saved permanently (crucial for Vercel Serverless)
+              await persistState('settings');
+            }
+
+            // Auto reply back into the LINE Group/Chat with its ID
+            if (event.replyToken && settings.lineMessagingChannelAccessToken && !settings.lineMessagingChannelAccessToken.startsWith('SIMULATED')) {
+              await fetch('https://api.line.me/v2/bot/message/reply', {
+                method: 'POST',
+                headers: {
+                  'Content-Type': 'application/json',
+                  'Authorization': `Bearer ${settings.lineMessagingChannelAccessToken.trim()}`
+                },
+                body: JSON.stringify({
+                  replyToken: event.replyToken,
+                  messages: [{
+                    type: 'text',
+                    text: `🤖 [ระบบแจ้งเตือนอัตโนมัติ]\n\n✅ เชื่อมต่อระบบรับแจ้งเตือนจองทัวร์เรียบร้อยแล้ว!\n\n📌 LINE ID สำหรับบันทึกลงในระบบคือ:\n${detectedGroupId}\n\n💡 ระบบได้บันทึก ID นี้ลงใน AppSettings ของเว็บไซต์เรียบร้อยแล้ว`
+                  }]
+                })
+              }).catch((e) => console.error('Error sending reply:', e));
+            }
+          }
         }
       }
     }
