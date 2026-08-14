@@ -138,10 +138,10 @@ export default function App() {
         if (logs) setLineLogs(logs);
       }
 
-      // Supabase direct fallback if server returned null/empty
-      if (!serverBookings || serverBookings.length === 0) {
+      // Supabase direct fallback ONLY if server API returned null (e.g. server offline)
+      if (serverBookings === null) {
         const directBookings = await supabaseApi.getBookings();
-        if (directBookings && directBookings.length > 0) {
+        if (directBookings) {
           serverBookings = directBookings;
         }
       }
@@ -151,15 +151,15 @@ export default function App() {
           serverSettings = directSettings;
         }
       }
-      if (!serverTours || serverTours.length === 0) {
+      if (serverTours === null) {
         const directTours = await supabaseApi.getTours();
-        if (directTours && directTours.length > 0) {
+        if (directTours) {
           serverTours = directTours;
         }
       }
-      if (!serverCustomers || serverCustomers.length === 0) {
+      if (serverCustomers === null) {
         const directCustomers = await supabaseApi.getCustomers();
-        if (directCustomers && directCustomers.length > 0) {
+        if (directCustomers) {
           serverCustomers = directCustomers;
         }
       }

@@ -920,14 +920,9 @@ app.put('/api/customers/:id', async (req, res) => {
 
 app.delete('/api/customers/:id', async (req, res) => {
   const { id } = req.params;
-  const initialLen = customers.length;
   customers = customers.filter(c => c.id !== id);
-  if (customers.length < initialLen) {
-    await persistState('customers');
-    res.json({ success: true, message: 'Customer deleted successfully' });
-  } else {
-    res.status(404).json({ error: 'Customer not found' });
-  }
+  await persistState('customers');
+  res.json({ success: true, message: 'Customer deleted successfully' });
 });
 
 // --- Stats Dashboard ---

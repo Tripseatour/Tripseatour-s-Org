@@ -1561,6 +1561,47 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
         </div>
       )}
 
+      {/* Delete Customer Modal */}
+      {deleteCustomerTarget && (
+        <div className="fixed inset-0 z-50 bg-slate-950/85 backdrop-blur-md flex items-center justify-center p-4 animate-in fade-in">
+          <div className="bg-slate-900 border border-rose-800 max-w-md w-full rounded-3xl p-6 shadow-2xl relative space-y-4 text-center">
+            <div className="w-12 h-12 bg-rose-500/20 rounded-full flex items-center justify-center mx-auto border border-rose-500/40 text-rose-400">
+              <Trash2 className="w-6 h-6" />
+            </div>
+            <div>
+              <h3 className="text-lg font-extrabold text-white">ยืนยันลบข้อมูลลูกค้า</h3>
+              <p className="text-xs text-slate-300 mt-1 leading-relaxed">
+                คุณต้องการลบข้อมูลลูกค้า <strong className="text-teal-300">{deleteCustomerTarget.name}</strong> ({deleteCustomerTarget.phone}) ออกจากระบบ CRM ใช่หรือไม่?
+              </p>
+            </div>
+
+            <div className="grid grid-cols-2 gap-3 pt-2">
+              <button
+                type="button"
+                onClick={() => setDeleteCustomerTarget(null)}
+                className="w-full bg-slate-800 hover:bg-slate-700 text-slate-300 font-bold py-2.5 rounded-xl text-xs transition border border-slate-700"
+              >
+                ยกเลิก
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  const targetId = deleteCustomerTarget.id;
+                  setDeleteCustomerTarget(null);
+                  if (onDeleteCustomer) {
+                    onDeleteCustomer(targetId);
+                  }
+                }}
+                className="w-full bg-rose-600 hover:bg-rose-500 text-white font-bold py-2.5 rounded-xl text-xs transition shadow-lg shadow-rose-900/40 flex items-center justify-center gap-1.5"
+              >
+                <Trash2 className="w-4 h-4" />
+                <span>ยืนยันลบข้อมูลลูกค้า</span>
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Customer Edit Modal */}
       {isCustomerModalOpen && editingCustomer && (
         <div className="fixed inset-0 z-50 bg-slate-950/85 backdrop-blur-md flex items-center justify-center p-4 animate-in fade-in">
