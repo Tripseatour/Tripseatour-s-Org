@@ -29,8 +29,14 @@ export const AdminAuthModal: React.FC<AdminAuthModalProps> = ({
   const verifyAndLogin = async (emailToVerify: string) => {
     const cleanEmail = emailToVerify.trim().toLowerCase();
 
-    if (!cleanEmail || (!cleanEmail.includes('@gmail.com') && !cleanEmail.endsWith('@tripseatour.com') && !cleanEmail.includes('@'))) {
-      setErrorMsg('กรุณาใช้อีเมล Google Account (@gmail.com) ที่ได้รับอนุญาตเท่านั้น');
+    if (!cleanEmail || !cleanEmail.includes('@')) {
+      setErrorMsg('กรุณาใช้อีเมล Google Account (@gmail.com) ที่ถูกต้อง');
+      return;
+    }
+
+    const lowerAuth = (authorizedEmails || ['asmr9941@gmail.com', 'admin@tripseatour.com']).map(a => a.trim().toLowerCase());
+    if (!lowerAuth.includes(cleanEmail)) {
+      setErrorMsg(`⛔ ไม่อนุญาต: บัญชี Google (${cleanEmail}) ไม่ได้อยู่ในรายชื่อ adminGoogleEmails ที่ได้รับสิทธิ์ในระบบ`);
       return;
     }
 
@@ -60,8 +66,6 @@ export const AdminAuthModal: React.FC<AdminAuthModalProps> = ({
         setErrorMsg(data.message || `⛔ บัญชี Google (${cleanEmail}) ไม่มีสิทธิ์เข้าถึงระบบผู้ดูแล`);
       }
     } catch (err) {
-      // Direct local verification with authorized emails
-      const lowerAuth = authorizedEmails.map(a => a.trim().toLowerCase());
       if (lowerAuth.includes(cleanEmail)) {
         const user: AdminUser = {
           email: cleanEmail,

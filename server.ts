@@ -185,7 +185,33 @@ async function loadStateFromSupabase() {
   }
 }
 
+let syncMetadata = {
+  version: 1,
+  lastUpdatedAt: {
+    tours: new Date().toISOString(),
+    bookings: new Date().toISOString(),
+    reviews: new Date().toISOString(),
+    customers: new Date().toISOString(),
+    settings: new Date().toISOString()
+  }
+};
+
+export function updateSyncMetadata(key?: 'tours' | 'bookings' | 'reviews' | 'customers' | 'settings') {
+  syncMetadata.version++;
+  const iso = new Date().toISOString();
+  if (key) {
+    syncMetadata.lastUpdatedAt[key] = iso;
+  } else {
+    syncMetadata.lastUpdatedAt.tours = iso;
+    syncMetadata.lastUpdatedAt.bookings = iso;
+    syncMetadata.lastUpdatedAt.reviews = iso;
+    syncMetadata.lastUpdatedAt.customers = iso;
+    syncMetadata.lastUpdatedAt.settings = iso;
+  }
+}
+
 async function persistState(key: 'tours' | 'bookings' | 'settings' | 'reviews' | 'customers') {
+  updateSyncMetadata(key);
   if (!supabase) return;
   try {
     let val = '';
@@ -363,6 +389,13 @@ async function checkAndSend24hReminders() {
 }
 
 // API ROUTES
+app.get('/api/sync-status', (req, res) => {
+  res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
+  res.json({
+    version: syncMetadata.version,
+    lastUpdatedAt: syncMetadata.lastUpdatedAt
+  });
+});
 // --- Tours ---
 app.get('/api/tours', (req, res) => {
   res.json(tours);

@@ -20,6 +20,8 @@ interface AdminDashboardProps {
   reviews?: Review[];
   settings: AppSettings;
   lineLogs: LineNotificationLog[];
+  syncStatus?: 'synced' | 'syncing' | 'error';
+  lastSyncedAt?: string;
   onUpdateBookingStatus: (id: string, paymentStatus: string, orderStatus: string) => void;
   onDeleteBooking?: (id: string) => void;
   onSaveSettings: (settings: AppSettings) => void;
@@ -36,6 +38,7 @@ interface AdminDashboardProps {
   onReplyReview?: (id: string, reply: string) => void;
   onDeleteReview?: (id: string) => void;
   onRefreshData?: () => void;
+  onForceSync?: () => void;
 }
 
 export const AdminDashboard: React.FC<AdminDashboardProps> = ({
@@ -45,6 +48,8 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
   reviews = [],
   settings,
   lineLogs,
+  syncStatus = 'synced',
+  lastSyncedAt,
   onUpdateBookingStatus,
   onDeleteBooking,
   onSaveSettings,
@@ -60,7 +65,8 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
   onApproveReview,
   onReplyReview,
   onDeleteReview,
-  onRefreshData
+  onRefreshData,
+  onForceSync
 }) => {
   const [activeTab, setActiveTab] = useState<'overview' | 'orders' | 'tours' | 'customers' | 'reviews' | 'settings'>('overview');
   const [stats, setStats] = useState<SalesStats | null>(null);
@@ -358,8 +364,36 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
             </h1>
           </div>
 
-          {/* Quick Stats Pills */}
-          <div className="flex items-center gap-2">
+          {/* Quick Stats Pills & Sync Status */}
+          <div className="flex flex-wrap items-center gap-2">
+            {/* Sync Status Badge */}
+            <div className={`px-3 py-1.5 rounded-xl text-xs font-bold flex items-center gap-1.5 border ${
+              syncStatus === 'synced'
+                ? 'bg-emerald-950/80 text-emerald-400 border-emerald-800/80'
+                : syncStatus === 'syncing'
+                ? 'bg-amber-950/80 text-amber-400 border-amber-800/80 animate-pulse'
+                : 'bg-rose-950/80 text-rose-400 border-rose-800/80'
+            }`}>
+              <span className={`w-2 h-2 rounded-full ${
+                syncStatus === 'synced' ? 'bg-emerald-400' : syncStatus === 'syncing' ? 'bg-amber-400 animate-ping' : 'bg-rose-500'
+              }`} />
+              <span>
+                {syncStatus === 'synced' ? `ซิงค์สำเร็จ (${lastSyncedAt || 'สด'})` : syncStatus === 'syncing' ? 'กำลังซิงค์...' : 'การซิงค์ขัดข้อง'}
+              </span>
+            </div>
+
+            {onForceSync && (
+              <button
+                type="button"
+                onClick={onForceSync}
+                className="bg-amber-950/40 hover:bg-amber-900/60 text-amber-300 border border-amber-800/60 px-3 py-2 rounded-xl text-xs font-bold flex items-center gap-1.5 transition"
+                title="ล้างแคช local storage และดึงข้อมูลสดจากเซิร์ฟเวอร์"
+              >
+                <Database className="w-3.5 h-3.5 text-amber-400" />
+                <span>ล้างแคช & รีเซ็ต</span>
+              </button>
+            )}
+
             <button
               onClick={() => {
                 if (onRefreshData) onRefreshData();

@@ -104,22 +104,46 @@ export default function App() {
   // Toast alert
   const [toastMessage, setToastMessage] = useState<string | null>(null);
 
+  // Sync status state & server version tracking
+  const [syncStatus, setSyncStatus] = useState<'synced' | 'syncing' | 'error'>('synced');
+  const [lastSyncedAt, setLastSyncedAt] = useState<string>(new Date().toLocaleTimeString('th-TH'));
+  const lastServerVersionRef = React.useRef<number>(0);
+
   const showToast = (msg: string) => {
     setToastMessage(msg);
     setTimeout(() => setToastMessage(null), 4000);
   };
 
-  // Fetch initial data & auto-sync from server/Supabase
-  const loadInitialData = useCallback(async () => {
+  // Fetch initial data & auto-sync with version / lastUpdatedAt check
+  const loadInitialData = useCallback(async (forceReload: boolean = false) => {
     try {
-      // 1. Fetch latest from server APIs
+      setSyncStatus('syncing');
+
+      // 1. Check server version first
+      let serverVersion: number | null = null;
+      try {
+        const syncRes = await fetch('/api/sync-status', { cache: 'no-store' });
+        if (syncRes.ok) {
+          const syncData = await syncRes.json();
+          serverVersion = syncData.version;
+        }
+      } catch (e) {}
+
+      // If server version has NOT changed and we are not forcing reload, skip heavy re-renders
+      if (!forceReload && serverVersion !== null && serverVersion === lastServerVersionRef.current && lastServerVersionRef.current > 0) {
+        setSyncStatus('synced');
+        setLastSyncedAt(new Date().toLocaleTimeString('th-TH'));
+        return;
+      }
+
+      // 2. Fetch latest from server APIs
       const [resTours, resBookings, resReviews, resCustomers, resSettings, resLogs] = await Promise.all([
-        fetch('/api/tours').catch(() => null),
-        fetch('/api/bookings').catch(() => null),
-        fetch('/api/reviews').catch(() => null),
-        fetch('/api/customers').catch(() => null),
-        fetch('/api/settings').catch(() => null),
-        fetch('/api/line/logs').catch(() => null)
+        fetch('/api/tours', { cache: 'no-store' }).catch(() => null),
+        fetch('/api/bookings', { cache: 'no-store' }).catch(() => null),
+        fetch('/api/reviews', { cache: 'no-store' }).catch(() => null),
+        fetch('/api/customers', { cache: 'no-store' }).catch(() => null),
+        fetch('/api/settings', { cache: 'no-store' }).catch(() => null),
+        fetch('/api/line/logs', { cache: 'no-store' }).catch(() => null)
       ]);
 
       let serverTours: Tour[] | null = null;
@@ -164,8 +188,8 @@ export default function App() {
         }
       }
 
-      // Update state if server or Supabase returned data (respecting edits and deletions)
-      if (serverTours && serverTours.length > 0) {
+      // Update state & replace localStorage cache authoritatively
+      if (serverTours && Array.isArray(serverTours)) {
         setTours(serverTours);
         localStorage.setItem('tst_tours', JSON.stringify(serverTours));
       }
@@ -185,10 +209,32 @@ export default function App() {
         setSettings(serverSettings);
         localStorage.setItem('tst_settings', JSON.stringify(serverSettings));
       }
+
+      if (serverVersion !== null) {
+        lastServerVersionRef.current = serverVersion;
+      }
+      setSyncStatus('synced');
+      setLastSyncedAt(new Date().toLocaleTimeString('th-TH'));
     } catch (err) {
       console.error('Error loading data from server/Supabase:', err);
+      setSyncStatus('error');
     }
   }, []);
+
+  const handleForcePurgeAndSync = async () => {
+    try {
+      localStorage.removeItem('tst_bookings');
+      localStorage.removeItem('tst_customers');
+      localStorage.removeItem('tst_tours');
+      localStorage.removeItem('tst_reviews');
+      localStorage.removeItem('tst_settings');
+      lastServerVersionRef.current = -1;
+      await loadInitialData(true);
+      showToast('🔄 ล้างแคชเครื่องและรีเซ็ตข้อมูลจากฐานข้อมูลหลักเรียบร้อยแล้ว');
+    } catch (err) {
+      console.error('Error purging local storage:', err);
+    }
+  };
 
   useEffect(() => {
     loadInitialData();
@@ -529,10 +575,19 @@ export default function App() {
   const handleLogoutAdmin = () => {
     setIsAdminAuthenticated(false);
     setAdminUser(null);
-    localStorage.removeItem('tst_admin_auth');
-    localStorage.removeItem('tst_admin_user');
+    try {
+      localStorage.removeItem('tst_admin_auth');
+      localStorage.removeItem('tst_admin_user');
+      sessionStorage.clear();
+      if (typeof window !== 'undefined' && (window as any).google?.accounts?.id) {
+        (window as any).google.accounts.id.disableAutoSelect();
+      }
+    } catch (e) {}
     setActiveView('home');
-    showToast('🔒 ออกจากระบบแอดมินเรียบร้อยแล้ว');
+    showToast('🔒 ออกจากระบบและล้างเซสชันแอดมินเรียบร้อยแล้ว');
+    setTimeout(() => {
+      window.location.reload();
+    }, 400);
   };
 
   const t = translations[currentLang];
@@ -569,6 +624,8 @@ export default function App() {
           reviews={reviews}
           settings={settings}
           lineLogs={lineLogs}
+          syncStatus={syncStatus}
+          lastSyncedAt={lastSyncedAt}
           onUpdateBookingStatus={handleUpdateBookingStatus}
           onDeleteBooking={handleDeleteBooking}
           onSaveSettings={handleSaveSettings}
@@ -585,6 +642,7 @@ export default function App() {
           onReplyReview={handleReplyReview}
           onDeleteReview={handleDeleteReview}
           onRefreshData={loadInitialData}
+          onForceSync={handleForcePurgeAndSync}
         />
       ) : (
         <main className="flex-1 space-y-12 pb-16">
