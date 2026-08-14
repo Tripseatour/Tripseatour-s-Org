@@ -2,12 +2,13 @@ import React, { useState, useEffect } from 'react';
 import {
   BarChart3, DollarSign, ShoppingBag, Clock, CheckCircle2, AlertTriangle, Users,
   Settings, MessageCircle, QrCode, Plus, Search, Eye, Check, X, RefreshCw, Send, Image as ImageIcon,
-  ChevronRight, Filter, FileSpreadsheet, Sparkles, LogOut, Lock, Key, Ticket, Trash2, Edit3, Calendar, ListChecks
+  ChevronRight, Filter, FileSpreadsheet, Sparkles, LogOut, Lock, Key, Ticket, Trash2, Edit3, Calendar, ListChecks,
+  Star, MessageSquare, Bot, UserPlus, UserMinus, ShieldCheck, Mail
 } from 'lucide-react';
 import {
   BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid, PieChart, Pie, Cell, Legend
 } from 'recharts';
-import { Booking, Tour, Customer, AppSettings, LineNotificationLog, SalesStats } from '../types';
+import { Booking, Tour, Customer, Review, AppSettings, LineNotificationLog, SalesStats } from '../types';
 import { TicketVoucher } from './TicketVoucher';
 import { EditTourModal } from './EditTourModal';
 import { isSupabaseConfigured, SUPABASE_SQL_SCHEMA } from '../lib/supabase';
@@ -16,6 +17,7 @@ interface AdminDashboardProps {
   bookings: Booking[];
   tours: Tour[];
   customers: Customer[];
+  reviews?: Review[];
   settings: AppSettings;
   lineLogs: LineNotificationLog[];
   onUpdateBookingStatus: (id: string, paymentStatus: string, orderStatus: string) => void;
@@ -30,12 +32,17 @@ interface AdminDashboardProps {
   onSendSingleReminder?: (bookingId: string) => void;
   onUpdateCustomer?: (id: string, customerData: Partial<Customer>) => void;
   onDeleteCustomer?: (id: string) => void;
+  onApproveReview?: (id: string, isApproved: boolean) => void;
+  onReplyReview?: (id: string, reply: string) => void;
+  onDeleteReview?: (id: string) => void;
+  onRefreshData?: () => void;
 }
 
 export const AdminDashboard: React.FC<AdminDashboardProps> = ({
   bookings,
   tours,
   customers,
+  reviews = [],
   settings,
   lineLogs,
   onUpdateBookingStatus,
@@ -50,13 +57,18 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
   onSendSingleReminder,
   onUpdateCustomer,
   onDeleteCustomer,
+  onApproveReview,
+  onReplyReview,
+  onDeleteReview,
+  onRefreshData
 }) => {
-  const [activeTab, setActiveTab] = useState<'overview' | 'orders' | 'tours' | 'customers' | 'settings'>('overview');
+  const [activeTab, setActiveTab] = useState<'overview' | 'orders' | 'tours' | 'customers' | 'reviews' | 'settings'>('overview');
   const [stats, setStats] = useState<SalesStats | null>(null);
 
   // Filters
   const [orderFilter, setOrderFilter] = useState<string>('all');
   const [searchQuery, setSearchQuery] = useState<string>('');
+  const [reviewFilter, setReviewFilter] = useState<'all' | 'pending' | 'approved'>('all');
 
   // Modals & Forms
   const [selectedSlipUrl, setSelectedSlipUrl] = useState<string | null>(null);
@@ -72,8 +84,14 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
   const [isCustomerModalOpen, setIsCustomerModalOpen] = useState(false);
   const [deleteCustomerTarget, setDeleteCustomerTarget] = useState<Customer | null>(null);
 
-  // Settings State
+  // Review Reply State & AI
+  const [replyTextMap, setReplyTextMap] = useState<Record<string, string>>({});
+  const [aiGeneratingMap, setAiGeneratingMap] = useState<Record<string, boolean>>({});
+  const [deleteReviewTarget, setDeleteReviewTarget] = useState<Review | null>(null);
+
+  // Settings State & Admin Google Account Management
   const [formSettings, setFormSettings] = useState<AppSettings>({ ...settings });
+  const [newAdminEmail, setNewAdminEmail] = useState('');
   const [detectedGroups, setDetectedGroups] = useState<Array<{ groupId: string; groupName?: string; lastSeen: string }>>([]);
   const [isFetchingGroups, setIsFetchingGroups] = useState(false);
   const [groupFetchStatus, setGroupFetchStatus] = useState<string | null>(null);
@@ -126,14 +144,6 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
     setFormSettings({ ...settings });
   }, [settings]);
 
-  // New Tour Form State
-  const [newTourTitle, setNewTourTitle] = useState('');
-  const [newTourCategory, setNewTourCategory] = useState<'island' | 'sunset' | 'yacht' | 'eco' | 'sightseeing'>('island');
-  const [newPriceAdult, setNewPriceAdult] = useState(1500);
-  const [newPriceChild, setNewPriceChild] = useState(1000);
-  const [newDuration, setNewDuration] = useState('08:00 - 17:00');
-  const [newImage, setNewImage] = useState('https://images.unsplash.com/photo-1507525428034-b723cf961d3e?auto=format&fit=crop&w=800&q=80');
-
   // Load Stats from backend API
   const fetchStats = async () => {
     try {
@@ -151,6 +161,17 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
     fetchStats();
   }, [bookings]);
 
+  // Auto-refresh interval (every 12 seconds) for live dashboard sync
+  useEffect(() => {
+    const interval = setInterval(() => {
+      if (onRefreshData) {
+        onRefreshData();
+      }
+      fetchStats();
+    }, 12000);
+    return () => clearInterval(interval);
+  }, [onRefreshData]);
+
   // Handle Save Settings
   const handleSaveSettings = (e: React.FormEvent) => {
     e.preventDefault();
@@ -159,6 +180,110 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
     setTimeout(() => {
       setSaveSuccess(false);
     }, 4000);
+  };
+
+  // Add Google Admin Account
+  const handleAddAdminEmail = async () => {
+    const email = newAdminEmail.trim().toLowerCase();
+    if (!email || !email.includes('@')) {
+      alert('กรุณากรอก Google Account Email ที่ถูกต้อง');
+      return;
+    }
+    const currentList = formSettings.adminGoogleEmails || ['asmr9941@gmail.com'];
+    if (currentList.includes(email)) {
+      alert('อีเมลนี้มีสิทธิ์ในระบบอยู่แล้ว');
+      return;
+    }
+    const updatedList = [...currentList, email];
+    const updatedSettings = { ...formSettings, adminGoogleEmails: updatedList };
+    setFormSettings(updatedSettings);
+    onSaveSettings(updatedSettings);
+    setNewAdminEmail('');
+    try {
+      await fetch('/api/admin/google-accounts', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email })
+      });
+    } catch (e) {}
+    alert(`เพิ่มบัญชีผู้ดูแล Google: ${email} เรียบร้อยแล้ว`);
+  };
+
+  // Remove Google Admin Account
+  const handleRemoveAdminEmail = async (emailToRemove: string) => {
+    const currentList = formSettings.adminGoogleEmails || ['asmr9941@gmail.com'];
+    if (currentList.length <= 1) {
+      alert('ไม่สามารถลบบัญชีผู้ดูแลคนสุดท้ายได้');
+      return;
+    }
+    if (emailToRemove === 'asmr9941@gmail.com') {
+      if (!confirm('คุณต้องการลบสิทธิ์ Super Admin (asmr9941@gmail.com) ใช่หรือไม่?')) return;
+    } else {
+      if (!confirm(`ต้องการลบสิทธิ์ผู้ดูแลของ ${emailToRemove} หรือไม่?`)) return;
+    }
+    const updatedList = currentList.filter(e => e.toLowerCase() !== emailToRemove.toLowerCase());
+    const updatedSettings = { ...formSettings, adminGoogleEmails: updatedList };
+    setFormSettings(updatedSettings);
+    onSaveSettings(updatedSettings);
+    try {
+      await fetch(`/api/admin/google-accounts/${encodeURIComponent(emailToRemove)}`, {
+        method: 'DELETE'
+      });
+    } catch (e) {}
+  };
+
+  // AI Reply Review Generator using Gemini
+  const handleGenerateAiReply = async (review: Review) => {
+    setAiGeneratingMap(prev => ({ ...prev, [review.id]: true }));
+    try {
+      const tour = tours.find(t => t.id === review.tourId);
+      const res = await fetch('/api/ai/reply-review', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          reviewText: review.comment,
+          rating: review.rating,
+          userName: review.userName,
+          tourTitle: tour?.title.TH || 'ทัวร์ภูเก็ต'
+        })
+      });
+      if (res.ok) {
+        const data = await res.json();
+        if (data.reply) {
+          setReplyTextMap(prev => ({ ...prev, [review.id]: data.reply }));
+        }
+      } else {
+        throw new Error('AI reply failed');
+      }
+    } catch (err) {
+      console.error('Error generating AI reply:', err);
+      setReplyTextMap(prev => ({
+        ...prev,
+        [review.id]: `ขอบพระคุณคุณ ${review.userName} มากๆ ครับที่ไว้วางใจเดินทางกับ Trip Sea Tour หวังว่าจะได้มีโอกาสดูแลคุณลูกค้าอีกในทริปหน้านะครับ! 🌊✨`
+      }));
+    } finally {
+      setAiGeneratingMap(prev => ({ ...prev, [review.id]: false }));
+    }
+  };
+
+  // Save Review Reply
+  const handleSaveReply = async (reviewId: string) => {
+    const reply = replyTextMap[reviewId];
+    if (!reply || !reply.trim()) {
+      alert('กรุณากรอกข้อความตอบกลับ');
+      return;
+    }
+    if (onReplyReview) {
+      onReplyReview(reviewId, reply.trim());
+    }
+    try {
+      await fetch(`/api/reviews/${reviewId}/reply`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ reply: reply.trim() })
+      });
+    } catch (e) {}
+    alert('บันทึกคำตอบกลับรีวิวเรียบร้อยแล้ว!');
   };
 
   // Filter Bookings List
@@ -177,7 +302,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
     return matchesFilter && matchesSearch;
   });
 
-  const COLORS = ['#06b6d4', '#14b8a6', '#3b82f6', '#f59e0b', '#8b5cf6'];
+  const COLORS = ['#0d9488', '#06b6d4', '#3b82f6', '#f59e0b', '#8b5cf6'];
 
   return (
     <div className="bg-slate-900 text-slate-100 min-h-screen pb-16">
@@ -186,10 +311,10 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
         <div className="max-w-7xl mx-auto flex flex-col sm:flex-row sm:items-center justify-between gap-4">
           <div>
             <div className="flex items-center gap-2">
-              <span className="bg-amber-500 text-slate-950 font-extrabold text-[10px] px-2 py-0.5 rounded tracking-wider uppercase">
+              <span className="bg-teal-500 text-slate-950 font-extrabold text-[10px] px-2 py-0.5 rounded tracking-wider uppercase">
                 ADMIN BACKOFFICE
               </span>
-              <span className="text-xs text-slate-400">ระบบจัดการคำสั่งซื้อและสถิติยอดขาย</span>
+              <span className="text-xs text-slate-400">ระบบจัดการคำสั่งซื้อและสถิติยอดขาย (Live Sync)</span>
             </div>
             <h1 className="text-xl sm:text-2xl font-extrabold text-white mt-1">
               แดชบอร์ดแอดมิน - Trip Sea Tour Phuket
@@ -199,20 +324,24 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
           {/* Quick Stats Pills */}
           <div className="flex items-center gap-2">
             <button
-              onClick={fetchStats}
+              onClick={() => {
+                if (onRefreshData) onRefreshData();
+                fetchStats();
+              }}
               className="bg-slate-800 hover:bg-slate-700 text-slate-300 px-3 py-2 rounded-xl text-xs font-semibold flex items-center gap-1.5 border border-slate-700 transition"
+              title="ดึงข้อมูลล่าสุดทันที"
             >
               <RefreshCw className="w-3.5 h-3.5" />
-              <span>อัปเดตข้อมูล</span>
+              <span>รีเฟรชข้อมูล</span>
             </button>
             {onLogoutAdmin && (
               <button
                 onClick={onLogoutAdmin}
-                className="bg-red-950/60 hover:bg-red-900 text-red-200 border border-red-800/80 px-3 py-2 rounded-xl text-xs font-bold flex items-center gap-1.5 transition"
+                className="bg-rose-950/60 hover:bg-rose-900 text-rose-200 border border-rose-800/80 px-3 py-2 rounded-xl text-xs font-bold flex items-center gap-1.5 transition"
                 title="ออกจากระบบแอดมินและล็อคการเข้าถึง"
               >
-                <LogOut className="w-3.5 h-3.5 text-red-400" />
-                <span>ออกจากระบบแอดมิน (Lock)</span>
+                <LogOut className="w-3.5 h-3.5 text-rose-400" />
+                <span>ล็อคแอดมิน (Lock)</span>
               </button>
             )}
           </div>
@@ -223,7 +352,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
           <button
             onClick={() => setActiveTab('overview')}
             className={`px-4 py-2 rounded-xl text-xs font-bold transition flex items-center gap-2 whitespace-nowrap ${
-              activeTab === 'overview' ? 'bg-blue-600 text-white shadow-lg shadow-blue-600/30' : 'bg-slate-800/80 text-slate-400 hover:text-white'
+              activeTab === 'overview' ? 'bg-teal-600 text-white shadow-lg shadow-teal-600/30' : 'bg-slate-800/80 text-slate-400 hover:text-white'
             }`}
           >
             <BarChart3 className="w-4 h-4" />
@@ -233,13 +362,13 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
           <button
             onClick={() => setActiveTab('orders')}
             className={`px-4 py-2 rounded-xl text-xs font-bold transition flex items-center gap-2 whitespace-nowrap relative ${
-              activeTab === 'orders' ? 'bg-blue-600 text-white shadow-lg shadow-blue-600/30' : 'bg-slate-800/80 text-slate-400 hover:text-white'
+              activeTab === 'orders' ? 'bg-teal-600 text-white shadow-lg shadow-teal-600/30' : 'bg-slate-800/80 text-slate-400 hover:text-white'
             }`}
           >
             <ShoppingBag className="w-4 h-4" />
-            <span>จัดการออเดอร์</span>
+            <span>จัดการออเดอร์ ({bookings.length})</span>
             {bookings.filter(b => b.paymentStatus === 'slip_uploaded').length > 0 && (
-              <span className="bg-red-500 text-white text-[10px] font-extrabold px-1.5 py-0.5 rounded-full animate-pulse">
+              <span className="bg-rose-500 text-white text-[10px] font-extrabold px-1.5 py-0.5 rounded-full animate-pulse">
                 {bookings.filter(b => b.paymentStatus === 'slip_uploaded').length}
               </span>
             )}
@@ -248,7 +377,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
           <button
             onClick={() => setActiveTab('tours')}
             className={`px-4 py-2 rounded-xl text-xs font-bold transition flex items-center gap-2 whitespace-nowrap ${
-              activeTab === 'tours' ? 'bg-blue-600 text-white shadow-lg shadow-blue-600/30' : 'bg-slate-800/80 text-slate-400 hover:text-white'
+              activeTab === 'tours' ? 'bg-teal-600 text-white shadow-lg shadow-teal-600/30' : 'bg-slate-800/80 text-slate-400 hover:text-white'
             }`}
           >
             <FileSpreadsheet className="w-4 h-4" />
@@ -258,21 +387,31 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
           <button
             onClick={() => setActiveTab('customers')}
             className={`px-4 py-2 rounded-xl text-xs font-bold transition flex items-center gap-2 whitespace-nowrap ${
-              activeTab === 'customers' ? 'bg-blue-600 text-white shadow-lg shadow-blue-600/30' : 'bg-slate-800/80 text-slate-400 hover:text-white'
+              activeTab === 'customers' ? 'bg-teal-600 text-white shadow-lg shadow-teal-600/30' : 'bg-slate-800/80 text-slate-400 hover:text-white'
             }`}
           >
             <Users className="w-4 h-4" />
-            <span>ฐานข้อมูลลูกค้า CRM</span>
+            <span>ฐานข้อมูลลูกค้า CRM ({customers.length})</span>
+          </button>
+
+          <button
+            onClick={() => setActiveTab('reviews')}
+            className={`px-4 py-2 rounded-xl text-xs font-bold transition flex items-center gap-2 whitespace-nowrap ${
+              activeTab === 'reviews' ? 'bg-teal-600 text-white shadow-lg shadow-teal-600/30' : 'bg-slate-800/80 text-slate-400 hover:text-white'
+            }`}
+          >
+            <Star className="w-4 h-4 text-amber-400" />
+            <span>จัดการรีวิว & ตอบกลับ ({reviews.length})</span>
           </button>
 
           <button
             onClick={() => setActiveTab('settings')}
             className={`px-4 py-2 rounded-xl text-xs font-bold transition flex items-center gap-2 whitespace-nowrap ${
-              activeTab === 'settings' ? 'bg-blue-600 text-white shadow-lg shadow-blue-600/30' : 'bg-slate-800/80 text-slate-400 hover:text-white'
+              activeTab === 'settings' ? 'bg-teal-600 text-white shadow-lg shadow-teal-600/30' : 'bg-slate-800/80 text-slate-400 hover:text-white'
             }`}
           >
             <Settings className="w-4 h-4" />
-            <span>ตั้งค่า PromptPay & LINE</span>
+            <span>ตั้งค่า & บัญชี Google Admin</span>
           </button>
         </div>
       </div>
@@ -288,16 +427,16 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                 <div className="flex items-center justify-between">
                   <div>
                     <span className="text-xs text-slate-400 block font-medium">รายได้รวมทั้งหมด</span>
-                    <span className="text-2xl font-extrabold text-cyan-400 mt-1 block">
+                    <span className="text-2xl font-extrabold text-teal-400 mt-1 block">
                       ฿{(stats?.totalRevenue || 0).toLocaleString()}
                     </span>
                   </div>
-                  <div className="w-12 h-12 bg-cyan-500/10 text-cyan-400 rounded-2xl flex items-center justify-center">
+                  <div className="w-12 h-12 bg-teal-500/10 text-teal-400 rounded-2xl flex items-center justify-center">
                     <DollarSign className="w-6 h-6" />
                   </div>
                 </div>
                 <div className="mt-3 text-[11px] text-emerald-400 flex items-center gap-1 font-semibold">
-                  <span>↑ +18.4% จากเดือนที่แล้ว</span>
+                  <span>✓ ข้อมูลอัปเดตอัตโนมัติแบบเรียลไทม์</span>
                 </div>
               </div>
 
@@ -306,7 +445,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                   <div>
                     <span className="text-xs text-slate-400 block font-medium">จำนวนออเดอร์ทั้งหมด</span>
                     <span className="text-2xl font-extrabold text-white mt-1 block">
-                      {stats?.totalBookings || 0}
+                      {bookings.length}
                     </span>
                   </div>
                   <div className="w-12 h-12 bg-blue-500/10 text-blue-400 rounded-2xl flex items-center justify-center">
@@ -323,7 +462,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                   <div>
                     <span className="text-xs text-slate-400 block font-medium">สลิปรอการตรวจสอบ</span>
                     <span className="text-2xl font-extrabold text-amber-400 mt-1 block">
-                      {stats?.pendingVerifications || 0}
+                      {bookings.filter(b => b.paymentStatus === 'slip_uploaded').length}
                     </span>
                   </div>
                   <div className="w-12 h-12 bg-amber-500/10 text-amber-400 rounded-2xl flex items-center justify-center">
@@ -331,7 +470,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                   </div>
                 </div>
                 <div className="mt-3 text-[11px] text-amber-400 font-semibold">
-                  {stats?.pendingVerifications ? '⚠️ มีสลิปรอให้แอนมินคอนเฟิร์ม' : '✓ ตรวจสอบครบหมดแล้ว'}
+                  {bookings.filter(b => b.paymentStatus === 'slip_uploaded').length > 0 ? '⚠️ มีสลิปรอให้แอดมินคอนเฟิร์ม' : '✓ ตรวจสอบครบหมดแล้ว'}
                 </div>
               </div>
 
@@ -340,7 +479,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                   <div>
                     <span className="text-xs text-slate-400 block font-medium">ออเดอร์ยืนยันสำเร็จ</span>
                     <span className="text-2xl font-extrabold text-emerald-400 mt-1 block">
-                      {stats?.confirmedBookings || 0}
+                      {bookings.filter(b => b.paymentStatus === 'verified').length}
                     </span>
                   </div>
                   <div className="w-12 h-12 bg-emerald-500/10 text-emerald-400 rounded-2xl flex items-center justify-center">
@@ -348,7 +487,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                   </div>
                 </div>
                 <div className="mt-3 text-[11px] text-emerald-400">
-                  ออกตั๋ว e-Voucher เรียบร้อย
+                  ออกตั๋ว E-Ticket เรียบร้อย
                 </div>
               </div>
             </div>
@@ -358,7 +497,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
               {/* Monthly Sales Revenue Chart */}
               <div className="lg:col-span-2 bg-slate-800/80 border border-slate-700/80 p-5 rounded-2xl shadow-xl">
                 <h3 className="text-base font-bold text-white mb-4 flex items-center gap-2">
-                  <BarChart3 className="w-5 h-5 text-cyan-400" />
+                  <BarChart3 className="w-5 h-5 text-teal-400" />
                   <span>สถิติยอดขายรายเดือน (Monthly Revenue)</span>
                 </h3>
                 <div className="h-64 w-full">
@@ -371,7 +510,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                         contentStyle={{ backgroundColor: '#0f172a', borderColor: '#334155', borderRadius: '12px', color: '#fff' }}
                         formatter={(val) => [`฿${Number(val).toLocaleString()}`, 'ยอดขาย']}
                       />
-                      <Bar dataKey="revenue" fill="#06b6d4" radius={[6, 6, 0, 0]} />
+                      <Bar dataKey="revenue" fill="#0d9488" radius={[6, 6, 0, 0]} />
                     </BarChart>
                   </ResponsiveContainer>
                 </div>
@@ -380,7 +519,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
               {/* Category Breakdown Pie Chart */}
               <div className="bg-slate-800/80 border border-slate-700/80 p-5 rounded-2xl shadow-xl flex flex-col justify-between">
                 <h3 className="text-base font-bold text-white mb-2 flex items-center gap-2">
-                  <PieChart className="w-5 h-5 text-teal-400" />
+                  <PieChart className="w-5 h-5 text-cyan-400" />
                   <span>สัดส่วนตามประเภททัวร์</span>
                 </h3>
                 <div className="h-56 w-full">
@@ -400,82 +539,20 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                           <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
                         ))}
                       </Pie>
-                      <Tooltip contentStyle={{ backgroundColor: '#0f172a', borderColor: '#334155', borderRadius: '12px' }} />
+                      <Tooltip
+                        contentStyle={{ backgroundColor: '#0f172a', borderColor: '#334155', borderRadius: '12px', color: '#fff' }}
+                      />
                     </PieChart>
                   </ResponsiveContainer>
                 </div>
-                <div className="grid grid-cols-2 gap-2 text-xs text-slate-300 pt-2 border-t border-slate-700">
-                  <div>🏝️ ทัวร์เกาะ: <strong className="text-cyan-400">58%</strong></div>
-                  <div>🏙️ เที่ยวเมือง: <strong className="text-purple-400">6%</strong></div>
+                <div className="flex flex-wrap justify-center gap-2 text-[11px] text-slate-400 pb-2">
+                  {(stats?.categoryBreakdown || []).map((cat, idx) => (
+                    <span key={idx} className="flex items-center gap-1">
+                      <span className="w-2.5 h-2.5 rounded-full" style={{ backgroundColor: COLORS[idx % COLORS.length] }}></span>
+                      <span>{cat.category}: {cat.count}</span>
+                    </span>
+                  ))}
                 </div>
-              </div>
-            </div>
-
-            {/* Recent Orders Overview */}
-            <div className="bg-slate-800/80 border border-slate-700/80 rounded-2xl p-5 shadow-xl">
-              <div className="flex items-center justify-between mb-4">
-                <h3 className="text-base font-bold text-white flex items-center gap-2">
-                  <ShoppingBag className="w-5 h-5 text-cyan-400" />
-                  <span>คำสั่งจองล่าสุด (Recent Bookings)</span>
-                </h3>
-                <button
-                  onClick={() => setActiveTab('orders')}
-                  className="text-xs text-cyan-400 hover:underline font-semibold"
-                >
-                  ดูทั้งหมด →
-                </button>
-              </div>
-
-              <div className="overflow-x-auto">
-                <table className="w-full text-left text-xs">
-                  <thead className="bg-slate-900 text-slate-400 border-b border-slate-700">
-                    <tr>
-                      <th className="p-3">รหัสการจอง</th>
-                      <th className="p-3">โปรแกรมทัวร์</th>
-                      <th className="p-3">ชื่อลูกค้า</th>
-                      <th className="p-3">วันเดินทาง</th>
-                      <th className="p-3">ยอดชำระ</th>
-                      <th className="p-3">สถานะ</th>
-                      <th className="p-3">แอคชั่น</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-slate-700/50 text-slate-300">
-                    {bookings.slice(0, 5).map((b) => (
-                      <tr key={b.id} className="hover:bg-slate-700/30 transition">
-                        <td className="p-3 font-mono font-bold text-cyan-300">{b.bookingRef}</td>
-                        <td className="p-3 font-semibold max-w-[200px] truncate">{b.tourTitle}</td>
-                        <td className="p-3">{b.customerName}</td>
-                        <td className="p-3">{b.travelDate}</td>
-                        <td className="p-3 font-bold text-amber-400">฿{b.totalAmount.toLocaleString()}</td>
-                        <td className="p-3">
-                          {b.paymentStatus === 'verified' ? (
-                            <span className="bg-emerald-500/20 text-emerald-300 px-2 py-0.5 rounded font-bold border border-emerald-500/30">
-                              ✓ ชำระแล้ว
-                            </span>
-                          ) : b.paymentStatus === 'slip_uploaded' ? (
-                            <span className="bg-amber-500/20 text-amber-300 px-2 py-0.5 rounded font-bold border border-amber-500/30 animate-pulse">
-                              ⏳ รอตรวจสลิป
-                            </span>
-                          ) : (
-                            <span className="bg-slate-700 text-slate-400 px-2 py-0.5 rounded">
-                              รอชำระ
-                            </span>
-                          )}
-                        </td>
-                        <td className="p-3">
-                          <button
-                            onClick={() => {
-                              setActiveTab('orders');
-                            }}
-                            className="text-cyan-400 hover:text-cyan-300 font-bold"
-                          >
-                            จัดการ
-                          </button>
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
               </div>
             </div>
           </div>
@@ -484,16 +561,16 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
         {/* TAB 2: ORDER MANAGEMENT */}
         {activeTab === 'orders' && (
           <div className="space-y-6 animate-in fade-in">
-            {/* Filter Bar */}
-            <div className="flex flex-col sm:flex-row items-center justify-between gap-3 bg-slate-800/80 p-4 rounded-2xl border border-slate-700/80">
-              <div className="flex items-center gap-2 w-full sm:w-auto">
-                <Search className="w-4 h-4 text-slate-400 shrink-0" />
+            {/* Filter & Search Bar */}
+            <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-4 bg-slate-800/80 border border-slate-700/80 p-4 rounded-2xl">
+              <div className="relative flex-1 max-w-md">
+                <Search className="w-4 h-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2" />
                 <input
                   type="text"
-                  placeholder="ค้นหารหัสการจอง, ชื่อลูกค้า, เบอร์โทร..."
+                  placeholder="ค้นหาชื่อลูกค้า, รหัสจอง (TST-...), หรือเบอร์โทร..."
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
-                  className="bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-xs text-white placeholder-slate-500 w-full sm:w-64 focus:outline-none focus:ring-2 focus:ring-cyan-500"
+                  className="w-full bg-slate-900 border border-slate-700 rounded-xl pl-10 pr-4 py-2 text-xs text-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-teal-500"
                 />
               </div>
 
@@ -501,17 +578,17 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                 {onTrigger24hReminders && (
                   <button
                     onClick={onTrigger24hReminders}
-                    className="bg-blue-600 hover:bg-blue-500 text-white font-bold px-3 py-1.5 rounded-xl text-xs transition flex items-center gap-1.5 shadow-md shadow-blue-900/30 shrink-0"
+                    className="bg-teal-700 hover:bg-teal-600 text-white font-bold px-3 py-1.5 rounded-xl text-xs transition flex items-center gap-1.5 shadow-md shadow-teal-950 shrink-0"
                     title="สแกนและส่งแจ้งเตือนใกล้วันเดินทาง (24 ชม.) ให้รายการที่ยังไม่ได้ส่ง"
                   >
-                    <Clock className="w-3.5 h-3.5 text-blue-200" />
+                    <Clock className="w-3.5 h-3.5 text-teal-200" />
                     <span>รันแจ้งเตือน 24 ชม. LINE</span>
                   </button>
                 )}
                 <button
                   onClick={() => setOrderFilter('all')}
                   className={`px-3 py-1.5 rounded-xl text-xs font-semibold whitespace-nowrap transition ${
-                    orderFilter === 'all' ? 'bg-cyan-500 text-slate-950 font-bold' : 'bg-slate-900 text-slate-400 hover:text-white'
+                    orderFilter === 'all' ? 'bg-teal-500 text-slate-950 font-bold' : 'bg-slate-900 text-slate-400 hover:text-white'
                   }`}
                 >
                   ทั้งหมด ({bookings.length})
@@ -554,7 +631,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                     {filteredBookings.map((b) => (
                       <tr key={b.id} className="hover:bg-slate-700/30 transition">
                         <td className="p-3.5">
-                          <span className="font-mono font-extrabold text-cyan-300 block text-sm">
+                          <span className="font-mono font-extrabold text-teal-300 block text-sm">
                             {b.bookingRef}
                           </span>
                           <span className="text-[10px] text-slate-500">
@@ -566,7 +643,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                           <span className="font-bold text-white block leading-snug line-clamp-2">
                             {b.tourTitle}
                           </span>
-                          <span className="text-[10px] text-cyan-400 font-mono">PromptPay QR</span>
+                          <span className="text-[10px] text-teal-400 font-mono">PromptPay QR</span>
                         </td>
 
                         <td className="p-3.5 space-y-0.5">
@@ -590,9 +667,9 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                           {b.slipUrl ? (
                             <button
                               onClick={() => setSelectedSlipUrl(b.slipUrl || null)}
-                              className="inline-flex items-center gap-1 bg-slate-900 border border-slate-700 text-cyan-300 hover:text-white px-2.5 py-1 rounded-lg text-[11px] font-semibold transition"
+                              className="inline-flex items-center gap-1 bg-slate-900 border border-slate-700 text-teal-300 hover:text-white px-2.5 py-1 rounded-lg text-[11px] font-semibold transition"
                             >
-                              <ImageIcon className="w-3.5 h-3.5 text-cyan-400" />
+                              <ImageIcon className="w-3.5 h-3.5 text-teal-400" />
                               <span>ดูรูปสลิป</span>
                             </button>
                           ) : (
@@ -619,11 +696,11 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                           <button
                             type="button"
                             onClick={() => setSelectedTicketBooking(b)}
-                            className="w-full mt-1 bg-cyan-900/60 hover:bg-cyan-800 text-cyan-200 border border-cyan-700/80 font-bold px-2 py-1 rounded-lg text-[10px] transition flex items-center justify-center gap-1 shadow-sm"
-                            title="เปิดดู ตั๋ว E-Ticket บันทึกรูป หรือส่งเข้า LINE"
+                            className="w-full mt-1 bg-teal-900/60 hover:bg-teal-800 text-teal-200 border border-teal-700/80 font-bold px-2 py-1 rounded-lg text-[10px] transition flex items-center justify-center gap-1 shadow-sm"
+                            title="เปิดดูตั๋ว E-Ticket บันทึกรูป หรือส่งรูปเข้า LINE"
                           >
-                            <Ticket className="w-3 h-3 text-cyan-300 shrink-0" />
-                            <span>ดู/ส่งตั๋ว E-Ticket</span>
+                            <Ticket className="w-3 h-3 text-teal-300 shrink-0" />
+                            <span>ดู/ส่งรูปตั๋ว LINE</span>
                           </button>
 
                           {/* LINE 24h Reminder Status / Trigger */}
@@ -635,7 +712,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                             <button
                               onClick={() => onSendSingleReminder(b.id)}
                               className="w-full mt-1 bg-blue-900/60 hover:bg-blue-800 text-blue-200 border border-blue-700/80 font-bold px-2 py-1 rounded-lg text-[10px] transition flex items-center justify-center gap-1 shadow-sm"
-                              title="ส่งแจ้งเตือนใกล้วันเดินทาง 24 ชม. เข้า LINE Notify"
+                              title="ส่งแจ้งเตือนใกล้วันเดินทาง 24 ชม. เข้า LINE"
                             >
                               <Clock className="w-3 h-3 text-blue-400 shrink-0" />
                               <span>ส่งเตือน 24 ชม. LINE</span>
@@ -678,67 +755,56 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                   setEditingTour(null);
                   setIsTourModalOpen(true);
                 }}
-                className="bg-cyan-500 hover:bg-cyan-400 text-slate-950 font-bold px-4 py-2 rounded-xl text-xs transition shadow-lg shadow-cyan-500/20 flex items-center gap-1.5"
+                className="bg-teal-600 hover:bg-teal-500 text-white font-bold px-4 py-2.5 rounded-xl text-xs transition flex items-center gap-2 shadow-lg shadow-teal-900/30"
               >
                 <Plus className="w-4 h-4" />
                 <span>เพิ่มโปรแกรมทัวร์ใหม่</span>
               </button>
             </div>
 
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-              {tours.map((t) => (
-                <div key={t.id} className="bg-slate-800/80 border border-slate-700 rounded-2xl overflow-hidden p-4 space-y-3 flex flex-col justify-between">
-                  <div className="space-y-3">
-                    <div className="aspect-video rounded-xl overflow-hidden relative">
-                      <img src={t.images[0]} alt={t.title.TH} className="w-full h-full object-cover" />
-                      <span className="absolute top-2 left-2 bg-slate-900/90 text-cyan-300 text-[10px] font-bold px-2 py-0.5 rounded-md border border-cyan-500/40">
-                        {t.categoryLabel?.TH || t.category}
-                      </span>
-                    </div>
-
-                    <div>
-                      <h4 className="font-bold text-white text-sm line-clamp-2">{t.title.TH}</h4>
-                      <p className="text-[11px] text-slate-400 mt-0.5">{t.duration?.TH}</p>
-                    </div>
-
-                    {/* Metadata Badges */}
-                    <div className="flex flex-wrap gap-1.5 text-[10px]">
-                      <span className="bg-emerald-950/80 text-emerald-300 border border-emerald-800/80 px-2 py-0.5 rounded-md flex items-center gap-1 font-medium">
-                        <ListChecks className="w-3 h-3 text-emerald-400" />
-                        <span>รวมในทัวร์: {t.included?.TH ? t.included.TH.length : 0} รายการ</span>
-                      </span>
-
-                      <span className="bg-cyan-950/80 text-cyan-300 border border-cyan-800/80 px-2 py-0.5 rounded-md flex items-center gap-1 font-medium">
-                        <Clock className="w-3 h-3 text-cyan-400" />
-                        <span>ตารางเดินทาง: {t.itinerary ? t.itinerary.length : 0} ช่วง</span>
-                      </span>
-                    </div>
-
-                    <div className="flex justify-between items-baseline text-xs pt-2 border-t border-slate-700">
-                      <span className="text-slate-400">ผู้ใหญ่: <strong className="text-emerald-400 font-extrabold text-sm">฿{t.priceAdult.toLocaleString()}</strong></span>
-                      <span className="text-slate-400">เด็ก: <strong className="text-cyan-400 font-bold">฿{t.priceChild.toLocaleString()}</strong></span>
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
+              {tours.map((tr) => (
+                <div key={tr.id} className="bg-slate-800/80 border border-slate-700 rounded-2xl overflow-hidden shadow-lg flex flex-col justify-between">
+                  <div className="relative aspect-video">
+                    <img src={tr.images[0]} alt={tr.title.TH} className="w-full h-full object-cover" />
+                    <div className="absolute top-3 right-3 bg-slate-900/90 text-teal-300 text-[10px] font-bold px-2 py-0.5 rounded-md">
+                      {tr.categoryLabel.TH}
                     </div>
                   </div>
 
-                  <div className="grid grid-cols-2 gap-2 pt-2 border-t border-slate-700/80">
-                    <button
-                      onClick={() => {
-                        setEditingTour(t);
-                        setIsTourModalOpen(true);
-                      }}
-                      className="bg-cyan-500/20 text-cyan-300 border border-cyan-500/40 hover:bg-cyan-500/30 py-2 rounded-xl text-xs font-bold transition flex items-center justify-center gap-1"
-                    >
-                      <Edit3 className="w-3.5 h-3.5 text-cyan-400" />
-                      <span>แก้ไขทัวร์ & ตารางเวลา</span>
-                    </button>
+                  <div className="p-4 space-y-3 flex-1 flex flex-col justify-between">
+                    <div>
+                      <h3 className="font-bold text-white text-sm line-clamp-1">{tr.title.TH}</h3>
+                      <p className="text-[11px] text-slate-400 mt-1 line-clamp-2">{tr.description.TH}</p>
+                      <div className="mt-2 flex items-center justify-between text-xs pt-2 border-t border-slate-700/60">
+                        <span className="text-slate-400">ราคาผู้ใหญ่:</span>
+                        <span className="font-extrabold text-amber-400 font-mono">฿{tr.priceAdult.toLocaleString()}</span>
+                      </div>
+                      <div className="flex items-center justify-between text-xs">
+                        <span className="text-slate-400">ราคาเด็ก:</span>
+                        <span className="font-bold text-slate-300 font-mono">฿{tr.priceChild.toLocaleString()}</span>
+                      </div>
+                    </div>
 
-                    <button
-                      onClick={() => setDeleteTourTarget(t)}
-                      className="bg-rose-500/20 text-rose-300 border border-rose-500/30 hover:bg-rose-500/30 py-2 rounded-xl text-xs font-semibold transition flex items-center justify-center gap-1"
-                    >
-                      <Trash2 className="w-3.5 h-3.5 text-rose-400" />
-                      <span>ลบรายการนี้</span>
-                    </button>
+                    <div className="grid grid-cols-2 gap-2 pt-2 border-t border-slate-700">
+                      <button
+                        onClick={() => {
+                          setEditingTour(tr);
+                          setIsTourModalOpen(true);
+                        }}
+                        className="bg-slate-700 hover:bg-slate-600 text-white font-bold py-2 rounded-xl text-xs transition flex items-center justify-center gap-1"
+                      >
+                        <Edit3 className="w-3.5 h-3.5" />
+                        <span>แก้ไข</span>
+                      </button>
+                      <button
+                        onClick={() => setDeleteTourTarget(tr)}
+                        className="bg-rose-950 hover:bg-rose-900 text-rose-300 border border-rose-800 font-bold py-2 rounded-xl text-xs transition flex items-center justify-center gap-1"
+                      >
+                        <Trash2 className="w-3.5 h-3.5" />
+                        <span>ลบ</span>
+                      </button>
+                    </div>
                   </div>
                 </div>
               ))}
@@ -746,63 +812,59 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
           </div>
         )}
 
-        {/* TAB 4: CUSTOMER CRM DATABASE */}
+        {/* TAB 4: CRM CUSTOMER DATABASE */}
         {activeTab === 'customers' && (
           <div className="space-y-6 animate-in fade-in">
-            <div>
-              <h2 className="text-lg font-bold text-white">ฐานข้อมูลลูกค้าอัตโนมัติ (Customer CRM)</h2>
-              <p className="text-xs text-slate-400">รวบรวมประวัติการจองและยอดใช้จ่ายของลูกค้าแต่ละท่าน</p>
+            <div className="flex items-center justify-between">
+              <div>
+                <h2 className="text-lg font-bold text-white">ฐานข้อมูลลูกค้า (CRM Database)</h2>
+                <p className="text-xs text-slate-400">รายชื่อลูกค้าทั้งหมด ประวัติการสั่งซื้อ และยอดการใช้จ่ายสะสม</p>
+              </div>
             </div>
 
-            <div className="bg-slate-800/80 border border-slate-700/80 rounded-2xl overflow-hidden shadow-xl">
+            <div className="bg-slate-800/80 border border-slate-700 rounded-2xl overflow-hidden shadow-xl">
               <div className="overflow-x-auto">
                 <table className="w-full text-left text-xs">
-                  <thead className="bg-slate-950 text-slate-400 border-b border-slate-700 font-bold">
+                  <thead className="bg-slate-950 text-slate-400 border-b border-slate-700 uppercase font-bold">
                     <tr>
                       <th className="p-3.5">ชื่อลูกค้า</th>
-                      <th className="p-3.5">ช่องทางติดต่อ (เบอร์ / LINE)</th>
-                      <th className="p-3.5">สัญชาติ</th>
-                      <th className="p-3.5">จำนวนทริปที่เคยจอง</th>
-                      <th className="p-3.5">ยอดใช้จ่ายรวม (THB)</th>
-                      <th className="p-3.5">จองล่าสุดเมื่อ</th>
+                      <th className="p-3.5">เบอร์โทรศัพท์ / LINE</th>
+                      <th className="p-3.5">อีเมล & สัญชาติ</th>
+                      <th className="p-3.5">จำนวนครั้งที่จอง</th>
+                      <th className="p-3.5">ยอดใช้จ่ายสะสม</th>
                       <th className="p-3.5 text-center">จัดการ</th>
                     </tr>
                   </thead>
-                  <tbody className="divide-y divide-slate-700/50 text-slate-300">
+                  <tbody className="divide-y divide-slate-700/50">
                     {customers.map((c) => (
                       <tr key={c.id} className="hover:bg-slate-700/30 transition">
                         <td className="p-3.5 font-bold text-white">{c.name}</td>
-                        <td className="p-3.5 space-y-0.5">
+                        <td className="p-3.5 text-slate-300">
                           <div>📞 {c.phone}</div>
-                          <div className="text-slate-400 text-[11px]">✉️ {c.email}</div>
-                          {c.lineId && <div className="text-emerald-400 text-[10px]">🟢 LINE: {c.lineId}</div>}
+                          {c.lineId && <div className="text-[11px] text-teal-400">LINE: {c.lineId}</div>}
                         </td>
-                        <td className="p-3.5">{c.nationality}</td>
-                        <td className="p-3.5 font-bold text-cyan-400">{c.totalBookings} ทริป</td>
-                        <td className="p-3.5 font-extrabold text-amber-400">฿{c.totalSpent.toLocaleString()}</td>
-                        <td className="p-3.5 text-slate-400">{c.lastBookingDate}</td>
-                        <td className="p-3.5 text-center">
-                          <div className="flex items-center justify-center gap-2">
-                            <button
-                              onClick={() => {
-                                setEditingCustomer(c);
-                                setIsCustomerModalOpen(true);
-                              }}
-                              className="inline-flex items-center gap-1 bg-cyan-600/30 border border-cyan-500/50 hover:bg-cyan-600/50 text-cyan-300 px-2.5 py-1.5 rounded-lg text-xs font-semibold transition"
-                            >
-                              <Edit3 className="w-3.5 h-3.5" />
-                              <span>แก้ไข</span>
-                            </button>
-                            <button
-                              onClick={() => {
-                                setDeleteCustomerTarget(c);
-                              }}
-                              className="inline-flex items-center gap-1 bg-rose-600/30 border border-rose-500/50 hover:bg-rose-600/50 text-rose-300 px-2.5 py-1.5 rounded-lg text-xs font-semibold transition"
-                            >
-                              <Trash2 className="w-3.5 h-3.5" />
-                              <span>ลบ</span>
-                            </button>
-                          </div>
+                        <td className="p-3.5 text-slate-300">
+                          <div>{c.email}</div>
+                          <span className="text-[10px] bg-slate-900 text-slate-400 px-1.5 py-0.5 rounded">{c.nationality}</span>
+                        </td>
+                        <td className="p-3.5 font-bold text-teal-300">{c.bookingCount} ครั้ง</td>
+                        <td className="p-3.5 font-bold text-amber-400 font-mono">฿{c.totalSpent.toLocaleString()}</td>
+                        <td className="p-3.5 text-center space-x-2">
+                          <button
+                            onClick={() => {
+                              setEditingCustomer(c);
+                              setIsCustomerModalOpen(true);
+                            }}
+                            className="bg-slate-700 hover:bg-slate-600 text-slate-200 px-2.5 py-1 rounded-lg text-[11px] font-bold"
+                          >
+                            แก้ไข
+                          </button>
+                          <button
+                            onClick={() => setDeleteCustomerTarget(c)}
+                            className="bg-rose-950 hover:bg-rose-900 text-rose-300 px-2.5 py-1 rounded-lg text-[11px] font-bold border border-rose-800"
+                          >
+                            ลบ
+                          </button>
                         </td>
                       </tr>
                     ))}
@@ -813,281 +875,393 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
           </div>
         )}
 
-        {/* TAB 5: PROMPTPAY & LINE NOTIFY SETTINGS */}
+        {/* TAB 5: REVIEWS & AI REPLIES MANAGEMENT */}
+        {activeTab === 'reviews' && (
+          <div className="space-y-6 animate-in fade-in">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+              <div>
+                <h2 className="text-lg font-bold text-white flex items-center gap-2">
+                  <Star className="w-5 h-5 text-amber-400" />
+                  <span>จัดการรีวิว & ระบบตอบกลับด้วย Gemini AI 24/7</span>
+                </h2>
+                <p className="text-xs text-slate-400">
+                  อนุมัติการแสดงผลรีวิว จัดการข้อความ และใช้ Gemini AI ช่วยร่างคำตอบกลับอย่างมืออาชีพและสุภาพ
+                </p>
+              </div>
+
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={() => setReviewFilter('all')}
+                  className={`px-3 py-1.5 rounded-xl text-xs font-bold transition ${
+                    reviewFilter === 'all' ? 'bg-teal-500 text-slate-950' : 'bg-slate-800 text-slate-400 hover:text-white'
+                  }`}
+                >
+                  ทั้งหมด ({reviews.length})
+                </button>
+                <button
+                  onClick={() => setReviewFilter('pending')}
+                  className={`px-3 py-1.5 rounded-xl text-xs font-bold transition ${
+                    reviewFilter === 'pending' ? 'bg-amber-500 text-slate-950' : 'bg-slate-800 text-amber-400 hover:text-white'
+                  }`}
+                >
+                  รออนุมัติ ({reviews.filter(r => r.isApproved === false).length})
+                </button>
+                <button
+                  onClick={() => setReviewFilter('approved')}
+                  className={`px-3 py-1.5 rounded-xl text-xs font-bold transition ${
+                    reviewFilter === 'approved' ? 'bg-emerald-500 text-slate-950' : 'bg-slate-800 text-emerald-400 hover:text-white'
+                  }`}
+                >
+                  อนุมัติแล้ว ({reviews.filter(r => r.isApproved !== false).length})
+                </button>
+              </div>
+            </div>
+
+            <div className="space-y-4">
+              {reviews
+                .filter(r => {
+                  if (reviewFilter === 'pending') return r.isApproved === false;
+                  if (reviewFilter === 'approved') return r.isApproved !== false;
+                  return true;
+                })
+                .map((rev) => {
+                  const tour = tours.find(t => t.id === rev.tourId);
+                  const isApproved = rev.isApproved !== false;
+                  const isAiThinking = aiGeneratingMap[rev.id] || false;
+                  const currentReplyValue = replyTextMap[rev.id] !== undefined ? replyTextMap[rev.id] : (rev.adminReply || '');
+
+                  return (
+                    <div
+                      key={rev.id}
+                      className={`bg-slate-800/90 border rounded-2xl p-5 shadow-lg space-y-4 transition ${
+                        isApproved ? 'border-slate-700' : 'border-amber-500/40 bg-amber-950/10'
+                      }`}
+                    >
+                      {/* Top Review Metadata */}
+                      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-slate-700/60 pb-3">
+                        <div className="flex items-center gap-3">
+                          <div className="w-10 h-10 rounded-full bg-teal-500/20 text-teal-300 font-bold flex items-center justify-center text-sm border border-teal-500/30">
+                            {rev.userName.slice(0, 1)}
+                          </div>
+                          <div>
+                            <div className="flex items-center gap-2">
+                              <h4 className="font-bold text-white text-sm">{rev.userName}</h4>
+                              <span className="text-[10px] text-slate-400">📅 {rev.date}</span>
+                              {rev.verifiedBooking && (
+                                <span className="bg-emerald-500/20 text-emerald-300 text-[10px] font-bold px-2 py-0.5 rounded border border-emerald-500/30">
+                                  ✓ ลูกค้าจองจริง
+                                </span>
+                              )}
+                            </div>
+                            <p className="text-xs text-teal-400 font-medium">
+                              📍 ทัวร์: {tour ? tour.title.TH : 'ทัวร์ภูเก็ต'}
+                            </p>
+                          </div>
+                        </div>
+
+                        <div className="flex items-center gap-3">
+                          <div className="flex text-amber-400">
+                            {Array.from({ length: rev.rating }).map((_, i) => (
+                              <Star key={i} className="w-4 h-4 fill-amber-400 text-amber-400" />
+                            ))}
+                          </div>
+
+                          {/* Approval Status Toggle */}
+                          <button
+                            type="button"
+                            onClick={() => {
+                              if (onApproveReview) {
+                                onApproveReview(rev.id, !isApproved);
+                              }
+                            }}
+                            className={`px-3 py-1 rounded-xl text-xs font-bold transition flex items-center gap-1 ${
+                              isApproved
+                                ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/40'
+                                : 'bg-amber-500/20 text-amber-300 border border-amber-500/40'
+                            }`}
+                          >
+                            {isApproved ? '✓ อนุมัติแสดงผล' : '⏳ ซ่อนรีวิว'}
+                          </button>
+
+                          {/* Delete Review */}
+                          <button
+                            type="button"
+                            onClick={() => {
+                              if (confirm('ต้องการลบรีวิวนี้หรือไม่?')) {
+                                if (onDeleteReview) onDeleteReview(rev.id);
+                              }
+                            }}
+                            className="p-1.5 bg-rose-950/60 hover:bg-rose-900 text-rose-300 border border-rose-800/80 rounded-lg transition"
+                            title="ลบรีวิว"
+                          >
+                            <Trash2 className="w-4 h-4" />
+                          </button>
+                        </div>
+                      </div>
+
+                      {/* Review Comment Content */}
+                      <p className="text-xs sm:text-sm text-slate-200 leading-relaxed italic bg-slate-900/60 p-3.5 rounded-xl border border-slate-800">
+                        "{rev.comment}"
+                      </p>
+
+                      {/* Attached Photos */}
+                      {rev.photos && rev.photos.length > 0 && (
+                        <div className="flex gap-2">
+                          {rev.photos.map((p, idx) => (
+                            <img
+                              key={idx}
+                              src={p}
+                              alt="Review"
+                              className="w-16 h-16 rounded-xl object-cover border border-slate-700"
+                            />
+                          ))}
+                        </div>
+                      )}
+
+                      {/* Admin Response Box & Gemini AI Assistant */}
+                      <div className="bg-slate-900/90 border border-teal-500/30 p-4 rounded-xl space-y-3">
+                        <div className="flex items-center justify-between">
+                          <span className="text-xs font-bold text-teal-300 flex items-center gap-1.5">
+                            <MessageSquare className="w-4 h-4 text-teal-400" />
+                            <span>ข้อความตอบกลับจากแอดมิน (Trip Sea Tour Official Response)</span>
+                          </span>
+
+                          <button
+                            type="button"
+                            onClick={() => handleGenerateAiReply(rev)}
+                            disabled={isAiThinking}
+                            className="bg-gradient-to-r from-teal-600 to-cyan-600 hover:from-teal-500 hover:to-cyan-500 text-white font-bold px-3 py-1.5 rounded-xl text-xs transition flex items-center gap-1.5 shadow-md shadow-teal-950 disabled:opacity-50"
+                          >
+                            <Sparkles className={`w-3.5 h-3.5 text-amber-300 ${isAiThinking ? 'animate-spin' : ''}`} />
+                            <span>{isAiThinking ? 'Gemini กำลังร่างคำตอบ...' : '✨ ให้ Gemini AI ช่วยร่างคำตอบ'}</span>
+                          </button>
+                        </div>
+
+                        <div className="flex gap-2">
+                          <textarea
+                            rows={2}
+                            value={currentReplyValue}
+                            onChange={(e) => setReplyTextMap(prev => ({ ...prev, [rev.id]: e.target.value }))}
+                            placeholder="พิมพ์ข้อความขอบคุณและตอบกลับลูกค้า หรือกดปุ่ม Gemini AI ด้านบน..."
+                            className="flex-1 bg-slate-950 border border-slate-700 rounded-xl p-3 text-xs text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-teal-500"
+                          />
+                          <button
+                            type="button"
+                            onClick={() => handleSaveReply(rev.id)}
+                            className="bg-teal-600 hover:bg-teal-500 text-white font-bold px-4 rounded-xl text-xs transition shadow-md shadow-teal-950 flex items-center justify-center shrink-0"
+                          >
+                            <span>บันทึกคำตอบ</span>
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })}
+            </div>
+          </div>
+        )}
+
+        {/* TAB 6: SETTINGS & GOOGLE ADMIN MANAGEMENT */}
         {activeTab === 'settings' && (
           <div className="space-y-8 animate-in fade-in">
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-              {/* PromptPay & LINE Form */}
-              <div className="bg-slate-800/80 border border-slate-700/80 p-6 rounded-2xl shadow-xl space-y-5">
-                <h3 className="text-base font-bold text-white flex items-center gap-2">
-                  <QrCode className="w-5 h-5 text-cyan-400" />
-                  <span>ตั้งค่าการรับชำระเงิน PromptPay QR</span>
-                </h3>
+            {/* Google Admin Accounts Management Section */}
+            <div className="bg-slate-800/80 border border-slate-700/80 p-6 rounded-2xl shadow-xl space-y-5">
+              <div className="flex items-center justify-between border-b border-slate-700/80 pb-4">
+                <div>
+                  <div className="flex items-center gap-2">
+                    <ShieldCheck className="w-5 h-5 text-teal-400" />
+                    <h3 className="text-base font-bold text-white">
+                      จัดการบัญชี Google Account ผู้ดูแลระบบ (Admin Access Control)
+                    </h3>
+                  </div>
+                  <p className="text-xs text-slate-400 mt-1">
+                    กำหนดรายชื่ออีเมล Google Account ที่มีสิทธิ์เข้าสู่ระบบหลังบ้านเพื่อจัดการคำสั่งซื้อ ราคา และการตั้งค่า
+                  </p>
+                </div>
+              </div>
+
+              {/* Authorized Accounts List */}
+              <div className="space-y-3">
+                <label className="text-xs font-bold text-slate-300 block">
+                  บัญชี Google ที่ได้รับสิทธิ์ในปัจจุบัน (Authorized Admins)
+                </label>
+
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                  {(formSettings.adminGoogleEmails || ['asmr9941@gmail.com']).map((email, idx) => {
+                    const isSuper = email === 'asmr9941@gmail.com' || idx === 0;
+                    return (
+                      <div
+                        key={email}
+                        className="bg-slate-900 border border-slate-700 p-3.5 rounded-xl flex items-center justify-between gap-3"
+                      >
+                        <div className="flex items-center gap-3">
+                          <div className="w-8 h-8 rounded-full bg-white flex items-center justify-center shadow-sm">
+                            <svg className="w-4 h-4" viewBox="0 0 24 24">
+                              <path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" />
+                              <path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" />
+                              <path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.06H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.94l2.85-2.22.81-.63z" />
+                              <path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.06l3.66 2.84c.87-2.6 3.3-4.52 6.16-4.52z" />
+                            </svg>
+                          </div>
+                          <div>
+                            <span className="font-mono text-xs font-bold text-white block">{email}</span>
+                            <span className="text-[10px] text-teal-400">
+                              {isSuper ? '👑 Super Administrator' : '🛡️ Administrator'}
+                            </span>
+                          </div>
+                        </div>
+
+                        <button
+                          type="button"
+                          onClick={() => handleRemoveAdminEmail(email)}
+                          className="text-slate-500 hover:text-rose-400 p-1.5 rounded-lg hover:bg-rose-950/50 transition"
+                          title="ลบสิทธิ์ผู้ดูแล"
+                        >
+                          <Trash2 className="w-4 h-4" />
+                        </button>
+                      </div>
+                    );
+                  })}
+                </div>
+
+                {/* Add new Google account */}
+                <div className="flex gap-2 pt-2">
+                  <div className="relative flex-1">
+                    <Mail className="w-4 h-4 text-slate-500 absolute left-3.5 top-1/2 -translate-y-1/2" />
+                    <input
+                      type="email"
+                      value={newAdminEmail}
+                      onChange={(e) => setNewAdminEmail(e.target.value)}
+                      placeholder="กรอก Google Email ที่ต้องการเพิ่มสิทธิ์ เช่น manager@gmail.com"
+                      className="w-full bg-slate-900 border border-slate-700 rounded-xl pl-10 pr-4 py-2.5 text-xs text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-teal-500"
+                    />
+                  </div>
+                  <button
+                    type="button"
+                    onClick={handleAddAdminEmail}
+                    className="bg-teal-600 hover:bg-teal-500 text-white font-bold px-4 py-2.5 rounded-xl text-xs transition flex items-center gap-1.5 shadow-md shadow-teal-950 shrink-0"
+                  >
+                    <UserPlus className="w-4 h-4" />
+                    <span>เพิ่มบัญชี Google</span>
+                  </button>
+                </div>
+              </div>
+            </div>
+
+            {/* PromptPay & LINE Notify Settings Form */}
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+              <div className="bg-slate-800/80 border border-slate-700/80 p-6 rounded-2xl shadow-xl space-y-6">
+                <div>
+                  <h3 className="text-base font-bold text-white flex items-center gap-2">
+                    <QrCode className="w-5 h-5 text-teal-400" />
+                    <span>ตั้งค่าบัญชีรับเงิน PromptPay & ข้อมูลบริษัท</span>
+                  </h3>
+                  <p className="text-xs text-slate-400 mt-1">
+                    กำหนดเบอร์โทรศัพท์/เลขบัตรรับเงิน และข้อมูลบริษัทที่ปรากฏบนตั๋ว E-Ticket
+                  </p>
+                </div>
 
                 <form onSubmit={handleSaveSettings} className="space-y-4 text-xs">
                   <div>
                     <label className="text-slate-300 font-bold block mb-1">
-                      หมายเลขพร้อมเพย์ (เบอร์โทรศัพท์ 10 หลัก หรือ เลขประจำตัวผู้เสียภาษี 13 หลัก)
+                      PromptPay ID (เบอร์โทรศัพท์ หรือ เลขประจำตัวประชาชน 13 หลัก)
                     </label>
                     <input
                       type="text"
                       required
                       value={formSettings.promptPayId}
                       onChange={(e) => setFormSettings({ ...formSettings, promptPayId: e.target.value })}
-                      className="w-full bg-slate-900 border border-slate-700 rounded-xl p-3 text-white text-sm font-mono font-bold focus:ring-2 focus:ring-cyan-500"
+                      placeholder="เช่น 0626816494 หรือ 1234567890123"
+                      className="w-full bg-slate-900 border border-slate-700 rounded-xl p-3 text-white text-xs font-mono font-bold focus:ring-2 focus:ring-teal-500"
                     />
                   </div>
 
                   <div>
-                    <label className="text-slate-300 font-bold block mb-1">
-                      ชื่อบัญชีพร้อมเพย์ (แสดงบนหน้าสแกนจ่าย)
-                    </label>
+                    <label className="text-slate-300 font-bold block mb-1">ชื่อบัญชีรับเงิน / บริษัท</label>
                     <input
                       type="text"
                       required
-                      value={formSettings.promptPayName}
-                      onChange={(e) => setFormSettings({ ...formSettings, promptPayName: e.target.value })}
-                      className="w-full bg-slate-900 border border-slate-700 rounded-xl p-3 text-white text-sm font-bold focus:ring-2 focus:ring-cyan-500"
+                      value={formSettings.companyName}
+                      onChange={(e) => setFormSettings({ ...formSettings, companyName: e.target.value })}
+                      className="w-full bg-slate-900 border border-slate-700 rounded-xl p-3 text-white text-xs font-bold focus:ring-2 focus:ring-teal-500"
                     />
                   </div>
 
-                  <hr className="border-slate-700 my-4" />
-
-                  <h4 className="text-sm font-bold text-white flex items-center gap-2 pt-1">
-                    <Lock className="w-4 h-4 text-blue-400" />
-                    <span>ตั้งค่าความปลอดภัยระบบแอดมิน (Admin Security Lock)</span>
-                  </h4>
+                  <div className="grid grid-cols-2 gap-3">
+                    <div>
+                      <label className="text-slate-300 font-bold block mb-1">เบอร์โทรศัพท์ติดต่อ</label>
+                      <input
+                        type="text"
+                        value={formSettings.contactPhone}
+                        onChange={(e) => setFormSettings({ ...formSettings, contactPhone: e.target.value })}
+                        className="w-full bg-slate-900 border border-slate-700 rounded-xl p-3 text-white text-xs"
+                      />
+                    </div>
+                    <div>
+                      <label className="text-slate-300 font-bold block mb-1">อีเมลติดต่อ</label>
+                      <input
+                        type="email"
+                        value={formSettings.contactEmail}
+                        onChange={(e) => setFormSettings({ ...formSettings, contactEmail: e.target.value })}
+                        className="w-full bg-slate-900 border border-slate-700 rounded-xl p-3 text-white text-xs"
+                      />
+                    </div>
+                  </div>
 
                   <div>
-                    <label className="text-slate-300 font-bold block mb-1">
-                      รหัสผ่านเข้าใช้งานระบบแอดมิน (Admin PIN / Password)
-                    </label>
+                    <label className="text-slate-300 font-bold block mb-1">ที่อยู่สำนักงาน</label>
                     <input
                       type="text"
-                      required
-                      value={formSettings.adminPin || '1234'}
-                      onChange={(e) => setFormSettings({ ...formSettings, adminPin: e.target.value })}
-                      placeholder="เช่น 1234 หรือ MySecretPass"
-                      className="w-full bg-slate-900 border border-slate-700 rounded-xl p-3 text-white text-xs font-mono font-bold focus:ring-2 focus:ring-blue-500"
-                    />
-                    <p className="text-[11px] text-slate-400 mt-1">
-                      * รหัสผ่านนี้จะใช้สำหรับปลดล็อคการเข้าถึงระบบแอดมินป้องกันลูกค้าทั่วไปแอบเข้ามาดูข้อมูล
-                    </p>
-                  </div>
-
-                  <hr className="border-slate-700 my-4" />
-
-                  <h4 className="text-sm font-bold text-white flex items-center gap-2 pt-1">
-                    <MessageCircle className="w-4 h-4 text-emerald-400" />
-                    <span>ตั้งค่าการแจ้งเตือน LINE Messaging API (LINE Official Account)</span>
-                  </h4>
-
-                  <div>
-                    <label className="text-slate-300 font-bold block mb-1">
-                      LINE Messaging Channel Access Token (Long-lived Token)
-                    </label>
-                    <input
-                      type="text"
-                      value={formSettings.lineMessagingChannelAccessToken || ''}
-                      onChange={(e) => setFormSettings({ ...formSettings, lineMessagingChannelAccessToken: e.target.value })}
-                      placeholder="วาง Channel Access Token จาก LINE Developers Console..."
-                      className="w-full bg-slate-900 border border-slate-700 rounded-xl p-3 text-white text-xs font-mono focus:ring-2 focus:ring-emerald-500"
+                      value={formSettings.address}
+                      onChange={(e) => setFormSettings({ ...formSettings, address: e.target.value })}
+                      className="w-full bg-slate-900 border border-slate-700 rounded-xl p-3 text-white text-xs"
                     />
                   </div>
 
-                  <div>
+                  <div className="pt-2 border-t border-slate-700/80">
                     <label className="text-slate-300 font-bold block mb-1">
-                      LINE Target User ID หรือ Group ID (สำหรับส่งข้อความตรง Push Message เข้ากลุ่มแอดมิน)
+                      LINE Target Group ID (สำหรับส่งข้อความตรง Push Message เข้ากลุ่มแอดมิน)
                     </label>
                     <div className="flex gap-2">
                       <input
                         type="text"
                         value={formSettings.lineMessagingUserId || ''}
                         onChange={(e) => setFormSettings({ ...formSettings, lineMessagingUserId: e.target.value })}
-                        placeholder="ระบุ Group ID เช่น C1234567890abcdef1234567890abcdef (ขึ้นต้นด้วย C...)"
-                        className="flex-1 bg-slate-900 border border-slate-700 rounded-xl p-3 text-white text-xs font-mono focus:ring-2 focus:ring-emerald-500"
+                        placeholder="ระบุ Group ID เช่น C1234567890abcdef1234567890abcdef"
+                        className="flex-1 bg-slate-900 border border-slate-700 rounded-xl p-3 text-white text-xs font-mono focus:ring-2 focus:ring-teal-500"
                       />
                       <button
                         type="button"
                         onClick={fetchDetectedGroups}
                         disabled={isFetchingGroups}
-                        className="bg-emerald-600/80 hover:bg-emerald-500 text-white font-bold px-3.5 rounded-xl text-xs flex items-center gap-1.5 transition shrink-0 border border-emerald-500/30"
+                        className="bg-teal-600/80 hover:bg-teal-500 text-white font-bold px-3.5 rounded-xl text-xs flex items-center gap-1.5 transition shrink-0 border border-teal-500/30"
                       >
                         <RefreshCw className={`w-3.5 h-3.5 ${isFetchingGroups ? 'animate-spin' : ''}`} />
-                        <span>ดึง Group ID ล่าสุด</span>
+                        <span>ดึง Group ID</span>
                       </button>
                     </div>
-                    <p className="text-[11px] text-slate-400 mt-1">
-                      * เมื่อใส่ Group ID (ขึ้นต้นด้วย C...) การแจ้งเตือนออเดอร์ใหม่ การสลิป และแจ้งเตือน 24 ชม. จะเด้งเข้ากลุ่มไลน์แอดมินโดยตรง
-                    </p>
-                  </div>
-
-                  {/* Detected Groups Auto-Select List */}
-                  {detectedGroups.length > 0 && (
-                    <div className="bg-slate-900/90 border border-emerald-500/40 p-3.5 rounded-xl space-y-2 text-xs">
-                      <div className="flex items-center justify-between">
-                        <span className="font-bold text-emerald-300 flex items-center gap-1.5 text-xs">
-                          <Sparkles className="w-4 h-4 text-emerald-400" />
-                          <span>พบ Group ID จากแชทกลุ่ม LINE ({detectedGroups.length} รายการ):</span>
-                        </span>
-                        <span className="text-[10px] text-slate-400">คลิกเพื่อเลือกบันทึกลง AppSettings</span>
-                      </div>
-                      <div className="space-y-1.5 max-h-40 overflow-y-auto pr-1">
-                        {detectedGroups.map((group, idx) => (
-                          <div
-                            key={idx}
-                            className="bg-slate-800/90 hover:bg-slate-800 border border-slate-700/80 p-2.5 rounded-lg flex items-center justify-between gap-2"
-                          >
-                            <div className="min-w-0 flex-1">
-                              <p className="text-xs font-bold text-white truncate">{group.groupName || 'กลุ่ม LINE'}</p>
-                              <p className="text-[11px] font-mono text-emerald-400 truncate">{group.groupId}</p>
-                            </div>
-                            <div className="flex items-center gap-1.5 shrink-0">
-                              <button
-                                type="button"
-                                onClick={() => {
-                                  setFormSettings({ ...formSettings, lineMessagingUserId: group.groupId });
-                                  setGroupFetchStatus(`เลือก Group ID: ${group.groupId} ลงในแบบฟอร์มแล้ว`);
-                                }}
-                                className="bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-[11px] px-2.5 py-1 rounded-md transition"
-                              >
-                                ใช้ ID นี้
-                              </button>
-                              <button
-                                type="button"
-                                onClick={() => handleSendGroupIdToBot(group.groupId)}
-                                className="bg-slate-700 hover:bg-slate-600 text-slate-200 font-bold text-[11px] px-2 py-1 rounded-md transition flex items-center gap-1"
-                              >
-                                <Send className="w-3 h-3 text-cyan-400" />
-                                <span>ทักเข้ากลุ่ม</span>
-                              </button>
-                            </div>
-                          </div>
-                        ))}
-                      </div>
-                      {groupFetchStatus && (
-                        <p className="text-[11px] text-cyan-300 font-medium pt-1 border-t border-slate-800">{groupFetchStatus}</p>
-                      )}
-                    </div>
-                  )}
-
-                  {/* LINE Group ID Setup Guide Box */}
-                  <div className="bg-emerald-950/40 border border-emerald-800/60 p-4 rounded-xl space-y-2.5 text-xs">
-                    <div className="flex items-center gap-2 text-emerald-300 font-bold">
-                      <MessageCircle className="w-4 h-4 text-emerald-400 shrink-0" />
-                      <span>💡 ขั้นตอนการตั้งค่าส่งแจ้งเตือนเข้ากลุ่ม LINE (Group ID)</span>
-                    </div>
-                    <ol className="list-decimal list-inside space-y-1.5 text-slate-300 text-[11px] leading-relaxed">
-                      <li>
-                        <strong className="text-white">อนุญาตให้บอทเข้ากลุ่ม:</strong> ไปที่ <span className="text-emerald-400">LINE Official Account Manager</span> &gt; ตั้งค่าสิทธิ์ &gt; เปิดใช้ <span className="text-amber-300">"Allow bot to join group chats"</span>
-                      </li>
-                      <li>
-                        <strong className="text-white">ดึงบอทเข้ากลุ่ม:</strong> ดึง LINE OA ของคุณเข้ามาในกลุ่ม LINE ของทีมงาน/แอดมิน
-                      </li>
-                      <li>
-                        <strong className="text-white">หา Group ID (เลือกใช้ตามสะดวก):</strong>
-                        <div className="pl-4 pt-1 space-y-1.5 text-slate-400">
-                          <p>• <strong className="text-emerald-300">วิธีที่ 1 (ผ่าน Webhook ของเว็บ):</strong> ใน LINE Developers Console ตั้ง Webhook URL เป็น <code className="bg-slate-900 text-emerald-300 px-1.5 py-0.5 rounded font-mono select-all">{window.location.origin}/api/line/webhook</code> จากนั้นเปิด <span className="text-emerald-300">Use webhook</span> แล้วพิมพ์ข้อความอะไรก็ได้ในกลุ่ม บอทจะตอบกลับ Group ID มาทันที</p>
-                          <p>• <strong className="text-emerald-300">วิธีที่ 2 (ผ่าน Google Apps Script):</strong> สร้าง Webhook ฟรีด้วย Google Apps Script เพื่อดักจับ Group ID แล้วส่งข้อความตอบกลับเข้ากลุ่ม (ดูโค้ดสำเร็จรูปด้านล่าง)</p>
-                        </div>
-                      </li>
-                      <li>
-                        <strong className="text-white">วาง Group ID:</strong> นำรหัส Group ID (ขึ้นต้นด้วย C...) มาวางในช่องด้านบนแล้วกด <span className="text-cyan-400 font-bold">บันทึกการตั้งค่า</span>
-                      </li>
-                    </ol>
                   </div>
 
                   {saveSuccess && (
-                    <div className="bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 p-3 rounded-xl flex items-center gap-2 text-xs font-bold animate-in fade-in duration-300">
+                    <div className="bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 p-3 rounded-xl flex items-center gap-2 text-xs font-bold animate-in fade-in">
                       <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" />
-                      <span>💾 บันทึกการตั้งค่าทั้งหมดเรียบร้อยแล้ว (ข้อมูลถูกเซฟลงคลาวด์ถาวร)</span>
+                      <span>💾 บันทึกการตั้งค่าทั้งหมดเรียบร้อยแล้ว</span>
                     </div>
                   )}
 
                   <button
                     type="submit"
-                    className={`w-full font-extrabold py-3 rounded-xl transition text-xs shadow-lg flex items-center justify-center gap-2 ${
-                      saveSuccess 
-                        ? 'bg-emerald-500 hover:bg-emerald-400 text-slate-950 shadow-emerald-500/20' 
-                        : 'bg-cyan-500 hover:bg-cyan-400 text-slate-950 shadow-cyan-500/20'
-                    }`}
+                    className="w-full font-extrabold py-3 rounded-xl bg-teal-500 hover:bg-teal-400 text-slate-950 shadow-teal-500/20 shadow-lg transition text-xs flex items-center justify-center gap-2"
                   >
-                    {saveSuccess ? (
-                      <>
-                        <Check className="w-4 h-4 text-slate-950 stroke-[3]" />
-                        <span>บันทึกสำเร็จเรียบร้อย!</span>
-                      </>
-                    ) : (
-                      <span>บันทึกการตั้งค่าทั้งหมด</span>
-                    )}
+                    <Check className="w-4 h-4 stroke-[3]" />
+                    <span>บันทึกการตั้งค่าทั้งหมด</span>
                   </button>
                 </form>
-
-                {/* Supabase Database Status & Setup Box */}
-                <div className="bg-slate-900/90 border border-emerald-500/30 p-5 rounded-2xl space-y-4">
-                  <div className="flex items-center justify-between border-b border-slate-800 pb-3">
-                    <div className="flex items-center gap-2 text-white font-bold text-sm">
-                      <span className="w-3 h-3 rounded-full bg-emerald-500 animate-pulse inline-block"></span>
-                      <span>ฐานข้อมูล Supabase (PostgreSQL Database)</span>
-                    </div>
-                    {isSupabaseConfigured ? (
-                      <span className="bg-emerald-500/20 text-emerald-300 text-[11px] font-bold px-2.5 py-1 rounded-full border border-emerald-500/40">
-                        ⚡ เชื่อมต่อเรียบร้อยแล้ว
-                      </span>
-                    ) : (
-                      <span className="bg-amber-500/20 text-amber-300 text-[11px] font-bold px-2.5 py-1 rounded-full border border-amber-500/40">
-                        ⏳ รอใส่ VITE_SUPABASE_URL ใน .env
-                      </span>
-                    )}
-                  </div>
-
-                  <p className="text-xs text-slate-300 leading-relaxed">
-                    ระบบรองรับการจัดเก็บข้อมูลการจอง รีวิว และการตั้งค่าลงฐานข้อมูล <strong>Supabase</strong> โดยอัตโนมัติ คุณสามารถนำโค้ด SQL ด้านล่างไปรันใน <strong>Supabase SQL Editor</strong> เพื่อสร้างตารางข้อมูล:
-                  </p>
-
-                  <div className="relative">
-                    <pre className="bg-slate-950 p-3 rounded-xl border border-slate-800 text-[10px] font-mono text-emerald-400 max-h-40 overflow-y-auto whitespace-pre-wrap">
-                      {SUPABASE_SQL_SCHEMA}
-                    </pre>
-                    <button
-                      type="button"
-                      onClick={() => {
-                        navigator.clipboard.writeText(SUPABASE_SQL_SCHEMA);
-                        setCopiedSql(true);
-                        setTimeout(() => setCopiedSql(false), 3000);
-                      }}
-                      className="absolute top-2 right-2 bg-slate-800 hover:bg-slate-700 text-slate-200 text-[10px] font-bold py-1 px-2.5 rounded-lg border border-slate-700 transition"
-                    >
-                      {copiedSql ? '✅ คัดลอก SQL แล้ว!' : '📋 คัดลอกโค้ด SQL'}
-                    </button>
-                  </div>
-                </div>
               </div>
 
               {/* LINE Notification Tester & Live Feed */}
               <div className="bg-slate-800/80 border border-slate-700/80 p-6 rounded-2xl shadow-xl space-y-5">
-                {/* 24-Hour Automated Reminder Feature Box */}
-                <div className="bg-blue-950/50 border border-blue-800/80 p-4 rounded-xl space-y-3">
-                  <div className="flex items-center gap-2 text-blue-300 font-bold text-xs">
-                    <Clock className="w-4 h-4 text-blue-400" />
-                    <span>ระบบส่งแจ้งเตือนเตือนความจำ 24 ชม. ก่อนวันเดินทาง (LINE 24h Reminder)</span>
-                  </div>
-                  <p className="text-[11px] text-blue-200/80 leading-relaxed">
-                    ระบบจะทำการสแกนคำสั่งซื้อที่ได้รับการยืนยันการชำระเงินแล้วที่มีกำหนดการเดินทางล่วงหน้า 24 ชั่วโมง โดยอัตโนมัติในเบื้องหลังทุกๆ 1 ชั่วโมง เพื่อส่งการแจ้งเตือนเตือนความจำพร้อมรายละเอียดทัวร์ โรงแรม และห้องพักให้ทีมงานเตรียมพร้อมดูแลลูกค้า
-                  </p>
-                  {onTrigger24hReminders && (
-                    <button
-                      type="button"
-                      onClick={onTrigger24hReminders}
-                      className="w-full bg-blue-600 hover:bg-blue-500 text-white font-bold py-2 rounded-lg text-xs transition flex items-center justify-center gap-2 shadow-md shadow-blue-900/40"
-                    >
-                      <Clock className="w-3.5 h-3.5" />
-                      <span>สแกนและส่งการแจ้งเตือน 24 ชม. ตอนนี้ (Manual Trigger)</span>
-                    </button>
-                  )}
-                </div>
-
-                <h3 className="text-base font-bold text-white flex items-center gap-2 pt-2">
+                <h3 className="text-base font-bold text-white flex items-center gap-2">
                   <Send className="w-5 h-5 text-emerald-400" />
                   <span>ทดสอบส่งการแจ้งเตือนเข้า LINE (LINE Alert Test)</span>
                 </h3>
@@ -1104,7 +1278,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                     className="w-full bg-emerald-600 hover:bg-emerald-500 text-white font-bold py-2.5 rounded-xl transition flex items-center justify-center gap-2 shadow-md shadow-emerald-900/30"
                   >
                     <Send className="w-4 h-4" />
-                    <span>ส่งข้อความทดสอบไปยัง LINE Messaging API</span>
+                    <span>ส่งข้อความทดสอบไปยัง LINE</span>
                   </button>
                 </div>
 
@@ -1118,7 +1292,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                     {lineLogs.map((log) => (
                       <div key={log.id} className="bg-slate-900 p-3 rounded-xl border border-slate-700 text-xs space-y-1">
                         <div className="flex justify-between text-[10px] text-slate-400">
-                          <span className="font-mono text-cyan-400">{log.bookingRef}</span>
+                          <span className="font-mono text-teal-400">{log.bookingRef}</span>
                           <span>{new Date(log.timestamp).toLocaleTimeString('th-TH')}</span>
                         </div>
                         <p className="text-slate-200 whitespace-pre-line font-medium">{log.message}</p>
@@ -1175,9 +1349,9 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
         <div className="fixed inset-0 z-50 bg-slate-950/85 backdrop-blur-md flex items-center justify-center p-3 overflow-y-auto animate-in fade-in">
           <div className="bg-slate-900 border border-slate-700 max-w-2xl w-full rounded-3xl p-5 shadow-2xl relative space-y-4 my-auto">
             <div className="flex items-center justify-between border-b border-slate-800 pb-3">
-              <div className="flex items-center gap-2 text-cyan-400 font-bold text-sm">
-                <Ticket className="w-5 h-5 text-cyan-400" />
-                <span>ตรวจสอบและจัดการตั๋ว E-Ticket #{selectedTicketBooking.bookingRef}</span>
+              <div className="flex items-center gap-2 text-teal-400 font-bold text-sm">
+                <Ticket className="w-5 h-5 text-teal-400" />
+                <span>ตรวจสอบและส่งรูปตั๋ว E-Ticket #{selectedTicketBooking.bookingRef}</span>
               </div>
               <button
                 onClick={() => setSelectedTicketBooking(null)}
@@ -1201,20 +1375,17 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
         </div>
       )}
 
-      {/* Custom Confirm Delete Booking Modal */}
+      {/* Delete Booking Modal */}
       {deleteBookingTarget && (
         <div className="fixed inset-0 z-50 bg-slate-950/85 backdrop-blur-md flex items-center justify-center p-4 animate-in fade-in">
-          <div className="bg-slate-900 border border-rose-800/80 max-w-md w-full rounded-3xl p-6 shadow-2xl relative space-y-4 text-center">
+          <div className="bg-slate-900 border border-rose-800 max-w-md w-full rounded-3xl p-6 shadow-2xl relative space-y-4 text-center">
             <div className="w-12 h-12 bg-rose-500/20 rounded-full flex items-center justify-center mx-auto border border-rose-500/40 text-rose-400">
               <Trash2 className="w-6 h-6" />
             </div>
             <div>
               <h3 className="text-lg font-extrabold text-white">ยืนยันลบคำสั่งซื้อทัวร์</h3>
               <p className="text-xs text-slate-300 mt-1 leading-relaxed">
-                คุณต้องการลบออเดอร์ <strong className="text-cyan-300 font-mono">#{deleteBookingTarget.bookingRef}</strong> คุณ <strong className="text-amber-300">{deleteBookingTarget.customerName}</strong> ใช่หรือไม่?
-              </p>
-              <p className="text-[11px] text-rose-400 mt-2 bg-rose-950/50 p-2.5 rounded-xl border border-rose-900">
-                ⚠️ การลบนี้จะมีผลทันทีในระบบและฐานข้อมูล
+                คุณต้องการลบออเดอร์ <strong className="text-teal-300 font-mono">#{deleteBookingTarget.bookingRef}</strong> คุณ <strong className="text-amber-300">{deleteBookingTarget.customerName}</strong> ใช่หรือไม่?
               </p>
             </div>
 
@@ -1245,20 +1416,17 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
         </div>
       )}
 
-      {/* Custom Confirm Delete Tour Modal */}
+      {/* Delete Tour Modal */}
       {deleteTourTarget && (
         <div className="fixed inset-0 z-50 bg-slate-950/85 backdrop-blur-md flex items-center justify-center p-4 animate-in fade-in">
-          <div className="bg-slate-900 border border-rose-800/80 max-w-md w-full rounded-3xl p-6 shadow-2xl relative space-y-4 text-center">
+          <div className="bg-slate-900 border border-rose-800 max-w-md w-full rounded-3xl p-6 shadow-2xl relative space-y-4 text-center">
             <div className="w-12 h-12 bg-rose-500/20 rounded-full flex items-center justify-center mx-auto border border-rose-500/40 text-rose-400">
               <Trash2 className="w-6 h-6" />
             </div>
             <div>
               <h3 className="text-lg font-extrabold text-white">ยืนยันลบโปรแกรมทัวร์</h3>
               <p className="text-xs text-slate-300 mt-1 leading-relaxed">
-                คุณต้องการลบโปรแกรมทัวร์ <strong className="text-cyan-300">{deleteTourTarget.title.TH}</strong> ใช่หรือไม่?
-              </p>
-              <p className="text-[11px] text-rose-400 mt-2 bg-rose-950/50 p-2.5 rounded-xl border border-rose-900">
-                ⚠️ รายการทัวร์จะถูกลบออกจากหน้าเว็บและฐานข้อมูล
+                คุณต้องการลบโปรแกรมทัวร์ <strong className="text-teal-300">{deleteTourTarget.title.TH}</strong> ใช่หรือไม่?
               </p>
             </div>
 
@@ -1305,10 +1473,9 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
 
             <div>
               <h3 className="text-lg font-extrabold text-white flex items-center gap-2">
-                <Users className="w-5 h-5 text-cyan-400" />
+                <Users className="w-5 h-5 text-teal-400" />
                 <span>แก้ไขข้อมูลลูกค้า (Edit Customer)</span>
               </h3>
-              <p className="text-xs text-slate-400">แก้ไขข้อมูลการติดต่อและรายละเอียดของลูกค้า</p>
             </div>
 
             <form
@@ -1335,7 +1502,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                   required
                   value={editingCustomer.name}
                   onChange={(e) => setEditingCustomer({ ...editingCustomer, name: e.target.value })}
-                  className="w-full bg-slate-950 border border-slate-700 rounded-xl p-3 text-white text-xs font-bold focus:ring-2 focus:ring-cyan-500"
+                  className="w-full bg-slate-950 border border-slate-700 rounded-xl p-3 text-white text-xs font-bold focus:ring-2 focus:ring-teal-500"
                 />
               </div>
 
@@ -1347,7 +1514,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                     required
                     value={editingCustomer.phone}
                     onChange={(e) => setEditingCustomer({ ...editingCustomer, phone: e.target.value })}
-                    className="w-full bg-slate-950 border border-slate-700 rounded-xl p-3 text-white text-xs font-bold focus:ring-2 focus:ring-cyan-500"
+                    className="w-full bg-slate-950 border border-slate-700 rounded-xl p-3 text-white text-xs font-bold focus:ring-2 focus:ring-teal-500"
                   />
                 </div>
                 <div>
@@ -1356,7 +1523,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                     type="text"
                     value={editingCustomer.lineId || ''}
                     onChange={(e) => setEditingCustomer({ ...editingCustomer, lineId: e.target.value })}
-                    className="w-full bg-slate-950 border border-slate-700 rounded-xl p-3 text-white text-xs font-bold focus:ring-2 focus:ring-cyan-500"
+                    className="w-full bg-slate-950 border border-slate-700 rounded-xl p-3 text-white text-xs font-bold focus:ring-2 focus:ring-teal-500"
                   />
                 </div>
               </div>
@@ -1369,7 +1536,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                     required
                     value={editingCustomer.email}
                     onChange={(e) => setEditingCustomer({ ...editingCustomer, email: e.target.value })}
-                    className="w-full bg-slate-950 border border-slate-700 rounded-xl p-3 text-white text-xs font-bold focus:ring-2 focus:ring-cyan-500"
+                    className="w-full bg-slate-950 border border-slate-700 rounded-xl p-3 text-white text-xs font-bold focus:ring-2 focus:ring-teal-500"
                   />
                 </div>
                 <div>
@@ -1379,7 +1546,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                     required
                     value={editingCustomer.nationality}
                     onChange={(e) => setEditingCustomer({ ...editingCustomer, nationality: e.target.value })}
-                    className="w-full bg-slate-950 border border-slate-700 rounded-xl p-3 text-white text-xs font-bold focus:ring-2 focus:ring-cyan-500"
+                    className="w-full bg-slate-950 border border-slate-700 rounded-xl p-3 text-white text-xs font-bold focus:ring-2 focus:ring-teal-500"
                   />
                 </div>
               </div>
@@ -1397,49 +1564,13 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                 </button>
                 <button
                   type="submit"
-                  className="w-full bg-cyan-600 hover:bg-cyan-500 text-white font-bold py-2.5 rounded-xl text-xs transition shadow-lg shadow-cyan-900/40 flex items-center justify-center gap-1.5"
+                  className="w-full bg-teal-600 hover:bg-teal-500 text-white font-bold py-2.5 rounded-xl text-xs transition shadow-lg shadow-teal-900/40 flex items-center justify-center gap-1.5"
                 >
                   <Check className="w-4 h-4" />
                   <span>บันทึกข้อมูล</span>
                 </button>
               </div>
             </form>
-          </div>
-        </div>
-      )}
-
-      {/* Delete Customer Confirmation Modal */}
-      {deleteCustomerTarget && (
-        <div className="fixed inset-0 z-50 bg-slate-950/85 backdrop-blur-md flex items-center justify-center p-4 animate-in fade-in">
-          <div className="bg-slate-900 border border-slate-700 max-w-sm w-full rounded-3xl p-6 shadow-2xl relative text-center space-y-4">
-            <div className="w-12 h-12 bg-rose-500/20 border border-rose-500/30 text-rose-400 rounded-2xl flex items-center justify-center mx-auto text-xl">
-              ⚠️
-            </div>
-            <div>
-              <h3 className="text-sm font-bold text-white">ต้องการลบลูกค้าคนนี้หรือไม่?</h3>
-              <p className="text-xs text-slate-400 mt-1">
-                คุณกำลังจะลบข้อมูลลูกค้า <span className="text-white font-semibold">"{deleteCustomerTarget.name}"</span> ออกจากระบบ CRM
-              </p>
-            </div>
-            <div className="grid grid-cols-2 gap-3 pt-2">
-              <button
-                onClick={() => setDeleteCustomerTarget(null)}
-                className="bg-slate-800 hover:bg-slate-700 text-slate-300 font-bold py-2 rounded-xl text-xs transition border border-slate-700"
-              >
-                ยกเลิก
-              </button>
-              <button
-                onClick={() => {
-                  if (onDeleteCustomer) {
-                    onDeleteCustomer(deleteCustomerTarget.id);
-                  }
-                  setDeleteCustomerTarget(null);
-                }}
-                className="bg-rose-600 hover:bg-rose-500 text-white font-bold py-2 rounded-xl text-xs transition shadow-lg shadow-rose-950/40"
-              >
-                ยืนยันการลบ
-              </button>
-            </div>
           </div>
         </div>
       )}

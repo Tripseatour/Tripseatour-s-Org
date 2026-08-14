@@ -567,5 +567,6 @@ export const initialSettings: AppSettings = {
   contactPhone: '+66 (0) 62 681 6494 / +66 (0) 97 924 1399',
   contactEmail: 'tripseatourphuket@gmail.com',
   address: 'ภูเก็ต ประเทศไทย',
-  adminPin: '1234'
+  adminPin: '1234',
+  adminGoogleEmails: ['asmr9941@gmail.com', 'admin@tripseatour.com']
 };

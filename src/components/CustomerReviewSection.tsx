@@ -76,7 +76,9 @@ export const CustomerReviewSection: React.FC<CustomerReviewSectionProps> = ({
 
         {/* Reviews Grid */}
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-          {reviews.map((rev) => {
+          {reviews
+            .filter((r) => r.isApproved !== false)
+            .map((rev) => {
             const tour = tours.find(t => t.id === rev.tourId);
             return (
               <div
@@ -87,7 +89,7 @@ export const CustomerReviewSection: React.FC<CustomerReviewSectionProps> = ({
                   {/* Top Bar */}
                   <div className="flex items-center justify-between">
                     <div className="flex items-center gap-2">
-                      <div className="w-8 h-8 rounded-full bg-cyan-100 text-cyan-800 font-bold flex items-center justify-center text-xs">
+                      <div className="w-8 h-8 rounded-full bg-teal-100 text-teal-800 font-bold flex items-center justify-center text-xs">
                         {rev.userName.slice(0, 1)}
                       </div>
                       <div>
@@ -123,7 +125,7 @@ export const CustomerReviewSection: React.FC<CustomerReviewSectionProps> = ({
 
                   {/* Attached Photos */}
                   {rev.photos && rev.photos.length > 0 && (
-                    <div className="flex gap-2 pt-1">
+                    <div className="flex gap-2 pt-1 overflow-x-auto">
                       {rev.photos.map((p, idx) => (
                         <img
                           key={idx}
@@ -138,9 +140,16 @@ export const CustomerReviewSection: React.FC<CustomerReviewSectionProps> = ({
 
                 {/* Admin Reply */}
                 {rev.adminReply && (
-                  <div className="bg-blue-50 border border-blue-100 p-3 rounded-xl text-[11px] text-slate-700 space-y-1">
-                    <span className="font-bold text-blue-800 block">💬 การตอบกลับจากแอดมิน:</span>
-                    <p>{rev.adminReply}</p>
+                  <div className="bg-teal-50/80 border border-teal-100 p-3 rounded-xl text-[11px] text-slate-700 space-y-1">
+                    <div className="flex items-center justify-between">
+                      <span className="font-bold text-teal-900 flex items-center gap-1">
+                        <span>💬 คำตอบจาก Trip Sea Tour</span>
+                      </span>
+                      {rev.adminReplyDate && (
+                        <span className="text-[10px] text-teal-600">{rev.adminReplyDate}</span>
+                      )}
+                    </div>
+                    <p className="text-slate-600 text-xs leading-relaxed">{rev.adminReply}</p>
                   </div>
                 )}
               </div>

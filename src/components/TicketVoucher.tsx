@@ -1,5 +1,5 @@
 import React, { useRef, useState } from 'react';
-import { Download } from 'lucide-react';
+import { Download, CheckCircle2, QrCode, ShieldCheck, Sparkles } from 'lucide-react';
 import { toPng } from 'html-to-image';
 import { Booking, AppSettings } from '../types';
 import tripSeaLogo from '../assets/images/trip_sea_tour_logo_1786613886795.jpg';
@@ -47,17 +47,17 @@ export const TicketVoucher: React.FC<TicketVoucherProps> = ({
     }
   };
 
-  const companyPhone = settings?.companyPhone || '(+66) 97 924 1399';
-  const companyEmail = settings?.companyEmail || '';
-  const companyAddress = settings?.companyAddress || '71/47 Moo.2 ,Kathu,Phuket';
-  const companyName = settings?.companyName || 'Trip Sea Tour';
+  const companyPhone = settings?.contactPhone || '(+66) 97 924 1399 / (+66) 62 681 6494';
+  const companyEmail = settings?.contactEmail || 'tripseatourphuket@gmail.com';
+  const companyAddress = settings?.address || 'ภูเก็ต ประเทศไทย (Phuket, Thailand)';
+  const companyName = settings?.companyName || 'Trip Sea Tour Phuket Co., Ltd.';
 
   return (
     <div className="space-y-4">
       {/* Printable / Downloadable Official E-Ticket Voucher (Paper Standard Layout) */}
       <div
         ref={ticketRef}
-        className="bg-white text-slate-900 border-2 border-slate-900 rounded-lg p-4 sm:p-6 shadow-2xl font-sans select-none max-w-4xl mx-auto overflow-hidden text-xs"
+        className="bg-white text-slate-900 border-2 border-slate-900 rounded-xl p-4 sm:p-6 shadow-2xl font-sans select-none max-w-4xl mx-auto overflow-hidden text-xs"
         id={`ticket-voucher-${booking.bookingRef}`}
       >
         {/* Header Section */}
@@ -72,9 +72,14 @@ export const TicketVoucher: React.FC<TicketVoucherProps> = ({
             />
 
             <div>
-              <h2 className="text-xl font-extrabold text-[#0d3b66] tracking-tight leading-none">
-                {companyName}
-              </h2>
+              <div className="flex items-center gap-2">
+                <h2 className="text-xl font-extrabold text-[#0d3b66] tracking-tight leading-none">
+                  {companyName}
+                </h2>
+                <span className="bg-teal-100 text-teal-900 text-[10px] font-extrabold px-2 py-0.5 rounded border border-teal-300">
+                  ททท. 33/11100
+                </span>
+              </div>
               <p className="text-[11px] text-slate-700 font-medium mt-1">
                 {companyAddress}
               </p>
@@ -84,6 +89,11 @@ export const TicketVoucher: React.FC<TicketVoucherProps> = ({
               </div>
             </div>
           </div>
+
+          <div className="hidden sm:block text-right">
+            <span className="text-[10px] uppercase font-bold text-slate-500 block">OFFICIAL E-TICKET</span>
+            <span className="text-sm font-black font-mono text-teal-700">{booking.bookingRef}</span>
+          </div>
         </div>
 
         {/* Main Form Table */}
@@ -91,7 +101,7 @@ export const TicketVoucher: React.FC<TicketVoucherProps> = ({
           {/* ROW 1: Program & Booking Date */}
           <div className="grid grid-cols-12 divide-x divide-slate-900">
             <div className="col-span-3 p-2 bg-slate-50 font-bold text-slate-800 flex items-center">
-              Program(โปรแกรม):
+              Program (โปรแกรมทัวร์):
             </div>
             <div className="col-span-3 p-2 font-bold text-slate-900 flex items-center text-sm">
               {booking.tourTitle}
@@ -130,7 +140,7 @@ export const TicketVoucher: React.FC<TicketVoucherProps> = ({
               {booking.travelDate}
             </div>
             <div className="col-span-3 p-2 bg-slate-50 font-bold text-slate-800 flex items-center">
-              Nation Ality(สัญชาติ):
+              Nation Ality (สัญชาติ):
             </div>
             <div className="col-span-3 p-2 font-semibold text-slate-900 flex items-center">
               {booking.nationality || 'Thai / -'}
@@ -156,12 +166,13 @@ export const TicketVoucher: React.FC<TicketVoucherProps> = ({
           {/* ROW 5: PAX Passengers */}
           <div className="grid grid-cols-12 divide-x divide-slate-900">
             <div className="col-span-3 p-2 bg-slate-50 font-bold text-slate-800 flex items-center">
-              PAX (คน):
+              PAX (จำนวนคน):
             </div>
             <div className="col-span-9 p-2 font-bold text-slate-900 flex items-center gap-6">
               <span>Adult(ผู้ใหญ่): <strong className="text-slate-900 font-mono text-sm">{booking.adults}</strong></span>
               <span>Child (เด็ก): <strong className="text-slate-900 font-mono text-sm">{booking.children || 0}</strong></span>
               <span>Infant(ทารก): <strong className="text-slate-900 font-mono text-sm">{booking.infants || 0}</strong></span>
+              <span className="ml-auto font-black text-emerald-700">ยอดชำระสุทธิ: ฿{booking.totalAmount.toLocaleString()}</span>
             </div>
           </div>
 
@@ -191,18 +202,18 @@ export const TicketVoucher: React.FC<TicketVoucherProps> = ({
               Remark (หมายเหตุ):
             </div>
             <div className="col-span-9 p-2 text-slate-800 flex items-center">
-              {booking.notes || '-'}
+              {booking.specialRequests || booking.notes || '-'}
             </div>
           </div>
 
           {/* ROW 9: Multi-Lingual Terms & Conditions */}
-          <div className="p-3 space-y-2 text-[10px] leading-tight">
+          <div className="p-3 space-y-2 text-[10px] leading-tight bg-slate-50/50">
             {/* THAI WARNINGS */}
             <div className="text-red-600 font-bold space-y-0.5">
-              <p>1. กรุณารอที่ล็อบบี้ของโรงแรมหรือสถานที่ที่กำหนดให้ตรงรถตามเวลานัดรับ คนขับรถจะรอเพียง 5 นาทีหลังจากมาถึงโรงแรม หากคุณไม่มาเนื่องจากคุณมาถึงล่าช้า พนักงานขับรถจะ ออกเดินทางทันทีและจะไม่มีการคืนเงินหรือกำหนดเวลาใหม่</p>
+              <p>1. กรุณารอที่ล็อบบี้ของโรงแรมหรือสถานที่ที่กำหนดให้ตรงรถตามเวลานัดรับ คนขับรถจะรอเพียง 5 นาทีหลังจากมาถึงโรงแรม หากคุณไม่มาเนื่องจากคุณมาถึงล่าช้า พนักงานขับรถจะออกเดินทางทันทีและจะไม่มีการคืนเงินหรือกำหนดเวลาใหม่</p>
               <p>2. โปรดคาดเข็มขัดนิรภัยตลอดเวลาที่อยู่ในรถ ไม่เช่นนั้นคุณอาจถูกปรับอย่างหนัก</p>
               <p>3. เนื่องจากมีสถานการณ์ที่ไม่สามารถควบคุมได้บนท้องถนนหลายประการ โปรดอย่ากังวลหากคนขับมาสาย หากไม่พบคนขับภายใน 20 นาที โปรดติดต่อ {companyPhone}</p>
-              <p>4. ห้ามสตรีมีครรภ์ ผู้ป่วยโรคหัวใจ ความดันโลหิตสูงขั้นรุนแรง และโรคกระดูกสันหลังเข้าร่วมทริปที่น่าตื่นเต้น เช่น เที่ยวทะเล กระโดดร่ม ล่องแก่ง หากคุณปกปิดข้อเท็จจริงที่เกี่ยวข้อง คุณจะต้องรับผิดชอบต่อผลที่ตามมา</p>
+              <p>4. ห้ามสตรีมีครรภ์ ผู้ป่วยโรคหัวใจ ความดันโลหิตสูงขั้นรุนแรง และโรคกระดูกสันหลังเข้าร่วมทริปที่น่าตื่นเต้น หากคุณปกปิดข้อเท็จจริงที่เกี่ยวข้อง คุณจะต้องรับผิดชอบต่อผลที่ตามมา</p>
             </div>
 
             {/* CHINESE WARNINGS */}
@@ -211,7 +222,7 @@ export const TicketVoucher: React.FC<TicketVoucherProps> = ({
               <p>1. 请按人时间准时到酒店大堂或指定地点等待，司机到后将最多等待5分钟，如果由于您的迟到没有赶上行程，司机会自行离开，且无法退款和改期。</p>
               <p>2. 在车上请务必系好安全带。</p>
               <p>3. 因为路上有各种不可控的情况，如果超过20分钟没见到司机，请联系 {companyPhone}。</p>
-              <p>4. 禁止孕妇、患有心脏病、严重高血压患者参加出海、漂流等刺激行程，如隐瞒相关事实后果自负。</p>
+              <p>4. 禁止孕妇、患有心脏病、严重高血压患者参加出海等刺激行程，如隐瞒相关事实后果自负。</p>
             </div>
 
             {/* ENGLISH WARNINGS */}
@@ -219,30 +230,28 @@ export const TicketVoucher: React.FC<TicketVoucherProps> = ({
               <p className="font-bold text-slate-900">Cautions:</p>
               <p>1. Please stand by at hotel lobby on time. Driver will leave if you late over 5 minutes and your order will not cancel and change.</p>
               <p>2. Please fasten the seat belt during the journey on the vehicle.</p>
-              <p>3. If you don't met the driver for more than 20 mins, please contact {companyPhone}.</p>
+              <p>3. If you don't meet the driver for more than 20 mins, please contact {companyPhone}.</p>
             </div>
           </div>
 
           {/* VOUCHER FOOTER WISH */}
-          <div className="p-2 text-center bg-slate-50 font-bold text-slate-900 text-xs tracking-wider space-y-0.5">
-            <div>HAVE A NICE TRIP</div>
-            <div>ขอให้เป็นทริปที่สนุกนะครับ/ค่ะ</div>
-            <div className="text-[11px] font-normal text-slate-700">祝您旅途愉快</div>
+          <div className="p-2 text-center bg-slate-100 font-bold text-slate-900 text-xs tracking-wider space-y-0.5">
+            <div>HAVE A NICE TRIP - ขอให้เป็นทริปที่สนุกนะครับ/ค่ะ - 祝您旅途愉快</div>
           </div>
         </div>
       </div>
 
       {/* Action Control Buttons */}
-      <div className="flex items-center justify-center pt-2">
+      <div className="flex flex-col sm:flex-row items-center justify-center gap-3 pt-2">
         {/* Save PNG Button */}
         <button
           type="button"
           onClick={handleDownloadPng}
           disabled={isDownloading}
-          className="w-full max-w-md bg-gradient-to-r from-cyan-600 to-blue-600 hover:from-cyan-500 hover:to-blue-500 text-white font-bold py-3 px-6 rounded-xl text-sm transition shadow-lg shadow-cyan-900/30 flex items-center justify-center gap-2.5 disabled:opacity-50"
+          className="w-full sm:w-auto bg-teal-700 hover:bg-teal-800 text-white font-bold py-3 px-6 rounded-xl text-xs sm:text-sm transition shadow-lg shadow-teal-900/30 flex items-center justify-center gap-2 disabled:opacity-50"
         >
           {isDownloading ? (
-            <span>กำลังบันทึกรูปตั๋ว...</span>
+            <span>กำลังสร้างรูปตั๋ว...</span>
           ) : (
             <>
               <Download className="w-4 h-4" />
@@ -254,7 +263,7 @@ export const TicketVoucher: React.FC<TicketVoucherProps> = ({
 
       {/* Status Banner */}
       {downloadSuccess && (
-        <div className="bg-emerald-500/20 border border-emerald-500/40 text-emerald-300 p-3 rounded-xl text-xs text-center font-bold animate-in fade-in">
+        <div className="bg-emerald-50 border border-emerald-300 text-emerald-800 p-3 rounded-xl text-xs text-center font-bold animate-in fade-in">
           ✅ บันทึกรูปตั๋วลงอุปกรณ์เรียบร้อยแล้ว! (E-Ticket-{booking.bookingRef}.png)
         </div>
       )}

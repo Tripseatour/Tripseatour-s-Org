@@ -47,9 +47,11 @@ export interface Booking {
   customerLineId?: string;
   nationality: string;
   travelDate: string; // YYYY-MM-DD
+  pickupTime?: string;
   pickupHotel: string;
   pickupZone: string;
   roomNumber?: string;
+  sendBackHotel?: string;
   specialRequests?: string;
   adults: number;
   children: number;
@@ -98,6 +100,16 @@ export interface Customer {
   createdAt: string;
 }
 
+export type Currency = 'THB' | 'USD' | 'EUR' | 'CNY' | 'RUB' | 'GBP' | 'SGD' | 'AUD';
+
+export interface AdminUser {
+  email: string;
+  name?: string;
+  picture?: string;
+  role: 'superadmin' | 'admin';
+  lastLogin?: string;
+}
+
 export interface AppSettings {
   siteName: string;
   companyName: string;
@@ -111,6 +123,7 @@ export interface AppSettings {
   contactEmail: string;
   address: string;
   adminPin?: string;
+  adminGoogleEmails?: string[];
 }
 
 export interface LineNotificationLog {

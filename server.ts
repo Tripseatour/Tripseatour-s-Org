@@ -1,8 +1,9 @@
 import express from 'express';
 import path from 'path';
 import { createClient } from '@supabase/supabase-js';
+import { GoogleGenAI } from '@google/genai';
 import { initialTours, initialBookings, initialReviews, initialCustomers, initialSettings } from './src/data/mockData';
-import { Tour, Booking, Review, Customer, AppSettings, LineNotificationLog, SalesStats } from './src/types';
+import { Tour, Booking, Review, Customer, AppSettings, LineNotificationLog, SalesStats, AdminUser } from './src/types';
 
 const app = express();
 const PORT = 3000;
@@ -15,9 +16,19 @@ const supabase = (SUPABASE_URL && SUPABASE_ANON_KEY)
   ? createClient(SUPABASE_URL, SUPABASE_ANON_KEY)
   : null;
 
+// Gemini AI Client
+const ai = new GoogleGenAI({
+  apiKey: process.env.GEMINI_API_KEY,
+  httpOptions: {
+    headers: {
+      'User-Agent': 'aistudio-build'
+    }
+  }
+});
+
 app.use(express.json({ limit: '10mb' }));
 
-// Memory DB State with Supabase persistence
+// Authoritative Memory DB State with Supabase persistence
 let tours: Tour[] = [...initialTours];
 let bookings: Booking[] = [...initialBookings];
 let reviews: Review[] = [...initialReviews];
@@ -25,8 +36,8 @@ let customers: Customer[] = [...initialCustomers];
 let settings: AppSettings = { ...initialSettings };
 let detectedLineGroups: Array<{ groupId: string; groupName?: string; lastSeen: string }> = [
   {
-    groupId: 'C1234567890abcdef1234567890abcdef',
-    groupName: 'กลุ่มแอดมินรับแจ้งเตือนจองทัวร์ ภูเก็ต (ตัวอย่าง)',
+    groupId: 'C1bb0d71ad5dbb960801dad6bd5208afa',
+    groupName: 'กลุ่มแอดมินรับแจ้งเตือนจองทัวร์ ภูเก็ต (Trip Sea Tour)',
     lastSeen: new Date().toISOString()
   }
 ];
@@ -78,7 +89,8 @@ async function loadStateFromSupabase() {
           contactPhone: s.contact_phone || settings.contactPhone,
           contactEmail: s.contact_email || settings.contactEmail,
           address: s.address || settings.address,
-          adminPin: s.admin_pin || settings.adminPin
+          adminPin: s.admin_pin || settings.adminPin,
+          adminGoogleEmails: settings.adminGoogleEmails || ['asmr9941@gmail.com', 'admin@tripseatour.com']
         };
       }
     }
@@ -89,7 +101,7 @@ async function loadStateFromSupabase() {
   // 2. Tours
   try {
     const { data: kvTours } = await supabase.from('app_store').select('value').eq('key', 'tours').maybeSingle();
-    if (kvTours && kvTours.value) {
+    if (kvTours && kvTours.value !== undefined && kvTours.value !== null) {
       try {
         tours = JSON.parse(kvTours.value);
       } catch (e) {}
@@ -101,7 +113,7 @@ async function loadStateFromSupabase() {
   // 3. Bookings
   try {
     const { data: kvBookings } = await supabase.from('app_store').select('value').eq('key', 'bookings').maybeSingle();
-    if (kvBookings && kvBookings.value) {
+    if (kvBookings && kvBookings.value !== undefined && kvBookings.value !== null) {
       try {
         bookings = JSON.parse(kvBookings.value);
       } catch (e) {}
@@ -149,7 +161,7 @@ async function loadStateFromSupabase() {
   // 4. Reviews
   try {
     const { data: kvReviews } = await supabase.from('app_store').select('value').eq('key', 'reviews').maybeSingle();
-    if (kvReviews && kvReviews.value) {
+    if (kvReviews && kvReviews.value !== undefined && kvReviews.value !== null) {
       try {
         reviews = JSON.parse(kvReviews.value);
       } catch (e) {}
@@ -161,7 +173,7 @@ async function loadStateFromSupabase() {
   // 5. Customers
   try {
     const { data: kvCustomers } = await supabase.from('app_store').select('value').eq('key', 'customers').maybeSingle();
-    if (kvCustomers && kvCustomers.value) {
+    if (kvCustomers && kvCustomers.value !== undefined && kvCustomers.value !== null) {
       try {
         customers = JSON.parse(kvCustomers.value);
       } catch (e) {}
@@ -222,8 +234,13 @@ app.use(async (req, res, next) => {
   next();
 });
 
-// Helper: Trigger LINE Notification via Messaging API
-async function sendLineNotification(message: string, bookingRef: string = 'N/A', type: 'NEW_ORDER' | 'PAYMENT_VERIFIED' | 'ORDER_CONFIRMED' | 'REMINDER_24H' | 'TEST' = 'NEW_ORDER') {
+// Helper: Trigger LINE Notification via Messaging API with optional image attachment
+async function sendLineNotification(
+  message: string,
+  bookingRef: string = 'N/A',
+  type: 'NEW_ORDER' | 'PAYMENT_VERIFIED' | 'ORDER_CONFIRMED' | 'REMINDER_24H' | 'TEST' = 'NEW_ORDER',
+  imageUrl?: string
+) {
   const logItem: LineNotificationLog = {
     id: `log-${Date.now()}`,
     bookingRef,
@@ -238,9 +255,26 @@ async function sendLineNotification(message: string, bookingRef: string = 'N/A',
 
   if (channelToken && !channelToken.startsWith('SIMULATED')) {
     try {
+      // Build rich messages array (Image + Text)
+      const messagesPayload: any[] = [];
+
+      // If an image URL is provided (HTTPS), attach it as an image message
+      if (imageUrl && imageUrl.startsWith('https://')) {
+        messagesPayload.push({
+          type: 'image',
+          originalContentUrl: imageUrl,
+          previewImageUrl: imageUrl
+        });
+      }
+
+      messagesPayload.push({
+        type: 'text',
+        text: message
+      });
+
       let response;
       if (targetId && targetId.trim().length > 0) {
-        // Send via LINE Messaging API - Push Message to User ID / Group ID
+        // Push Message to Group ID / User ID
         response = await fetch('https://api.line.me/v2/bot/message/push', {
           method: 'POST',
           headers: {
@@ -249,11 +283,11 @@ async function sendLineNotification(message: string, bookingRef: string = 'N/A',
           },
           body: JSON.stringify({
             to: targetId.trim(),
-            messages: [{ type: 'text', text: message }]
+            messages: messagesPayload
           })
         });
       } else {
-        // Send via LINE Messaging API - Broadcast Message
+        // Broadcast Message
         response = await fetch('https://api.line.me/v2/bot/message/broadcast', {
           method: 'POST',
           headers: {
@@ -261,7 +295,7 @@ async function sendLineNotification(message: string, bookingRef: string = 'N/A',
             'Authorization': `Bearer ${channelToken.trim()}`
           },
           body: JSON.stringify({
-            messages: [{ type: 'text', text: message }]
+            messages: messagesPayload
           })
         });
       }
@@ -297,14 +331,12 @@ async function checkAndSend24hReminders() {
   const sentBookings: Booking[] = [];
 
   for (const booking of bookings) {
-    // Check if booking is confirmed / paid and 24h reminder hasn't been sent yet
     if ((booking.orderStatus === 'confirmed' || booking.paymentStatus === 'verified') && !booking.reminderSent) {
       const travelDateStr = booking.travelDate;
       const travelTime = new Date(travelDateStr).getTime();
       const todayTime = new Date(todayStr).getTime();
       const diffDays = Math.round((travelTime - todayTime) / (1000 * 3600 * 24));
 
-      // Remind if travel date is tomorrow (1 day ahead) or today/within 24 hours
       if (diffDays === 1 || travelDateStr === tomorrowStr || (diffDays >= 0 && diffDays <= 1)) {
         const lineMsg = `\n⏰ [แจ้งเตือนใกล้วันเดินทาง - 24 ชม.]\n` +
           `🎫 รหัสการจอง: ${booking.bookingRef}\n` +
@@ -316,7 +348,7 @@ async function checkAndSend24hReminders() {
           `📌 สถานะ: ยืนยันเรียบร้อยแล้ว (พร้อมต้อนรับลูกค้า!)\n` +
           `🌐 เว็บไซต์: ${SITE_URL}`;
 
-        await sendLineNotification(lineMsg, booking.bookingRef, 'REMINDER_24H');
+        await sendLineNotification(lineMsg, booking.bookingRef, 'REMINDER_24H', booking.tourImage);
         booking.reminderSent = true;
         booking.reminderSentAt = new Date().toISOString();
         sentCount++;
@@ -441,7 +473,7 @@ app.post('/api/bookings', async (req, res) => {
     `💰 ยอดรวม: ${totalAmount.toLocaleString()} บาท (PromptPay QR)\n` +
     `🌐 เว็บไซต์: ${SITE_URL}`;
 
-  await sendLineNotification(lineMsg, bookingRef, 'NEW_ORDER');
+  await sendLineNotification(lineMsg, bookingRef, 'NEW_ORDER', newBooking.tourImage);
   newBooking.lineNotifySent = true;
 
   await persistState('bookings');
@@ -468,7 +500,7 @@ app.post('/api/bookings/:id/upload-slip', async (req, res) => {
     `💰 ยอดชำระ: ${booking.totalAmount.toLocaleString()} บาท\n` +
     `🌐 ตรวจสอบที่: ${SITE_URL}`;
 
-  await sendLineNotification(msg, booking.bookingRef, 'NEW_ORDER');
+  await sendLineNotification(msg, booking.bookingRef, 'NEW_ORDER', booking.slipUrl || booking.tourImage);
   await persistState('bookings');
 
   res.json(booking);
@@ -490,14 +522,25 @@ app.put('/api/bookings/:id/status', async (req, res) => {
     booking.paidAt = new Date().toISOString();
     booking.orderStatus = 'confirmed';
 
-    const msg = `\n✅ [ยืนยันการชำระเงินเรียบร้อย] ${booking.bookingRef}\n` +
-      `👤 ลูกค้า: ${booking.customerName}\n` +
+    const qrUrl = `https://api.qrserver.com/v1/create-qr-code/?size=250x250&data=${encodeURIComponent(booking.bookingRef)}`;
+    const ticketImageUrl = booking.tourImage || 'https://images.unsplash.com/photo-1518509562904-e7ef99cdcc86?auto=format&fit=crop&w=1200&q=80';
+
+    const msg = `🎫 [ตั๋วอิเล็กทรอนิกส์ E-TICKET / VOUCHER ยืนยันการจองเรียบร้อย]\n` +
+      `═════════════════════════\n` +
+      `📌 รหัสตั๋ว: ${booking.bookingRef}\n` +
       `📍 ทัวร์: ${booking.tourTitle}\n` +
       `📅 วันเดินทาง: ${booking.travelDate}\n` +
-      `🎉 สถานะ: ออกตั๋ว Voucher เรียบร้อยแล้ว\n` +
-      `🌐 ดูเว็บไซต์: ${SITE_URL}`;
+      `⏰ เวลานัดรับ: ${booking.pickupTime || '07:30 - 08:00 น.'}\n` +
+      `👤 ผู้เดินทาง: ${booking.customerName} (${booking.customerPhone})\n` +
+      `🏨 โรงแรมที่รับ: ${booking.pickupHotel} (ห้อง: ${booking.roomNumber || 'ยังไม่ระบุ'} / โซน: ${booking.pickupZone || 'ทั่วไป'})\n` +
+      `👥 จำนวน: ผู้ใหญ่ ${booking.adults} ท่าน / เด็ก ${booking.children || 0} ท่าน / ทารก ${booking.infants || 0} ท่าน\n` +
+      `💰 ยอดชำระสุทธิ: ฿${booking.totalAmount.toLocaleString()} (ชำระผ่าน PromptPay แล้ว)\n` +
+      `═════════════════════════\n` +
+      `🔗 สแกนตรวจตั๋ว: ${qrUrl}\n` +
+      `🌐 เว็บไซต์: ${SITE_URL}\n` +
+      `ℹ️ ออกตั๋ว E-Voucher อัตโนมัติในระบบเรียบร้อย สามารถนำไปแสดงต่อคนขับ/ไกด์ในวันเดินทางได้ทันที`;
 
-    await sendLineNotification(msg, booking.bookingRef, 'PAYMENT_VERIFIED');
+    await sendLineNotification(msg, booking.bookingRef, 'PAYMENT_VERIFIED', ticketImageUrl);
   }
 
   await persistState('bookings');
@@ -513,7 +556,7 @@ app.delete('/api/bookings/:id', async (req, res) => {
   res.json({ success: true, id, message: 'Deleted booking successfully' });
 });
 
-// --- Reviews ---
+// --- Reviews Management API ---
 app.get('/api/reviews', (req, res) => {
   res.json(reviews);
 });
@@ -522,11 +565,11 @@ app.post('/api/reviews', async (req, res) => {
   const { tourId, userName, rating, comment, nationality, photo } = req.body;
   const newRev: Review = {
     id: `rev-${Date.now()}`,
-    tourId,
-    userName,
+    tourId: tourId || (tours[0]?.id || 'tour-1'),
+    userName: userName || 'ผู้ใช้งาน',
     nationality: nationality || 'TH',
     rating: Number(rating) || 5,
-    comment,
+    comment: comment || '',
     date: new Date().toISOString().split('T')[0],
     verifiedBooking: true,
     photos: photo ? [photo] : undefined,
@@ -535,9 +578,9 @@ app.post('/api/reviews', async (req, res) => {
   reviews.unshift(newRev);
 
   // Update tour rating average
-  const tour = tours.find(t => t.id === tourId);
+  const tour = tours.find(t => t.id === newRev.tourId);
   if (tour) {
-    const tourRevs = reviews.filter(r => r.tourId === tourId);
+    const tourRevs = reviews.filter(r => r.tourId === newRev.tourId);
     const avg = tourRevs.reduce((acc, curr) => acc + curr.rating, 0) / tourRevs.length;
     tour.rating = Number(avg.toFixed(2));
     tour.reviewCount = tourRevs.length;
@@ -545,7 +588,6 @@ app.post('/api/reviews', async (req, res) => {
   }
 
   await persistState('reviews');
-
   res.json(newRev);
 });
 
@@ -561,6 +603,231 @@ app.put('/api/reviews/:id/reply', async (req, res) => {
   } else {
     res.status(404).json({ error: 'Review not found' });
   }
+});
+
+app.put('/api/reviews/:id/status', async (req, res) => {
+  const { id } = req.params;
+  const { isApproved } = req.body;
+  const rev = reviews.find(r => r.id === id);
+  if (rev) {
+    rev.isApproved = isApproved !== undefined ? isApproved : !rev.isApproved;
+    await persistState('reviews');
+    res.json(rev);
+  } else {
+    res.status(404).json({ error: 'Review not found' });
+  }
+});
+
+app.delete('/api/reviews/:id', async (req, res) => {
+  const { id } = req.params;
+  const initialLen = reviews.length;
+  reviews = reviews.filter(r => r.id !== id);
+  if (reviews.length < initialLen) {
+    await persistState('reviews');
+    res.json({ success: true, message: 'Review deleted successfully' });
+  } else {
+    res.status(404).json({ error: 'Review not found' });
+  }
+});
+
+// --- AI Review Reply Generator (Powered by Gemini AI) ---
+app.post('/api/ai/reply-review', async (req, res) => {
+  try {
+    const { reviewComment, rating, customerName, tourTitle } = req.body;
+
+    if (process.env.GEMINI_API_KEY) {
+      const response = await ai.models.generateContent({
+        model: 'gemini-3.7-flash',
+        contents: `You are the official management team of "Trip Sea Tour Phuket" (ทริปซีทัวร์ ภูเก็ต - TAT License 33/11100).
+Generate a warm, professional, polite, and personalized Thai reply to this customer review:
+Customer Name: ${customerName || 'ลูกค้าท่านสำคัญ'}
+Tour: ${tourTitle || 'ทัวร์ภูเก็ต'}
+Rating: ${rating || 5}/5 Stars
+Review: "${reviewComment || 'บริการดีมาก ประทับใจมากครับ'}"
+
+Requirements:
+- Polite Thai language using formal yet friendly tone (ค่ะ/ครับ)
+- Express sincere appreciation for their patronage
+- Address their specific positive comments or feedback
+- Wish them safe travels and invite them back warmly
+- Keep response length concise and natural (2-4 sentences). Do not include quotes or prefixes.`,
+      });
+
+      const reply = response.text?.trim() || `ขอบพระคุณคุณ ${customerName || 'ลูกค้า'} เป็นอย่างสูงที่ไว้วางใจเลือกเดินทางกับ Trip Sea Tour Phuket ค่ะ ทางทีมงานยินดีเป็นอย่างยิ่งที่ได้มอบความประทับใจ และหวังว่าจะมีโอกาสได้ต้อนรับท่านอีกครั้งในทริปหน้านะคะ! 🌊🙏`;
+      return res.json({ reply });
+    } else {
+      const reply = `ขอบพระคุณคุณ ${customerName || 'ลูกค้า'} เป็นอย่างสูงที่เลือกใช้บริการ Trip Sea Tour Phuket และมอบคะแนน ${rating || 5} ดาวให้พวกเราค่ะ ทางทีมงานรู้สึกยินดีและเป็นเกียรติอย่างยิ่งที่ได้ดูแล หวังว่าจะได้ต้อนรับท่านอีกในโอกาสต่อไปนะคะ! 🌊🙏`;
+      return res.json({ reply });
+    }
+  } catch (err: any) {
+    console.error('Error generating AI review reply:', err);
+    res.json({
+      reply: `ขอบพระคุณคุณ ${req.body.customerName || 'ลูกค้า'} มากค่ะที่ไว้วางใจและประทับใจบริการของ Trip Sea Tour Phuket ยินดีต้อนรับเสมอค่ะ`
+    });
+  }
+});
+
+// --- TripSeaTour AI Chatbot (Powered by Gemini AI 24/7) ---
+app.post('/api/chat', async (req, res) => {
+  try {
+    const { message, language = 'TH' } = req.body;
+    if (!message || typeof message !== 'string') {
+      return res.status(400).json({ error: 'Message is required' });
+    }
+
+    const availableToursSummary = tours.map(t =>
+      `• [${t.title.TH} / ${t.title.EN}] (ID: ${t.id})
+  - หมวดหมู่: ${t.categoryLabel?.TH || t.category}
+  - ราคา: ผู้ใหญ่ ฿${t.priceAdult.toLocaleString()}, เด็ก ฿${t.priceChild.toLocaleString()} (จากปกติ ฿${t.originalPriceAdult.toLocaleString()})
+  - ระยะเวลา: ${t.duration.TH}
+  - ไฮไลท์: ${t.highlights.TH?.join(', ')}
+  - บริการรวม: ${t.included.TH?.join(', ')}
+  - จุดรับส่ง: ${t.pickupAreas?.join(', ')}`
+    ).join('\n\n');
+
+    const systemInstruction = `You are "TripSeaTour AI Assistant" (ผู้ช่วยอัจฉริยะ TripSeaTour 24/7 Powered by Gemini AI), the official 24/7 AI travel concierge for "Trip Sea Tour Phuket" (บริษัท ทริปซีทัวร์ ภูเก็ต จำกัด).
+
+ABOUT TRIP SEA TOUR PHUKET:
+- Official TAT License (ใบอนุญาตประกอบธุรกิจนำเที่ยว ททท.): เลขที่ 33/11100 (จดทะเบียนถูกต้องตามกฎหมาย มีประกันภัยอุบัติเหตุทางทะเลคุ้มครองทุกที่นั่ง)
+- Location: Phuket, Thailand
+- Contact Hotline: ${settings.contactPhone || '+66 (0) 62 681 6494 / +66 (0) 97 924 1399'}
+- Official LINE OA: ${settings.lineOaId || '@056hxinu'}
+- Official Website: ${SITE_URL}
+
+CURRENT TOUR PACKAGES:
+${availableToursSummary}
+
+HOW TO BOOK & PAYMENT:
+1. เลือกรอบทัวร์และวันที่ต้องการเดินทางบนหน้าเว็บ
+2. กรอกชื่อผู้เดินทาง, เบอร์โทร, โรงแรมที่พักในภูเก็ต (มีรถตู้ VIP รับส่งถึงล็อบบี้)
+3. ชำระเงินสะดวกผ่าน PromptPay QR Code (สแกนจ่ายได้ทุกธนาคาร ไม่มีค่าธรรมเนียม)
+4. อัปโหลดสลิป ระบบจะออก E-Ticket / Voucher ทางหน้าจอพร้อมส่งแจ้งเตือนเข้า LINE ทันที
+5. มีระบบแจ้งเตือนวันเดินทางล่วงหน้า 24 ชม. ผ่าน LINE
+
+THINGS TO PREPARE FOR SEA TOURS:
+- ครีมกันแดดที่เป็นมิตรกับปะการัง (Reef-safe sunscreen)
+- แว่นกันแดด, หมวก, ผ้าเช็ดตัว, ชุดว่ายน้ำ, ชุดเปลี่ยน
+- ซองกันน้ำสำหรับสมาร์ทโฟน
+- ยาแก้เมาคลื่น (บนเรือมีบริการฟรี)
+
+YOUR INSTRUCTIONS:
+- Answer in the user's requested language (${language}) or matching the user's input language (Thai, English, Chinese, Russian).
+- In Thai, use warm and polite particles (ค่ะ/ครับ).
+- Provide accurate, helpful, inspiring travel advice about Phuket sea trips, weather, itineraries, packing tips, and booking details.
+- Recommend specific tour packages with exact prices when requested.
+- If customer wants to book immediately, guide them to click "จองทัวร์นี้" or contact LINE: ${settings.lineOaId || '@056hxinu'}.
+- Keep replies well-structured, formatted with neat bullet points, bold highlights, and friendly emojis.`;
+
+    if (process.env.GEMINI_API_KEY) {
+      const response = await ai.models.generateContent({
+        model: 'gemini-3.7-flash',
+        contents: `${systemInstruction}\n\nUser Question: ${message}`,
+      });
+
+      const reply = response.text || 'ขออภัยค่ะ ขณะนี้ระบบไม่สามารถประมวลผลคำตอบได้ โปรดลองอีกครั้งหรือติดต่อเจ้าหน้าที่ทาง LINE: @056hxinu';
+      return res.json({ reply });
+    } else {
+      // Smart offline fallback
+      let fallbackReply = `สวัสดีค่ะ ยินดีต้อนรับสู่ Trip Sea Tour Phuket 🌊\n\nเราพร้อมให้บริการข้อมูลทัวร์ภูเก็ต เกาะพีพี อ่าวพังงา และเรือยอชท์ชมพระอาทิตย์ตก พร้อมใบอนุญาต ททท. เลขที่ 33/11100\n\n📌 สนใจทัวร์ไหนเป็นพิเศษ สามารถกดเลือกดูรายละเอียดบนหน้าเว็บ หรือสอบถามแอดมินทาง LINE: ${settings.lineOaId || '@056hxinu'} (โทร ${settings.contactPhone}) ได้ตลอด 24 ชม. ค่ะ!`;
+      
+      const lower = message.toLowerCase();
+      if (lower.includes('ราคา') || lower.includes('price') || lower.includes('เท่าไหร่') || lower.includes('cost')) {
+        fallbackReply = `ราคาโปรโมชั่นพิเศษของ Trip Sea Tour Phuket วันนี้ค่ะ:\n` +
+          `🏝️ 1. ทัวร์เกาะพีพี - มาหยา - ปิเละลากูน สปีดโบ๊ท: ผู้ใหญ่ ฿1,590 / เด็ก ฿1,190\n` +
+          `🚣 2. ทัวร์อ่าวพังงา - เกาะเจมส์บอนด์ - แคนูเกาะห้อง: ผู้ใหญ่ ฿1,690 / เด็ก ฿1,290\n` +
+          `⛵ 3. ล่องเรือยอชท์คาทามารัน เกาะเฮ & พระอาทิตย์ตกแหลมพรหมเทพ: ผู้ใหญ่ ฿2,490 / เด็ก ฿1,790\n\n` +
+          `ทุกโปรแกรมรวม: รถรับส่งโรงแรม, อาหารกลางวัน/ค่ำ, อุปกรณ์ดำน้ำ, ประกันอุบัติเหตุทางทะเล ททท. ค่ะ!`;
+      } else if (lower.includes('จอง') || lower.includes('book') || lower.includes('ชำระ') || lower.includes('จ่าย') || lower.includes('pay')) {
+        fallbackReply = `ขั้นตอนการจองและชำระเงินง่ายๆ 4 ขั้นตอนค่ะ:\n` +
+          `1️⃣ เลือกโปรแกรมทัวร์และวันที่ต้องการเดินทาง\n` +
+          `2️⃣ กรอกข้อมูลผู้เดินทางและชื่อโรงแรมที่พัก\n` +
+          `3️⃣ สแกนจ่ายด้วย PromptPay QR Code ผ่านแอปธนาคาร\n` +
+          `4️⃣ แนบสลิป รับ E-Ticket ทันที พร้อมรับการแจ้งเตือนทาง LINE 24 ชม. ค่ะ!`;
+      }
+      return res.json({ reply: fallbackReply });
+    }
+  } catch (err: any) {
+    console.error('Chatbot API error:', err);
+    res.status(500).json({ error: 'Chat processing failed', details: err?.message });
+  }
+});
+
+// --- Admin Google Authentication & Account Management ---
+app.post('/api/admin/verify-google-account', async (req, res) => {
+  try {
+    const { email, name, picture } = req.body;
+    if (!email) {
+      return res.status(400).json({ authenticated: false, message: 'กรุณาระบุ Google Email' });
+    }
+
+    const lowerEmail = email.trim().toLowerCase();
+    const authorizedEmails = (settings.adminGoogleEmails || ['asmr9941@gmail.com', 'admin@tripseatour.com'])
+      .map(e => e.trim().toLowerCase());
+
+    const isAuthorized = authorizedEmails.includes(lowerEmail);
+
+    if (isAuthorized) {
+      const user: AdminUser = {
+        email: lowerEmail,
+        name: name || lowerEmail.split('@')[0],
+        picture: picture || `https://ui-avatars.com/api/?name=${encodeURIComponent(name || lowerEmail)}&background=0D9488&color=fff`,
+        role: lowerEmail === authorizedEmails[0] ? 'superadmin' : 'admin',
+        lastLogin: new Date().toISOString()
+      };
+      return res.json({ authenticated: true, user, message: 'เข้าสู่ระบบผู้ดูแลระบบสำเร็จ' });
+    } else {
+      return res.status(403).json({
+        authenticated: false,
+        message: `บัญชี Google (${email}) ไม่ได้รับสิทธิ์เข้าถึงระบบผู้ดูแล กรุณาติดต่อ Super Admin เพื่อเพิ่มสิทธิ์`
+      });
+    }
+  } catch (err: any) {
+    console.error('Error verifying Google admin account:', err);
+    res.status(500).json({ authenticated: false, message: 'Authentication error' });
+  }
+});
+
+// Add new authorized Google Admin email
+app.post('/api/admin/google-emails', async (req, res) => {
+  const { email } = req.body;
+  if (!email || !email.includes('@')) {
+    return res.status(400).json({ error: 'Invalid email address' });
+  }
+
+  const cleanEmail = email.trim().toLowerCase();
+  if (!settings.adminGoogleEmails) {
+    settings.adminGoogleEmails = ['asmr9941@gmail.com', 'admin@tripseatour.com'];
+  }
+
+  if (!settings.adminGoogleEmails.includes(cleanEmail)) {
+    settings.adminGoogleEmails.push(cleanEmail);
+    await persistState('settings');
+  }
+
+  res.json({ success: true, adminGoogleEmails: settings.adminGoogleEmails });
+});
+
+// Remove authorized Google Admin email
+app.delete('/api/admin/google-emails', async (req, res) => {
+  const { email } = req.body;
+  if (!email) {
+    return res.status(400).json({ error: 'Email is required' });
+  }
+
+  const cleanEmail = email.trim().toLowerCase();
+  if (!settings.adminGoogleEmails) {
+    settings.adminGoogleEmails = ['asmr9941@gmail.com', 'admin@tripseatour.com'];
+  }
+
+  // Prevent removing superadmin primary account
+  if (cleanEmail === 'asmr9941@gmail.com') {
+    return res.status(400).json({ error: 'Cannot remove primary superadmin account' });
+  }
+
+  settings.adminGoogleEmails = settings.adminGoogleEmails.filter(e => e.toLowerCase() !== cleanEmail);
+  await persistState('settings');
+
+  res.json({ success: true, adminGoogleEmails: settings.adminGoogleEmails });
 });
 
 // --- Customers ---
@@ -742,7 +1009,7 @@ app.post('/api/bookings/:id/send-line-ticket', async (req, res) => {
     `🔗 สแกนตรวจตั๋ว: ${qrUrl}\n` +
     `ℹ️ ลูกค้าสามารถแสดงตั๋วนี้ให้คนขับรถ/ไกด์ดูในวันเดินทางได้ทันที`;
 
-  const logResult = await sendLineNotification(ticketMessage, booking.bookingRef, 'ORDER_CONFIRMED');
+  const logResult = await sendLineNotification(ticketMessage, booking.bookingRef, 'ORDER_CONFIRMED', booking.tourImage || 'https://images.unsplash.com/photo-1518509562904-e7ef99cdcc86?auto=format&fit=crop&w=1200&q=80');
 
   res.json({ success: true, bookingRef: booking.bookingRef, logResult });
 });

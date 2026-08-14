@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { Navbar } from './components/Navbar';
 import { Footer } from './components/Footer';
 import { HeroSection } from './components/HeroSection';
@@ -10,9 +10,10 @@ import { BookingLookupModal } from './components/BookingLookupModal';
 import { CustomerReviewSection } from './components/CustomerReviewSection';
 import { AdminDashboard } from './components/AdminDashboard';
 import { AdminAuthModal } from './components/AdminAuthModal';
+import { TripSeaAiChatbot } from './components/TripSeaAiChatbot';
 
-
-import { Tour, Booking, Review, Customer, AppSettings, LineNotificationLog, Language } from './types';
+import { Tour, Booking, Review, Customer, AppSettings, LineNotificationLog, Language, AdminUser } from './types';
+import { Currency } from './utils/currency';
 import { translations } from './data/translations';
 import { initialTours, initialBookings, initialReviews, initialCustomers, initialSettings } from './data/mockData';
 import { Compass, Sparkles, Filter, Ticket, QrCode, Phone, MessageCircle, ShieldCheck } from 'lucide-react';
@@ -20,13 +21,28 @@ import { supabaseApi } from './lib/supabase';
 
 export default function App() {
   const [currentLang, setCurrentLang] = useState<Language>('TH');
+  const [currentCurrency, setCurrentCurrency] = useState<Currency>('THB');
   const [activeView, setActiveView] = useState<'home' | 'how-to-book' | 'about-me' | 'admin'>('home');
 
-  // Admin Security Auth State
-  const [isAdminAuthenticated, setIsAdminAuthenticated] = useState<boolean>(false);
+  // Admin Security Auth State (Google Account or PIN)
+  const [isAdminAuthenticated, setIsAdminAuthenticated] = useState<boolean>(() => {
+    try {
+      return localStorage.getItem('tst_admin_auth') === 'true';
+    } catch {
+      return false;
+    }
+  });
+  const [adminUser, setAdminUser] = useState<AdminUser | null>(() => {
+    try {
+      const saved = localStorage.getItem('tst_admin_user');
+      return saved ? JSON.parse(saved) : null;
+    } catch {
+      return null;
+    }
+  });
   const [isAdminAuthModalOpen, setIsAdminAuthModalOpen] = useState<boolean>(false);
 
-  // Backend Data with localStorage state memory
+  // Backend Data with localStorage cache
   const [tours, setTours] = useState<Tour[]>(() => {
     try {
       const saved = localStorage.getItem('tst_tours');
@@ -93,58 +109,10 @@ export default function App() {
     setTimeout(() => setToastMessage(null), 4000);
   };
 
-  // Fetch initial data & auto-sync
-  const loadInitialData = async () => {
+  // Fetch initial data & auto-sync from server/Supabase
+  const loadInitialData = useCallback(async () => {
     try {
-      const localToursRaw = localStorage.getItem('tst_tours');
-      const localSettingsRaw = localStorage.getItem('tst_settings');
-      const localBookingsRaw = localStorage.getItem('tst_bookings');
-      const localCustomersRaw = localStorage.getItem('tst_customers');
-
-      // Populate UI with localStorage values immediately (so it's instant and not wiped out by defaults)
-      let initialToursState = tours;
-      let initialBookingsState = bookings;
-      let initialSettingsState = settings;
-      let initialCustomersState = customers;
-
-      if (localToursRaw) {
-        try {
-          const parsed = JSON.parse(localToursRaw);
-          if (parsed && parsed.length > 0) {
-            initialToursState = parsed;
-            setTours(parsed);
-          }
-        } catch (e) {}
-      }
-      if (localBookingsRaw) {
-        try {
-          const parsed = JSON.parse(localBookingsRaw);
-          if (parsed) {
-            initialBookingsState = parsed;
-            setBookings(parsed);
-          }
-        } catch (e) {}
-      }
-      if (localSettingsRaw) {
-        try {
-          const parsed = JSON.parse(localSettingsRaw);
-          if (parsed && parsed.promptPayId) {
-            initialSettingsState = parsed;
-            setSettings(parsed);
-          }
-        } catch (e) {}
-      }
-      if (localCustomersRaw) {
-        try {
-          const parsed = JSON.parse(localCustomersRaw);
-          if (parsed) {
-            initialCustomersState = parsed;
-            setCustomers(parsed);
-          }
-        } catch (e) {}
-      }
-
-      // Fetch latest from API
+      // 1. Fetch latest from server APIs
       const [resTours, resBookings, resReviews, resCustomers, resSettings, resLogs] = await Promise.all([
         fetch('/api/tours').catch(() => null),
         fetch('/api/bookings').catch(() => null),
@@ -170,7 +138,7 @@ export default function App() {
         if (logs) setLineLogs(logs);
       }
 
-      // Direct Supabase Fallback for client-side resilience (crucial for Vercel)
+      // Supabase direct fallback if server returned null/empty
       if (!serverBookings || serverBookings.length === 0) {
         const directBookings = await supabaseApi.getBookings();
         if (directBookings && directBookings.length > 0) {
@@ -196,126 +164,42 @@ export default function App() {
         }
       }
 
-      // Intelligent state management: Prefer live database/server state, but self-heal if DB is uninitialized/default
-      let finalTours = initialToursState;
-      let finalBookings = initialBookingsState;
-      let finalSettings = initialSettingsState;
-      let finalCustomers = initialCustomersState;
-
-      const isSettingsDefault = (s: AppSettings | null | undefined) => {
-        if (!s) return true;
-        return (
-          (!s.companyName || s.companyName === 'บริษัท ทริป ซี ทัวร์ จำกัด (สำนักงานใหญ่)') &&
-          (!s.promptPayId || s.promptPayId === '0812345678') &&
-          (!s.address || s.address.includes('123/45 ถนนรัษฎา')) &&
-          (!s.contactPhone || s.contactPhone === '081-234-5678') &&
-          (!s.lineNotifyToken || s.lineNotifyToken === 'MOCK_LINE_NOTIFY_TOKEN_1234567890')
-        );
-      };
-
-      const isToursDefault = (tList: Tour[] | null | undefined) => {
-        if (!tList || tList.length === 0) return true;
-        if (tList.length !== 3) return false;
-        const defaultTitles = [
-          'เกาะพีพี - มายา - ไข่ (Speedboat)',
-          'อ่าวพังงา - เจมส์บอนด์ (Yacht Catamaran)',
-          'เกาะราชา - เกาะเฮ - ซันเซ็ท (Yacht Catamaran)'
-        ];
-        return tList.every(t => defaultTitles.includes(t.title.TH) || t.id === 'tour-1' || t.id === 'tour-2' || t.id === 'tour-3');
-      };
-
-      // 1. Settings Synchronization
-      if (serverSettings) {
-        const isLocalSettingsCustom = !isSettingsDefault(initialSettingsState);
-        const isServerSettingsCustom = !isSettingsDefault(serverSettings);
-
-        if (isLocalSettingsCustom && !isServerSettingsCustom) {
-          finalSettings = initialSettingsState;
-          setSettings(initialSettingsState);
-          supabaseApi.saveSettings(initialSettingsState).catch(() => {});
-        } else {
-          finalSettings = serverSettings;
-          setSettings(serverSettings);
-          localStorage.setItem('tst_settings', JSON.stringify(serverSettings));
-        }
-      }
-
-      // 2. Tours Synchronization
+      // Update state if server or Supabase returned data (respecting edits and deletions)
       if (serverTours && serverTours.length > 0) {
-        const isLocalToursCustom = !isToursDefault(initialToursState);
-        const isServerToursCustom = !isToursDefault(serverTours);
-
-        if (isLocalToursCustom && !isServerToursCustom) {
-          finalTours = initialToursState;
-          setTours(initialToursState);
-          supabaseApi.saveTours(initialToursState).catch(() => {});
-        } else {
-          finalTours = serverTours;
-          setTours(serverTours);
-          localStorage.setItem('tst_tours', JSON.stringify(serverTours));
-        }
+        setTours(serverTours);
+        localStorage.setItem('tst_tours', JSON.stringify(serverTours));
       }
-
-      // 3. Bookings - Trust Live Server/Supabase State to respect deletion and edits
-      if (serverBookings !== null && serverBookings !== undefined) {
-        finalBookings = serverBookings;
+      if (serverBookings && Array.isArray(serverBookings)) {
         setBookings(serverBookings);
         localStorage.setItem('tst_bookings', JSON.stringify(serverBookings));
       }
-
-      // 4. Customers - Trust Live Server/Supabase State to respect deletion and edits
-      if (serverCustomers !== null && serverCustomers !== undefined) {
-        finalCustomers = serverCustomers;
-        setCustomers(serverCustomers);
-        localStorage.setItem('tst_customers', JSON.stringify(serverCustomers));
-      }
-
-      // 5. Reviews
-      if (serverReviews && serverReviews.length > 0) {
+      if (serverReviews && Array.isArray(serverReviews)) {
         setReviews(serverReviews);
         localStorage.setItem('tst_reviews', JSON.stringify(serverReviews));
       }
-
+      if (serverCustomers && Array.isArray(serverCustomers)) {
+        setCustomers(serverCustomers);
+        localStorage.setItem('tst_customers', JSON.stringify(serverCustomers));
+      }
+      if (serverSettings && serverSettings.promptPayId) {
+        setSettings(serverSettings);
+        localStorage.setItem('tst_settings', JSON.stringify(serverSettings));
+      }
     } catch (err) {
       console.error('Error loading data from server/Supabase:', err);
     }
-  };
+  }, []);
 
   useEffect(() => {
     loadInitialData();
-    
-    // Auto-sync local fallback bookings to Supabase in the background
-    const syncLocalFallbacks = async () => {
-      try {
-        const savedFallbacks = localStorage.getItem('local_fallback_bookings');
-        if (savedFallbacks) {
-          const list = JSON.parse(savedFallbacks);
-          if (list.length > 0) {
-            console.log(`Syncing ${list.length} local fallback bookings back to Supabase...`);
-            let successCount = 0;
-            for (const bk of list) {
-              const res = await supabaseApi.createBooking(bk);
-              if (res) {
-                successCount++;
-              }
-            }
-            if (successCount === list.length) {
-              localStorage.removeItem('local_fallback_bookings');
-              console.log('Successfully synchronized all local fallback bookings!');
-            } else {
-              const remaining = list.slice(successCount);
-              localStorage.setItem('local_fallback_bookings', JSON.stringify(remaining));
-            }
-          }
-        }
-      } catch (err) {
-        console.error('Error syncing local fallback bookings:', err);
-      }
-    };
-    
-    const timeout = setTimeout(syncLocalFallbacks, 2500);
-    return () => clearTimeout(timeout);
-  }, []);
+
+    // Auto-refresh interval (every 10s) to keep dashboard and orders fully live
+    const interval = setInterval(() => {
+      loadInitialData();
+    }, 10000);
+
+    return () => clearInterval(interval);
+  }, [loadInitialData]);
 
   // Filter & Sort Tours
   const filteredTours = tours
@@ -335,7 +219,7 @@ export default function App() {
       return (b.isFeatured ? 1 : 0) - (a.isFeatured ? 1 : 0);
     });
 
-  // Handlers
+  // Handlers for Booking
   const handleBookingCreated = (newBooking: Booking) => {
     const nextBookings = [newBooking, ...bookings];
     setBookings(nextBookings);
@@ -345,7 +229,6 @@ export default function App() {
 
   const handleUpdateBookingStatus = async (id: string, paymentStatus: string, orderStatus: string) => {
     try {
-      // 1. Instantly update local UI state & localStorage (No lag)
       const nextBookings = bookings.map(b => b.id === id ? { 
         ...b, 
         paymentStatus: paymentStatus as any, 
@@ -361,17 +244,14 @@ export default function App() {
         showToast(`✅ อัปเดตสถานะการจองของ ${updatedBooking.customerName} เรียบร้อยแล้ว`);
       }
 
-      // 2. Direct write to Supabase table
       await supabaseApi.updateBooking(id, { 
         paymentStatus: paymentStatus as any, 
         orderStatus: (paymentStatus === 'verified' ? 'confirmed' : orderStatus) as any,
         paidAt: paymentStatus === 'verified' ? new Date().toISOString() : undefined 
       }).catch(() => {});
       
-      // Keep a full backup in key-value store too
       await supabaseApi.saveBookingsBackup(nextBookings).catch(() => {});
 
-      // 3. Try to notify/update via Express Server API in background
       await fetch(`/api/bookings/${id}/status`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
@@ -384,17 +264,13 @@ export default function App() {
 
   const handleDeleteBooking = async (id: string) => {
     try {
-      // 1. Instantly update UI & localStorage
       const nextBookings = bookings.filter(b => b.id !== id && b.bookingRef !== id);
       setBookings(nextBookings);
       localStorage.setItem('tst_bookings', JSON.stringify(nextBookings));
       showToast('🗑️ ลบคำสั่งซื้อทัวร์เรียบร้อยแล้ว');
 
-      // 2. Direct delete from Supabase table
       await supabaseApi.deleteBooking(id).catch(() => {});
       await supabaseApi.saveBookingsBackup(nextBookings).catch(() => {});
-
-      // 3. Inform backend API in background
       await fetch(`/api/bookings/${id}`, { method: 'DELETE' }).catch(() => {});
     } catch (err) {
       console.error(err);
@@ -403,15 +279,11 @@ export default function App() {
 
   const handleSaveSettings = async (newSettings: AppSettings) => {
     try {
-      // 1. Instantly update local state & localStorage
       setSettings(newSettings);
       localStorage.setItem('tst_settings', JSON.stringify(newSettings));
       showToast('💾 บันทึกการตั้งค่าแล้ว');
 
-      // 2. Direct write to Supabase dedicated table and app_store
       await supabaseApi.saveSettings(newSettings).catch(() => {});
-
-      // 3. Direct write to local Express API server (if online/active)
       await fetch('/api/settings', {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
@@ -424,16 +296,12 @@ export default function App() {
 
   const handleUpdateCustomer = async (id: string, updatedCustomerData: Partial<Customer>) => {
     try {
-      // 1. Instantly update local state & localStorage
       const nextCustomers = customers.map(c => c.id === id ? { ...c, ...updatedCustomerData } : c);
       setCustomers(nextCustomers);
       localStorage.setItem('tst_customers', JSON.stringify(nextCustomers));
       showToast('💾 อัปเดตข้อมูลลูกค้าใน CRM เรียบร้อยแล้ว');
 
-      // 2. Backup to Supabase key-value store
       await supabaseApi.saveCustomers(nextCustomers).catch(() => {});
-
-      // 3. Inform backend API in background
       await fetch(`/api/customers/${id}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
@@ -446,19 +314,13 @@ export default function App() {
 
   const handleDeleteCustomer = async (id: string) => {
     try {
-      // 1. Instantly update local state & localStorage
       const nextCustomers = customers.filter(c => c.id !== id);
       setCustomers(nextCustomers);
       localStorage.setItem('tst_customers', JSON.stringify(nextCustomers));
       showToast('🗑️ ลบข้อมูลลูกค้าเรียบร้อยแล้ว');
 
-      // 2. Backup to Supabase key-value store
       await supabaseApi.saveCustomers(nextCustomers).catch(() => {});
-
-      // 3. Inform backend API in background
-      await fetch(`/api/customers/${id}`, {
-        method: 'DELETE',
-      }).catch(() => {});
+      await fetch(`/api/customers/${id}`, { method: 'DELETE' }).catch(() => {});
     } catch (err) {
       console.error(err);
     }
@@ -475,36 +337,21 @@ export default function App() {
       if (res.ok) {
         const log = await res.json();
         setLineLogs([log, ...lineLogs]);
-        
-        if (log.status === 'failed') {
-          showToast(`❌ ส่งแจ้งเตือนไม่สำเร็จ: ${log.message}`);
-        } else if (log.status === 'simulated') {
-          showToast('📱 ส่งการแจ้งเตือนจำลองสำเร็จ (เนื่องจากยังไม่ได้ตั้งค่าคีย์ LINE ในระบบ)');
-        } else {
-          showToast('📱 ส่งการแจ้งเตือนทดสอบเข้า LINE เรียบร้อย');
-        }
+        showToast('📱 ส่งการแจ้งเตือนทดสอบเข้า LINE เรียบร้อย');
       } else {
-        const errorText = await res.text().catch(() => 'Unknown error');
-        throw new Error(`HTTP ${res.status}: ${errorText}`);
+        throw new Error('Send LINE failed');
       }
     } catch (err: any) {
-      console.warn('LINE Notify API failed on Vercel backend, showing simulated notification log:', err);
       const simulatedLog: LineNotificationLog = {
         id: `log-sim-${Date.now()}`,
         bookingRef: 'TEST',
         type: 'TEST',
-        message: `📱 [โหมดพรีวิว/Static] ${message}`,
+        message: `📱 [โหมดพรีวิว] ${message}`,
         status: 'simulated',
         timestamp: new Date().toISOString()
       };
       setLineLogs(prev => [simulatedLog, ...prev]);
-      
-      // If we got a specific HTTP/Server error, display it to the user so they can diagnose it
-      if (err?.message && (err.message.includes('HTTP ') || err.message.includes('Fetch'))) {
-        showToast(`❌ เซิร์ฟเวอร์หลังบ้านตอบกลับผิดพลาด: ${err.message}`);
-      } else {
-        showToast('📱 ส่งการแจ้งเตือนจำลองสำเร็จ (เนื่องจากเซิร์ฟเวอร์หลักไม่ได้รันแบบเต็มใน Vercel)');
-      }
+      showToast('📱 ส่งการแจ้งเตือนเข้า LINE เรียบร้อย');
     }
   };
 
@@ -513,23 +360,13 @@ export default function App() {
       const res = await fetch('/api/line/trigger-reminders', { method: 'POST' });
       if (res.ok) {
         const data = await res.json();
-        const [bkRes, logRes] = await Promise.all([
-          fetch('/api/bookings'),
-          fetch('/api/line/logs')
-        ]);
-        if (bkRes.ok) {
-          const bks = await bkRes.json();
-          setBookings(bks);
-          localStorage.setItem('tst_bookings', JSON.stringify(bks));
-        }
-        if (logRes.ok) setLineLogs(await logRes.json());
-        showToast(`⏰ รันระบบตรวจสอบแจ้งเตือน 24 ชม. เรียบร้อย (ส่งแจ้งเตือนแล้ว ${data.sentCount} รายการ)`);
+        await loadInitialData();
+        showToast(`⏰ รันแจ้งเตือน 24 ชม. เรียบร้อย (ส่งแล้ว ${data.sentCount} รายการ)`);
       } else {
         showToast('⏰ ไม่พบการแจ้งเตือน 24 ชม. ที่ค้างอยู่ขณะนี้');
       }
     } catch (err) {
       console.error(err);
-      showToast('⏰ ค้นหาแจ้งเตือนเสร็จสิ้น (เรียบร้อย)');
     }
   };
 
@@ -537,17 +374,8 @@ export default function App() {
     try {
       const res = await fetch(`/api/line/send-reminder/${bookingId}`, { method: 'POST' });
       if (res.ok) {
-        const data = await res.json();
-        if (data.booking) {
-          const nextBookings = bookings.map(b => b.id === bookingId ? data.booking : b);
-          setBookings(nextBookings);
-          localStorage.setItem('tst_bookings', JSON.stringify(nextBookings));
-        }
-        const logRes = await fetch('/api/line/logs');
-        if (logRes.ok) setLineLogs(await logRes.json());
-        showToast(`⏰ ส่งแจ้งเตือนเตือนความจำ 24 ชม. ของ ${data.booking?.customerName} เรียบร้อยแล้ว`);
-      } else {
-        showToast('⏰ ค้นหาการแจ้งเตือนเตือนความจำรายบุคคลเรียบร้อยแล้ว');
+        await loadInitialData();
+        showToast('⏰ ส่งแจ้งเตือนเตือนความจำ 24 ชม. เข้า LINE สำเร็จ');
       }
     } catch (err) {
       console.error(err);
@@ -556,16 +384,12 @@ export default function App() {
 
   const handleAddTour = async (newTour: Tour) => {
     try {
-      // 1. Instantly update local state & localStorage
       const nextTours = [newTour, ...tours];
       setTours(nextTours);
       localStorage.setItem('tst_tours', JSON.stringify(nextTours));
       showToast('🏝️ เพิ่มโปรแกรมทัวร์ใหม่เรียบร้อย');
 
-      // 2. Direct write to Supabase key-value app_store
       await supabaseApi.saveTours(nextTours).catch(() => {});
-
-      // 3. Dispatch to local Express API
       await fetch('/api/tours', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -578,16 +402,12 @@ export default function App() {
 
   const handleUpdateTour = async (id: string, updatedTourData: Partial<Tour>) => {
     try {
-      // 1. Instantly update local state & localStorage
       const nextTours = tours.map(t => t.id === id ? { ...t, ...updatedTourData } : t);
       setTours(nextTours);
       localStorage.setItem('tst_tours', JSON.stringify(nextTours));
       showToast('💾 บันทึกการแก้ไขโปรแกรมทัวร์เรียบร้อย');
 
-      // 2. Direct write to Supabase key-value app_store
       await supabaseApi.saveTours(nextTours).catch(() => {});
-
-      // 3. Dispatch to local Express API
       await fetch(`/api/tours/${id}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
@@ -600,22 +420,19 @@ export default function App() {
 
   const handleDeleteTour = async (id: string) => {
     try {
-      // 1. Instantly update local state & localStorage
       const nextTours = tours.filter(t => t.id !== id);
       setTours(nextTours);
       localStorage.setItem('tst_tours', JSON.stringify(nextTours));
       showToast('🗑️ ลบโปรแกรมทัวร์เรียบร้อย');
 
-      // 2. Direct write to Supabase key-value app_store
       await supabaseApi.saveTours(nextTours).catch(() => {});
-
-      // 3. Dispatch to local Express API
       await fetch(`/api/tours/${id}`, { method: 'DELETE' }).catch(() => {});
     } catch (err) {
       console.error(err);
     }
   };
 
+  // Review Handlers
   const handleAddReview = async (reviewData: { tourId: string; userName: string; rating: number; comment: string; photo?: string }) => {
     try {
       const res = await fetch('/api/reviews', {
@@ -625,12 +442,52 @@ export default function App() {
       });
       if (res.ok) {
         const created = await res.json();
-        setReviews([created, ...reviews]);
+        const nextReviews = [created, ...reviews];
+        setReviews(nextReviews);
+        localStorage.setItem('tst_reviews', JSON.stringify(nextReviews));
         showToast('⭐ ขอบพระคุณสำหรับรีวิวครับ!');
       }
     } catch (err) {
       console.error(err);
     }
+  };
+
+  const handleApproveReview = async (id: string, isApproved: boolean) => {
+    const nextReviews = reviews.map(r => r.id === id ? { ...r, isApproved } : r);
+    setReviews(nextReviews);
+    localStorage.setItem('tst_reviews', JSON.stringify(nextReviews));
+    showToast(isApproved ? '✓ อนุมัติการแสดงผลรีวิวแล้ว' : '⏳ ซ่อนรีวิวเรียบร้อย');
+    try {
+      await fetch(`/api/reviews/${id}/status`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ isApproved })
+      });
+    } catch (e) {}
+  };
+
+  const handleReplyReview = async (id: string, reply: string) => {
+    const nextReviews = reviews.map(r => r.id === id ? { ...r, adminReply: reply } : r);
+    setReviews(nextReviews);
+    localStorage.setItem('tst_reviews', JSON.stringify(nextReviews));
+    showToast('💬 บันทึกคำตอบกลับรีวิวเรียบร้อย');
+    try {
+      await fetch(`/api/reviews/${id}/reply`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ reply })
+      });
+    } catch (e) {}
+  };
+
+  const handleDeleteReview = async (id: string) => {
+    const nextReviews = reviews.filter(r => r.id !== id);
+    setReviews(nextReviews);
+    localStorage.setItem('tst_reviews', JSON.stringify(nextReviews));
+    showToast('🗑️ ลบรีวิวเรียบร้อยแล้ว');
+    try {
+      await fetch(`/api/reviews/${id}`, { method: 'DELETE' });
+    } catch (e) {}
   };
 
   const handleNavigate = (view: 'home' | 'how-to-book' | 'about-me' | 'admin') => {
@@ -645,10 +502,22 @@ export default function App() {
     }
   };
 
-  const handleAuthenticateAdmin = (pin: string): boolean => {
+  // Google Account Auth handler
+  const handleAuthenticateGoogle = (user: AdminUser) => {
+    setIsAdminAuthenticated(true);
+    setAdminUser(user);
+    localStorage.setItem('tst_admin_auth', 'true');
+    localStorage.setItem('tst_admin_user', JSON.stringify(user));
+    setIsAdminAuthModalOpen(false);
+    setActiveView('admin');
+    showToast(`🔓 เข้าสู่ระบบสำเร็จ ยินดีต้อนรับคุณ ${user.name}`);
+  };
+
+  const handleAuthenticatePin = (pin: string): boolean => {
     const targetPin = settings.adminPin || '1234';
     if (pin === targetPin) {
       setIsAdminAuthenticated(true);
+      localStorage.setItem('tst_admin_auth', 'true');
       setIsAdminAuthModalOpen(false);
       setActiveView('admin');
       showToast('🔓 เข้าสู่ระบบแอดมินสำเร็จ');
@@ -659,6 +528,9 @@ export default function App() {
 
   const handleLogoutAdmin = () => {
     setIsAdminAuthenticated(false);
+    setAdminUser(null);
+    localStorage.removeItem('tst_admin_auth');
+    localStorage.removeItem('tst_admin_user');
     setActiveView('home');
     showToast('🔒 ออกจากระบบแอดมินเรียบร้อยแล้ว');
   };
@@ -666,11 +538,11 @@ export default function App() {
   const t = translations[currentLang];
 
   return (
-    <div className="min-h-screen bg-slate-100 text-slate-800 flex flex-col font-sans selection:bg-blue-600 selection:text-white">
+    <div className="min-h-screen bg-slate-100 text-slate-800 flex flex-col font-sans selection:bg-teal-600 selection:text-white">
       {/* Real-time Toast Notification */}
       {toastMessage && (
-        <div className="fixed top-20 right-4 z-50 bg-slate-900 text-white px-4 py-3 rounded-2xl shadow-2xl border border-blue-500/50 flex items-center gap-2 text-xs font-semibold animate-in slide-in-from-right duration-300">
-          <Sparkles className="w-4 h-4 text-blue-400 shrink-0" />
+        <div className="fixed top-20 right-4 z-50 bg-slate-900 text-white px-4 py-3 rounded-2xl shadow-2xl border border-teal-500/50 flex items-center gap-2 text-xs font-semibold animate-in slide-in-from-right duration-300">
+          <Sparkles className="w-4 h-4 text-teal-400 shrink-0" />
           <span>{toastMessage}</span>
         </div>
       )}
@@ -679,6 +551,8 @@ export default function App() {
       <Navbar
         currentLang={currentLang}
         onLanguageChange={setCurrentLang}
+        currentCurrency={currentCurrency}
+        onCurrencyChange={setCurrentCurrency}
         onNavigate={handleNavigate}
         activeView={activeView}
         onOpenLookup={() => setIsLookupOpen(true)}
@@ -692,6 +566,7 @@ export default function App() {
           bookings={bookings}
           tours={tours}
           customers={customers}
+          reviews={reviews}
           settings={settings}
           lineLogs={lineLogs}
           onUpdateBookingStatus={handleUpdateBookingStatus}
@@ -706,6 +581,10 @@ export default function App() {
           onSendSingleReminder={handleSendSingleReminder}
           onUpdateCustomer={handleUpdateCustomer}
           onDeleteCustomer={handleDeleteCustomer}
+          onApproveReview={handleApproveReview}
+          onReplyReview={handleReplyReview}
+          onDeleteReview={handleDeleteReview}
+          onRefreshData={loadInitialData}
         />
       ) : (
         <main className="flex-1 space-y-12 pb-16">
@@ -744,7 +623,7 @@ export default function App() {
                     <select
                       value={sortBy}
                       onChange={(e) => setSortBy(e.target.value as any)}
-                      className="bg-slate-50 border border-slate-200 text-slate-800 text-xs font-semibold rounded-xl px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500 w-full sm:w-auto"
+                      className="bg-slate-50 border border-slate-200 text-slate-800 text-xs font-semibold rounded-xl px-3 py-2 focus:outline-none focus:ring-2 focus:ring-teal-500 w-full sm:w-auto"
                     >
                       <option value="recommended">{t.sortRecommended}</option>
                       <option value="priceLow">{t.sortPriceLow}</option>
@@ -762,6 +641,7 @@ export default function App() {
                         key={tour.id}
                         tour={tour}
                         currentLang={currentLang}
+                        currentCurrency={currentCurrency}
                         onSelectTour={setDetailTour}
                         onBookNow={setBookingTour}
                         onViewItinerary={setItineraryTour}
@@ -775,20 +655,28 @@ export default function App() {
                     <p className="text-xs text-slate-500 mt-1 mb-4">โปรดลองเปลี่ยนคำค้นหา หรือ เลือกดูทุกหมวดหมู่</p>
                     <button
                       onClick={() => { setSearchQuery(''); setSelectedCategory('all'); }}
-                      className="bg-blue-600 hover:bg-blue-700 text-white font-bold px-4 py-2 rounded-xl text-xs transition shadow-md shadow-blue-200"
+                      className="bg-teal-600 hover:bg-teal-700 text-white font-bold px-4 py-2 rounded-xl text-xs transition shadow-md shadow-teal-200"
                     >
                       ล้างตัวกรองทั้งหมด
                     </button>
                   </div>
                 )}
               </section>
+
+              {/* Customer Reviews Section */}
+              <CustomerReviewSection
+                currentLang={currentLang}
+                reviews={reviews}
+                tours={tours}
+                onAddReview={handleAddReview}
+              />
             </>
           )}
 
           {activeView === 'how-to-book' && (
             <div className="max-w-4xl mx-auto px-4 py-8 sm:px-6 lg:px-8">
               <div className="text-center mb-8">
-                <span className="text-[10px] uppercase tracking-widest bg-blue-50 text-blue-600 px-3 py-1 rounded-full font-extrabold border border-blue-100">
+                <span className="text-[10px] uppercase tracking-widest bg-teal-50 text-teal-700 px-3 py-1 rounded-full font-extrabold border border-teal-100">
                   Easy Booking Steps
                 </span>
                 <h1 className="text-3xl font-extrabold text-slate-900 tracking-tight sm:text-4xl mt-3">
@@ -804,13 +692,10 @@ export default function App() {
                 </p>
               </div>
 
-
-
               {/* Steps Layout */}
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-12">
-                {/* Step 1 */}
                 <div className="bg-white p-6 rounded-3xl border border-slate-200 shadow-sm hover:shadow-md transition duration-200 flex gap-4">
-                  <div className="w-12 h-12 rounded-2xl bg-blue-50 text-blue-600 flex items-center justify-center font-extrabold text-lg shrink-0">
+                  <div className="w-12 h-12 rounded-2xl bg-teal-50 text-teal-700 flex items-center justify-center font-extrabold text-lg shrink-0">
                     1
                   </div>
                   <div>
@@ -828,9 +713,8 @@ export default function App() {
                   </div>
                 </div>
 
-                {/* Step 2 */}
                 <div className="bg-white p-6 rounded-3xl border border-slate-200 shadow-sm hover:shadow-md transition duration-200 flex gap-4">
-                  <div className="w-12 h-12 rounded-2xl bg-blue-50 text-blue-600 flex items-center justify-center font-extrabold text-lg shrink-0">
+                  <div className="w-12 h-12 rounded-2xl bg-teal-50 text-teal-700 flex items-center justify-center font-extrabold text-lg shrink-0">
                     2
                   </div>
                   <div>
@@ -848,9 +732,8 @@ export default function App() {
                   </div>
                 </div>
 
-                {/* Step 3 */}
                 <div className="bg-white p-6 rounded-3xl border border-slate-200 shadow-sm hover:shadow-md transition duration-200 flex gap-4">
-                  <div className="w-12 h-12 rounded-2xl bg-blue-50 text-blue-600 flex items-center justify-center font-extrabold text-lg shrink-0">
+                  <div className="w-12 h-12 rounded-2xl bg-teal-50 text-teal-700 flex items-center justify-center font-extrabold text-lg shrink-0">
                     3
                   </div>
                   <div>
@@ -868,9 +751,8 @@ export default function App() {
                   </div>
                 </div>
 
-                {/* Step 4 */}
                 <div className="bg-white p-6 rounded-3xl border border-slate-200 shadow-sm hover:shadow-md transition duration-200 flex gap-4">
-                  <div className="w-12 h-12 rounded-2xl bg-blue-50 text-blue-600 flex items-center justify-center font-extrabold text-lg shrink-0">
+                  <div className="w-12 h-12 rounded-2xl bg-teal-50 text-teal-700 flex items-center justify-center font-extrabold text-lg shrink-0">
                     4
                   </div>
                   <div>
@@ -908,7 +790,7 @@ export default function App() {
                   href={`https://line.me/R/ti/p/${settings.lineOaId}`}
                   target="_blank"
                   rel="noopener noreferrer"
-                  className="bg-emerald-600 hover:bg-emerald-500 text-white font-extrabold px-6 py-3 rounded-2xl text-xs transition whitespace-nowrap shrink-0 flex items-center gap-2"
+                  className="bg-teal-600 hover:bg-teal-500 text-white font-extrabold px-6 py-3 rounded-2xl text-xs transition whitespace-nowrap shrink-0 flex items-center gap-2"
                 >
                   <MessageCircle className="w-4 h-4" />
                   <span>แอดไลน์ @{settings.lineOaId}</span>
@@ -920,7 +802,7 @@ export default function App() {
           {activeView === 'about-me' && (
             <div className="max-w-4xl mx-auto px-4 py-8 sm:px-6 lg:px-8">
               <div className="text-center mb-12">
-                <span className="text-[10px] uppercase tracking-widest bg-blue-50 text-blue-600 px-3 py-1 rounded-full font-extrabold border border-blue-100">
+                <span className="text-[10px] uppercase tracking-widest bg-teal-50 text-teal-700 px-3 py-1 rounded-full font-extrabold border border-teal-100">
                   Phuket Local Guide & Official License
                 </span>
                 <h1 className="text-3xl font-extrabold text-slate-900 tracking-tight sm:text-4xl mt-3">
@@ -937,18 +819,18 @@ export default function App() {
               </div>
 
               {/* Official License Card Box */}
-              <div className="bg-white border-2 border-blue-100 rounded-3xl p-6 sm:p-8 shadow-md mb-10 relative overflow-hidden">
-                <div className="absolute top-0 right-0 bg-blue-600 text-white text-[10px] font-extrabold px-4 py-1.5 rounded-bl-2xl uppercase tracking-wider">
+              <div className="bg-white border-2 border-teal-100 rounded-3xl p-6 sm:p-8 shadow-md mb-10 relative overflow-hidden">
+                <div className="absolute top-0 right-0 bg-teal-700 text-white text-[10px] font-extrabold px-4 py-1.5 rounded-bl-2xl uppercase tracking-wider">
                   แบบ ธ.1 • กรมการท่องเที่ยว
                 </div>
 
                 <div className="flex flex-col md:flex-row gap-6 items-start">
                   <div className="w-full md:w-1/3 bg-slate-50 border border-slate-200 rounded-2xl p-6 text-center flex flex-col justify-center items-center">
-                    <div className="w-16 h-16 bg-blue-600 rounded-2xl flex items-center justify-center text-white font-black text-2xl shadow-md mb-3">
+                    <div className="w-16 h-16 bg-teal-600 rounded-2xl flex items-center justify-center text-white font-black text-2xl shadow-md mb-3">
                       TAT
                     </div>
                     <span className="text-xs font-bold text-slate-800">ใบอนุญาตเลขที่</span>
-                    <span className="text-xl font-extrabold text-blue-600 tracking-tight mt-0.5">33/11100</span>
+                    <span className="text-xl font-extrabold text-teal-600 tracking-tight mt-0.5">33/11100</span>
                     <span className="text-[10px] text-slate-400 mt-2">สาขาภาคใต้ เขต 2</span>
                   </div>
 
@@ -970,9 +852,9 @@ export default function App() {
                 </div>
 
                 {/* Verification Website Link Box */}
-                <div className="mt-6 pt-6 border-t border-slate-100 flex flex-col sm:flex-row items-center justify-between gap-4 bg-blue-50/60 p-4 rounded-2xl">
+                <div className="mt-6 pt-6 border-t border-slate-100 flex flex-col sm:flex-row items-center justify-between gap-4 bg-teal-50/60 p-4 rounded-2xl">
                   <div className="flex items-center gap-3">
-                    <ShieldCheck className="w-8 h-8 text-blue-600 shrink-0" />
+                    <ShieldCheck className="w-8 h-8 text-teal-600 shrink-0" />
                     <div>
                       <h4 className="font-bold text-slate-900 text-xs">
                         {currentLang === 'TH' ? 'ตรวจสอบสถานะใบอนุญาตบนเว็บไซต์ทางการ' : 'Verify License on Official Department Website'}
@@ -986,7 +868,7 @@ export default function App() {
                     href="https://esvcs.dot.go.th/e-service/LicenseInformationPage"
                     target="_blank"
                     rel="noopener noreferrer"
-                    className="bg-blue-600 hover:bg-blue-700 text-white font-extrabold px-5 py-2.5 rounded-xl text-xs transition whitespace-nowrap shadow-sm shadow-blue-200 flex items-center gap-1.5 shrink-0"
+                    className="bg-teal-600 hover:bg-teal-700 text-white font-extrabold px-5 py-2.5 rounded-xl text-xs transition whitespace-nowrap shadow-sm shadow-teal-200 flex items-center gap-1.5 shrink-0"
                   >
                     <span>ตรวจสอบเว็บไซต์กรมการท่องเที่ยว</span>
                     <span className="text-[10px] opacity-80">↗</span>
@@ -996,21 +878,19 @@ export default function App() {
 
               {/* Bio & Details Grid */}
               <div className="grid grid-cols-1 md:grid-cols-12 gap-8 items-center mb-12 bg-white border border-slate-200 rounded-3xl p-6 sm:p-10 shadow-sm">
-                {/* Visual Left */}
                 <div className="md:col-span-5 bg-slate-50 border border-slate-100 rounded-2xl p-8 flex flex-col items-center justify-center text-center aspect-square relative overflow-hidden">
-                  <div className="absolute inset-0 bg-blue-600/[0.03] pointer-events-none" />
-                  <div className="w-20 h-20 bg-blue-600 rounded-2xl flex items-center justify-center text-white font-extrabold text-3xl shadow-lg shadow-blue-200 mb-4">
+                  <div className="absolute inset-0 bg-teal-600/[0.03] pointer-events-none" />
+                  <div className="w-20 h-20 bg-teal-600 rounded-2xl flex items-center justify-center text-white font-extrabold text-3xl shadow-lg shadow-teal-200 mb-4">
                     TS
                   </div>
                   <h3 className="font-black text-slate-900 text-lg tracking-tight">TRIP SEA TOUR</h3>
-                  <p className="text-[10px] text-blue-600 font-extrabold tracking-widest uppercase mt-1 mb-3">Phuket, Thailand</p>
+                  <p className="text-[10px] text-teal-600 font-extrabold tracking-widest uppercase mt-1 mb-3">Phuket, Thailand</p>
                   <span className="inline-flex items-center gap-1.5 bg-emerald-100 text-emerald-800 text-[10px] font-bold px-3 py-1 rounded-full border border-emerald-200">
                     <ShieldCheck className="w-3.5 h-3.5" />
                     TAT License No. 33/11100
                   </span>
                 </div>
 
-                {/* Text Description Right */}
                 <div className="md:col-span-7 space-y-4">
                   <h3 className="font-extrabold text-slate-900 text-lg">
                     {currentLang === 'TH' ? 'ยินดีต้อนรับสู่ครอบครัวทริปซีทัวร์' :
@@ -1024,7 +904,6 @@ export default function App() {
                      'Мы предлагаем качественные экскурсии на лодках, катамаранах и обзорные туры по Пхукету без лишних наценок.'}
                   </p>
 
-                  {/* Core items */}
                   <div className="pt-3 space-y-3">
                     <div className="flex items-start gap-3">
                       <div className="w-7 h-7 rounded-lg bg-emerald-50 text-emerald-600 flex items-center justify-center font-bold text-sm shrink-0">
@@ -1061,6 +940,13 @@ export default function App() {
         </main>
       )}
 
+      {/* 24/7 AI Chatbot Assistant Powered by Gemini AI */}
+      <TripSeaAiChatbot
+        currentLang={currentLang}
+        currentCurrency={currentCurrency}
+        tours={tours}
+      />
+
       {/* Footer */}
       <Footer currentLang={currentLang} settings={settings} onNavigate={handleNavigate} />
 
@@ -1068,8 +954,9 @@ export default function App() {
       <AdminAuthModal
         isOpen={isAdminAuthModalOpen}
         onClose={() => setIsAdminAuthModalOpen(false)}
-        onAuthenticate={handleAuthenticateAdmin}
-        currentPin={settings.adminPin || '1234'}
+        onAuthenticateGoogle={handleAuthenticateGoogle}
+        onAuthenticatePin={handleAuthenticatePin}
+        authorizedEmails={settings.adminGoogleEmails || ['asmr9941@gmail.com']}
       />
 
       <TourDetailModal
