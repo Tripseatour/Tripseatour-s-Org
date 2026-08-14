@@ -120,8 +120,8 @@ export default function App() {
     try {
       setSyncStatus('syncing');
 
-      // Skip background sync overwrite if user recently performed a mutation (<3.5 sec ago)
-      if (!forceReload && Date.now() - lastMutationTimeRef.current < 3500) {
+      // Skip background sync overwrite if user recently performed a mutation (<10 sec ago)
+      if (!forceReload && Date.now() - lastMutationTimeRef.current < 10000) {
         setSyncStatus('synced');
         setLastSyncedAt(new Date().toLocaleTimeString('th-TH'));
         return;
@@ -170,10 +170,10 @@ export default function App() {
         if (logs) setLineLogs(logs);
       }
 
-      // Supabase direct fallback ONLY if server API returned null (e.g. server offline)
+      // Supabase direct fallback ONLY if server API returned null (e.g. server offline / Vercel SPA)
       if (serverBookings === null) {
         const directBookings = await supabaseApi.getBookings();
-        if (directBookings) {
+        if (directBookings !== null) {
           serverBookings = directBookings;
         }
       }
@@ -185,14 +185,20 @@ export default function App() {
       }
       if (serverTours === null) {
         const directTours = await supabaseApi.getTours();
-        if (directTours) {
+        if (directTours !== null) {
           serverTours = directTours;
         }
       }
       if (serverCustomers === null) {
         const directCustomers = await supabaseApi.getCustomers();
-        if (directCustomers) {
+        if (directCustomers !== null) {
           serverCustomers = directCustomers;
+        }
+      }
+      if (serverReviews === null) {
+        const directReviews = await supabaseApi.getReviews();
+        if (directReviews !== null) {
+          serverReviews = directReviews;
         }
       }
 
@@ -331,16 +337,23 @@ export default function App() {
   const handleDeleteBooking = async (id: string) => {
     try {
       lastMutationTimeRef.current = Date.now();
+      const targetBooking = bookings.find(b => b.id === id || b.bookingRef === id);
+      const bookingRef = targetBooking?.bookingRef || id;
+      const actualId = targetBooking?.id || id;
+
       const nextBookings = bookings.filter(b => b.id !== id && b.bookingRef !== id);
       setBookings(nextBookings);
       localStorage.setItem('tst_bookings', JSON.stringify(nextBookings));
       showToast('🗑️ ลบคำสั่งซื้อทัวร์เรียบร้อยแล้ว');
 
-      // Sync to Supabase
-      supabaseApi.deleteBooking(id).catch(() => {});
-      supabaseApi.saveBookingsBackup(nextBookings).catch(() => {});
+      // Sync to Supabase (delete from bookings table AND update app_store backup)
+      await Promise.all([
+        supabaseApi.deleteBooking(actualId),
+        supabaseApi.deleteBooking(bookingRef),
+        supabaseApi.saveBookingsBackup(nextBookings)
+      ]).catch(() => {});
 
-      // Sync to Express API
+      // Sync to Express API if available
       const res = await fetch(`/api/bookings/${id}`, { method: 'DELETE' }).catch(() => null);
       if (res && res.ok) {
         const data = await res.json().catch(() => ({}));

@@ -125,48 +125,61 @@ export const supabaseApi = {
     const client = getSupabase();
     if (!client) return null;
 
-    const { data, error } = await client
-      .from('bookings')
-      .select('*')
-      .order('created_at', { ascending: false });
+    try {
+      const { data, error } = await client
+        .from('bookings')
+        .select('*')
+        .order('created_at', { ascending: false });
 
-    if (error) {
-      console.error('Error fetching bookings from Supabase:', error);
-      return null;
+      if (!error && data && data.length > 0) {
+        return data.map((b: any) => ({
+          id: b.id,
+          bookingRef: b.booking_ref,
+          tourId: b.tour_id,
+          tourTitle: b.tour_title,
+          tourImage: b.tour_image || '',
+          customerName: b.customer_name,
+          customerEmail: b.customer_email,
+          customerPhone: b.customer_phone,
+          customerLineId: b.customer_line_id,
+          nationality: b.nationality,
+          travelDate: b.travel_date,
+          pickupHotel: b.pickup_hotel,
+          pickupZone: b.pickup_zone,
+          roomNumber: b.room_number,
+          specialRequests: b.special_requests,
+          adults: b.adults,
+          children: b.children,
+          infants: b.infants,
+          totalAmount: Number(b.total_amount),
+          paymentMethod: b.payment_method || 'promptpay',
+          promptPayIdUsed: b.promptpay_id_used,
+          paymentStatus: b.payment_status,
+          orderStatus: b.order_status,
+          slipUrl: b.slip_url,
+          slipUploadedAt: b.slip_uploaded_at,
+          paidAt: b.paid_at,
+          createdAt: b.created_at,
+          lineNotifySent: b.line_notify_sent,
+          reminderSent: b.reminder_sent,
+          notes: b.notes,
+        }));
+      }
+
+      // Check app_store backup key 'bookings'
+      const { data: storeData } = await client.from('app_store').select('value').eq('key', 'bookings').maybeSingle();
+      if (storeData && storeData.value) {
+        return JSON.parse(storeData.value);
+      }
+
+      if (!error && data && data.length === 0) {
+        return [];
+      }
+    } catch (e) {
+      console.error('getBookings error:', e);
     }
 
-    return (data || []).map((b: any) => ({
-      id: b.id,
-      bookingRef: b.booking_ref,
-      tourId: b.tour_id,
-      tourTitle: b.tour_title,
-      tourImage: b.tour_image || '',
-      customerName: b.customer_name,
-      customerEmail: b.customer_email,
-      customerPhone: b.customer_phone,
-      customerLineId: b.customer_line_id,
-      nationality: b.nationality,
-      travelDate: b.travel_date,
-      pickupHotel: b.pickup_hotel,
-      pickupZone: b.pickup_zone,
-      roomNumber: b.room_number,
-      specialRequests: b.special_requests,
-      adults: b.adults,
-      children: b.children,
-      infants: b.infants,
-      totalAmount: Number(b.total_amount),
-      paymentMethod: b.payment_method || 'promptpay',
-      promptPayIdUsed: b.promptpay_id_used,
-      paymentStatus: b.payment_status,
-      orderStatus: b.order_status,
-      slipUrl: b.slip_url,
-      slipUploadedAt: b.slip_uploaded_at,
-      paidAt: b.paid_at,
-      createdAt: b.created_at,
-      lineNotifySent: b.line_notify_sent,
-      reminderSent: b.reminder_sent,
-      notes: b.notes,
-    }));
+    return null;
   },
 
   // Get Settings from Supabase
@@ -299,19 +312,16 @@ export const supabaseApi = {
     const client = getSupabase();
     if (!client) return false;
 
-    const isUUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id);
-    let query = client.from('bookings').delete();
-    if (isUUID) {
-      query = query.eq('id', id);
-    } else {
-      query = query.eq('booking_ref', id);
-    }
+    try {
+      // Attempt deleting by both id and booking_ref to guarantee deletion
+      const { error: err1 } = await client.from('bookings').delete().eq('id', id);
+      const { error: err2 } = await client.from('bookings').delete().eq('booking_ref', id);
 
-    const { error } = await query;
-
-    if (error) {
-      console.error('Failed to delete booking in Supabase:', error);
-      return false;
+      if (err1 && err2) {
+        console.warn('Booking deletion warning:', err1, err2);
+      }
+    } catch (e) {
+      console.error('Failed to delete booking in Supabase:', e);
     }
     return true;
   },
@@ -392,6 +402,22 @@ export const supabaseApi = {
       }, { onConflict: 'key' });
     } catch (e) {}
     return true;
+  },
+
+  // Get Reviews from Supabase ('app_store' key 'reviews')
+  async getReviews(): Promise<Review[] | null> {
+    const client = getSupabase();
+    if (!client) return null;
+
+    try {
+      const { data, error } = await client.from('app_store').select('value').eq('key', 'reviews').maybeSingle();
+      if (data && data.value) {
+        return JSON.parse(data.value);
+      }
+    } catch (e) {
+      console.error('getReviews error:', e);
+    }
+    return null;
   },
 
   // Save bookings backup to app_store for recovery
