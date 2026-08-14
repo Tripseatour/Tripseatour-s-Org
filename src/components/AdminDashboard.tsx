@@ -3,7 +3,7 @@ import {
   BarChart3, DollarSign, ShoppingBag, Clock, CheckCircle2, AlertTriangle, Users,
   Settings, MessageCircle, QrCode, Plus, Search, Eye, Check, X, RefreshCw, Send, Image as ImageIcon,
   ChevronRight, Filter, FileSpreadsheet, Sparkles, LogOut, Lock, Key, Ticket, Trash2, Edit3, Calendar, ListChecks,
-  Star, MessageSquare, Bot, UserPlus, UserMinus, ShieldCheck, Mail
+  Star, MessageSquare, Bot, UserPlus, UserMinus, ShieldCheck, Mail, Database
 } from 'lucide-react';
 import {
   BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid, PieChart, Pie, Cell, Legend
@@ -98,6 +98,42 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
   const [copiedSql, setCopiedSql] = useState(false);
   const [saveSuccess, setSaveSuccess] = useState(false);
 
+  // Supabase Status & Purge State
+  const [supabaseStatus, setSupabaseStatus] = useState<{ connected: boolean; url: string | null; error?: string | null } | null>(null);
+  const [isCleaningData, setIsCleaningData] = useState(false);
+  const [cleanStatusMsg, setCleanStatusMsg] = useState<string | null>(null);
+
+  const checkSupabaseStatus = async () => {
+    try {
+      const res = await fetch('/api/admin/supabase-status');
+      if (res.ok) {
+        const data = await res.json();
+        setSupabaseStatus(data);
+      }
+    } catch (err) {
+      setSupabaseStatus({ connected: false, url: null, error: 'Network Error' });
+    }
+  };
+
+  const handleCleanDeletedData = async () => {
+    setIsCleaningData(true);
+    setCleanStatusMsg(null);
+    try {
+      const res = await fetch('/api/admin/clean-deleted-data', { method: 'POST' });
+      const data = await res.json();
+      if (res.ok) {
+        setCleanStatusMsg('✅ ล้างข้อมูลเก่าที่ลบไปแล้วสะสมใน Supabase เรียบร้อยแล้ว!');
+        if (onRefreshData) onRefreshData();
+      } else {
+        setCleanStatusMsg('❌ ไม่สามารถล้างข้อมูลได้: ' + (data.details || 'ข้อผิดพลาดระบบ'));
+      }
+    } catch (e) {
+      setCleanStatusMsg('❌ เกิดข้อผิดพลาดในการเชื่อมต่อเซิร์ฟเวอร์');
+    } finally {
+      setIsCleaningData(false);
+    }
+  };
+
   const fetchDetectedGroups = async () => {
     setIsFetchingGroups(true);
     setGroupFetchStatus(null);
@@ -138,6 +174,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
 
   useEffect(() => {
     fetchDetectedGroups();
+    checkSupabaseStatus();
   }, []);
 
   useEffect(() => {
@@ -1064,6 +1101,53 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
         {/* TAB 6: SETTINGS & GOOGLE ADMIN MANAGEMENT */}
         {activeTab === 'settings' && (
           <div className="space-y-8 animate-in fade-in">
+            {/* Supabase Database Connection Status Banner */}
+            <div className="bg-slate-800/80 border border-slate-700/80 p-5 rounded-2xl shadow-xl flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
+              <div className="flex items-center gap-3">
+                <div className={`w-10 h-10 rounded-xl flex items-center justify-center font-bold ${supabaseStatus?.connected ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/40' : 'bg-amber-500/20 text-amber-400 border border-amber-500/40'}`}>
+                  <Database className="w-5 h-5" />
+                </div>
+                <div>
+                  <div className="flex items-center gap-2">
+                    <h4 className="text-sm font-extrabold text-white">สถานะการเชื่อมต่อฐานข้อมูล Supabase</h4>
+                    <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${supabaseStatus?.connected ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/30' : 'bg-amber-500/20 text-amber-300 border border-amber-500/30'}`}>
+                      {supabaseStatus?.connected ? '🟢 ออนไลน์ / เชื่อมต่อสมบูรณ์' : '🟡 กำลังตรวจสอบ / Local Cache Mode'}
+                    </span>
+                  </div>
+                  <p className="text-xs text-slate-400 font-mono mt-0.5">
+                    URL: {supabaseStatus?.url || 'https://tljofqremlconawmtndd.supabase.co'} (ตาราง: app_store, bookings, tours, settings)
+                  </p>
+                </div>
+              </div>
+
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={handleCleanDeletedData}
+                  disabled={isCleaningData}
+                  className="bg-rose-900/60 hover:bg-rose-800 text-rose-200 border border-rose-700/60 font-bold px-3.5 py-2 rounded-xl text-xs flex items-center gap-1.5 transition disabled:opacity-50"
+                  title="ล้างข้อมูลออเดอร์/ทัวร์ที่เคยลบไปแล้วเพื่อไม่ให้ดึงกลับมาซ้ำ"
+                >
+                  <Trash2 className={`w-3.5 h-3.5 ${isCleaningData ? 'animate-spin' : ''}`} />
+                  <span>{isCleaningData ? 'กำลังล้างข้อมูล...' : 'ล้างขยะข้อมูลเก่าใน Supabase'}</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={checkSupabaseStatus}
+                  className="bg-slate-700 hover:bg-slate-600 text-slate-200 font-bold px-3 py-2 rounded-xl text-xs transition flex items-center gap-1"
+                >
+                  <RefreshCw className="w-3.5 h-3.5" />
+                  <span>เช็คสถานะ</span>
+                </button>
+              </div>
+            </div>
+            {cleanStatusMsg && (
+              <div className="bg-slate-800 border border-teal-500/40 p-3.5 rounded-xl text-xs text-teal-300 font-bold animate-in fade-in flex items-center justify-between">
+                <span>{cleanStatusMsg}</span>
+                <button onClick={() => setCleanStatusMsg(null)} className="text-slate-400 hover:text-white text-xs">✕</button>
+              </div>
+            )}
+
             {/* Google Admin Accounts Management Section */}
             <div className="bg-slate-800/80 border border-slate-700/80 p-6 rounded-2xl shadow-xl space-y-5">
               <div className="flex items-center justify-between border-b border-slate-700/80 pb-4">
@@ -1174,6 +1258,26 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                       placeholder="เช่น 0626816494 หรือ 1234567890123"
                       className="w-full bg-slate-900 border border-slate-700 rounded-xl p-3 text-white text-xs font-mono font-bold focus:ring-2 focus:ring-teal-500"
                     />
+                  </div>
+
+                  <div>
+                    <label className="text-slate-300 font-bold block mb-1 flex items-center justify-between">
+                      <span>รหัสความปลอดภัย PIN สำรอง (Backup Admin PIN)</span>
+                      <span className="text-[10px] text-amber-400 font-normal">ใช้เข้าสู่ระบบสำรองฉุกเฉิน</span>
+                    </label>
+                    <div className="relative">
+                      <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-slate-500">
+                        <Lock className="w-4 h-4 text-amber-400" />
+                      </div>
+                      <input
+                        type="text"
+                        maxLength={10}
+                        value={formSettings.adminPin || '1234'}
+                        onChange={(e) => setFormSettings({ ...formSettings, adminPin: e.target.value })}
+                        placeholder="รหัส PIN 4 หลัก เช่น 1234"
+                        className="w-full bg-slate-900 border border-slate-700 rounded-xl pl-10 pr-3 py-2.5 text-xs font-mono font-bold text-amber-300 focus:ring-2 focus:ring-teal-500"
+                      />
+                    </div>
                   </div>
 
                   <div>

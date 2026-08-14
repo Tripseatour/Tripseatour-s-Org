@@ -152,6 +152,8 @@ async function loadStateFromSupabase() {
           reminderSent: b.reminder_sent,
           notes: b.notes
         }));
+        // Immediately persist to app_store
+        await persistState('bookings');
       }
     }
   } catch (e) {
@@ -553,7 +555,70 @@ app.delete('/api/bookings/:id', async (req, res) => {
   const { id } = req.params;
   bookings = bookings.filter(b => b.id !== id && b.bookingRef !== id);
   await persistState('bookings');
+  if (supabase) {
+    try {
+      await supabase.from('bookings').delete().or(`id.eq.${id},booking_ref.eq.${id}`);
+    } catch (e) {
+      console.warn('Supabase row delete info:', e);
+    }
+  }
   res.json({ success: true, id, message: 'Deleted booking successfully' });
+});
+
+// Supabase Connection Status API
+app.get('/api/admin/supabase-status', async (req, res) => {
+  if (!supabase) {
+    return res.json({
+      connected: false,
+      url: null,
+      message: 'Supabase client is not initialized'
+    });
+  }
+
+  try {
+    const { data, error } = await supabase.from('app_store').select('key').limit(5);
+    res.json({
+      connected: !error,
+      url: SUPABASE_URL,
+      keysFound: data ? data.map((d: any) => d.key) : [],
+      error: error ? error.message : null
+    });
+  } catch (err: any) {
+    res.json({
+      connected: false,
+      url: SUPABASE_URL,
+      error: err?.message || 'Database ping error'
+    });
+  }
+});
+
+// Purge / Clean orphaned deleted data from Supabase
+app.post('/api/admin/clean-deleted-data', async (req, res) => {
+  try {
+    await persistState('tours');
+    await persistState('bookings');
+    await persistState('reviews');
+    await persistState('customers');
+    await persistState('settings');
+
+    if (supabase) {
+      // Clean relational table entries that don't match current bookings memory
+      const currentBookingIds = bookings.map(b => b.id);
+      const currentRefs = bookings.map(b => b.bookingRef);
+      const { data: dbBookings } = await supabase.from('bookings').select('id, booking_ref');
+      if (dbBookings && dbBookings.length > 0) {
+        for (const row of dbBookings) {
+          if (!currentBookingIds.includes(row.id) && !currentRefs.includes(row.booking_ref)) {
+            await supabase.from('bookings').delete().eq('id', row.id);
+          }
+        }
+      }
+    }
+
+    res.json({ success: true, message: 'ล้างข้อมูลเก่าที่ลบไปแล้วใน Supabase เรียบร้อยแล้ว (Sync Complete)' });
+  } catch (err: any) {
+    res.status(500).json({ error: 'Failed to clean Supabase data', details: err?.message });
+  }
 });
 
 // --- Reviews Management API ---
