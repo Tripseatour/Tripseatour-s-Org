@@ -18,10 +18,11 @@ export const TourDetailModal: React.FC<TourDetailModalProps> = ({
   onBookNow,
   reviews,
 }) => {
+  const [activeImageIndex, setActiveImageIndex] = useState(0);
+
   if (!tour) return null;
 
   const t = translations[currentLang];
-  const [activeImageIndex, setActiveImageIndex] = useState(0);
 
   const title = tour.title[currentLang] || tour.title.TH;
   const description = tour.description[currentLang] || tour.description.TH;

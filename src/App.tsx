@@ -108,6 +108,7 @@ export default function App() {
   const [syncStatus, setSyncStatus] = useState<'synced' | 'syncing' | 'error'>('synced');
   const [lastSyncedAt, setLastSyncedAt] = useState<string>(new Date().toLocaleTimeString('th-TH'));
   const lastServerVersionRef = React.useRef<number>(0);
+  const lastMutationTimeRef = React.useRef<number>(0);
 
   const showToast = (msg: string) => {
     setToastMessage(msg);
@@ -118,6 +119,13 @@ export default function App() {
   const loadInitialData = useCallback(async (forceReload: boolean = false) => {
     try {
       setSyncStatus('syncing');
+
+      // Skip background sync overwrite if user recently performed a mutation (<3.5 sec ago)
+      if (!forceReload && Date.now() - lastMutationTimeRef.current < 3500) {
+        setSyncStatus('synced');
+        setLastSyncedAt(new Date().toLocaleTimeString('th-TH'));
+        return;
+      }
 
       // 1. Check server version first
       let serverVersion: number | null = null;
@@ -267,6 +275,7 @@ export default function App() {
 
   // Handlers for Booking
   const handleBookingCreated = (newBooking: Booking) => {
+    lastMutationTimeRef.current = Date.now();
     const nextBookings = [newBooking, ...bookings];
     setBookings(nextBookings);
     localStorage.setItem('tst_bookings', JSON.stringify(nextBookings));
@@ -275,6 +284,7 @@ export default function App() {
 
   const handleUpdateBookingStatus = async (id: string, paymentStatus: string, orderStatus: string) => {
     try {
+      lastMutationTimeRef.current = Date.now();
       const nextBookings = bookings.map(b => b.id === id ? { 
         ...b, 
         paymentStatus: paymentStatus as any, 
@@ -290,19 +300,15 @@ export default function App() {
         showToast(`✅ อัปเดตสถานะการจองของ ${updatedBooking.customerName} เรียบร้อยแล้ว`);
       }
 
-      await supabaseApi.updateBooking(id, { 
-        paymentStatus: paymentStatus as any, 
-        orderStatus: (paymentStatus === 'verified' ? 'confirmed' : orderStatus) as any,
-        paidAt: paymentStatus === 'verified' ? new Date().toISOString() : undefined 
-      }).catch(() => {});
-      
-      await supabaseApi.saveBookingsBackup(nextBookings).catch(() => {});
-
-      await fetch(`/api/bookings/${id}/status`, {
+      const res = await fetch(`/api/bookings/${id}/status`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ paymentStatus, orderStatus }),
-      }).catch(() => {});
+      });
+      if (res.ok) {
+        const data = await res.json();
+        if (data.version) lastServerVersionRef.current = data.version;
+      }
     } catch (err) {
       console.error(err);
     }
@@ -310,14 +316,17 @@ export default function App() {
 
   const handleDeleteBooking = async (id: string) => {
     try {
+      lastMutationTimeRef.current = Date.now();
       const nextBookings = bookings.filter(b => b.id !== id && b.bookingRef !== id);
       setBookings(nextBookings);
       localStorage.setItem('tst_bookings', JSON.stringify(nextBookings));
       showToast('🗑️ ลบคำสั่งซื้อทัวร์เรียบร้อยแล้ว');
 
-      await supabaseApi.deleteBooking(id).catch(() => {});
-      await supabaseApi.saveBookingsBackup(nextBookings).catch(() => {});
-      await fetch(`/api/bookings/${id}`, { method: 'DELETE' }).catch(() => {});
+      const res = await fetch(`/api/bookings/${id}`, { method: 'DELETE' });
+      if (res.ok) {
+        const data = await res.json();
+        if (data.version) lastServerVersionRef.current = data.version;
+      }
     } catch (err) {
       console.error(err);
     }
@@ -325,16 +334,20 @@ export default function App() {
 
   const handleSaveSettings = async (newSettings: AppSettings) => {
     try {
+      lastMutationTimeRef.current = Date.now();
       setSettings(newSettings);
       localStorage.setItem('tst_settings', JSON.stringify(newSettings));
       showToast('💾 บันทึกการตั้งค่าแล้ว');
 
-      await supabaseApi.saveSettings(newSettings).catch(() => {});
-      await fetch('/api/settings', {
+      const res = await fetch('/api/settings', {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(newSettings),
-      }).catch(() => {});
+      });
+      if (res.ok) {
+        const data = await res.json();
+        if (data.version) lastServerVersionRef.current = data.version;
+      }
     } catch (err) {
       console.error(err);
     }
@@ -342,17 +355,21 @@ export default function App() {
 
   const handleUpdateCustomer = async (id: string, updatedCustomerData: Partial<Customer>) => {
     try {
+      lastMutationTimeRef.current = Date.now();
       const nextCustomers = customers.map(c => c.id === id ? { ...c, ...updatedCustomerData } : c);
       setCustomers(nextCustomers);
       localStorage.setItem('tst_customers', JSON.stringify(nextCustomers));
       showToast('💾 อัปเดตข้อมูลลูกค้าใน CRM เรียบร้อยแล้ว');
 
-      await supabaseApi.saveCustomers(nextCustomers).catch(() => {});
-      await fetch(`/api/customers/${id}`, {
+      const res = await fetch(`/api/customers/${id}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(updatedCustomerData),
-      }).catch(() => {});
+      });
+      if (res.ok) {
+        const data = await res.json();
+        if (data.version) lastServerVersionRef.current = data.version;
+      }
     } catch (err) {
       console.error(err);
     }
@@ -360,13 +377,17 @@ export default function App() {
 
   const handleDeleteCustomer = async (id: string) => {
     try {
+      lastMutationTimeRef.current = Date.now();
       const nextCustomers = customers.filter(c => c.id !== id);
       setCustomers(nextCustomers);
       localStorage.setItem('tst_customers', JSON.stringify(nextCustomers));
       showToast('🗑️ ลบข้อมูลลูกค้าเรียบร้อยแล้ว');
 
-      await supabaseApi.saveCustomers(nextCustomers).catch(() => {});
-      await fetch(`/api/customers/${id}`, { method: 'DELETE' }).catch(() => {});
+      const res = await fetch(`/api/customers/${id}`, { method: 'DELETE' });
+      if (res.ok) {
+        const data = await res.json();
+        if (data.version) lastServerVersionRef.current = data.version;
+      }
     } catch (err) {
       console.error(err);
     }
@@ -430,17 +451,21 @@ export default function App() {
 
   const handleAddTour = async (newTour: Tour) => {
     try {
+      lastMutationTimeRef.current = Date.now();
       const nextTours = [newTour, ...tours];
       setTours(nextTours);
       localStorage.setItem('tst_tours', JSON.stringify(nextTours));
       showToast('🏝️ เพิ่มโปรแกรมทัวร์ใหม่เรียบร้อย');
 
-      await supabaseApi.saveTours(nextTours).catch(() => {});
-      await fetch('/api/tours', {
+      const res = await fetch('/api/tours', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(newTour),
-      }).catch(() => {});
+      });
+      if (res.ok) {
+        const data = await res.json();
+        if (data.version) lastServerVersionRef.current = data.version;
+      }
     } catch (err) {
       console.error(err);
     }
@@ -448,17 +473,21 @@ export default function App() {
 
   const handleUpdateTour = async (id: string, updatedTourData: Partial<Tour>) => {
     try {
+      lastMutationTimeRef.current = Date.now();
       const nextTours = tours.map(t => t.id === id ? { ...t, ...updatedTourData } : t);
       setTours(nextTours);
       localStorage.setItem('tst_tours', JSON.stringify(nextTours));
       showToast('💾 บันทึกการแก้ไขโปรแกรมทัวร์เรียบร้อย');
 
-      await supabaseApi.saveTours(nextTours).catch(() => {});
-      await fetch(`/api/tours/${id}`, {
+      const res = await fetch(`/api/tours/${id}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(updatedTourData),
-      }).catch(() => {});
+      });
+      if (res.ok) {
+        const data = await res.json();
+        if (data.version) lastServerVersionRef.current = data.version;
+      }
     } catch (err) {
       console.error(err);
     }
@@ -466,13 +495,17 @@ export default function App() {
 
   const handleDeleteTour = async (id: string) => {
     try {
+      lastMutationTimeRef.current = Date.now();
       const nextTours = tours.filter(t => t.id !== id);
       setTours(nextTours);
       localStorage.setItem('tst_tours', JSON.stringify(nextTours));
       showToast('🗑️ ลบโปรแกรมทัวร์เรียบร้อย');
 
-      await supabaseApi.saveTours(nextTours).catch(() => {});
-      await fetch(`/api/tours/${id}`, { method: 'DELETE' }).catch(() => {});
+      const res = await fetch(`/api/tours/${id}`, { method: 'DELETE' });
+      if (res.ok) {
+        const data = await res.json();
+        if (data.version) lastServerVersionRef.current = data.version;
+      }
     } catch (err) {
       console.error(err);
     }
@@ -481,6 +514,7 @@ export default function App() {
   // Review Handlers
   const handleAddReview = async (reviewData: { tourId: string; userName: string; rating: number; comment: string; photo?: string }) => {
     try {
+      lastMutationTimeRef.current = Date.now();
       const res = await fetch('/api/reviews', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -488,6 +522,7 @@ export default function App() {
       });
       if (res.ok) {
         const created = await res.json();
+        if (created.version) lastServerVersionRef.current = created.version;
         const nextReviews = [created, ...reviews];
         setReviews(nextReviews);
         localStorage.setItem('tst_reviews', JSON.stringify(nextReviews));
@@ -499,40 +534,55 @@ export default function App() {
   };
 
   const handleApproveReview = async (id: string, isApproved: boolean) => {
+    lastMutationTimeRef.current = Date.now();
     const nextReviews = reviews.map(r => r.id === id ? { ...r, isApproved } : r);
     setReviews(nextReviews);
     localStorage.setItem('tst_reviews', JSON.stringify(nextReviews));
     showToast(isApproved ? '✓ อนุมัติการแสดงผลรีวิวแล้ว' : '⏳ ซ่อนรีวิวเรียบร้อย');
     try {
-      await fetch(`/api/reviews/${id}/status`, {
+      const res = await fetch(`/api/reviews/${id}/status`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ isApproved })
       });
+      if (res.ok) {
+        const data = await res.json();
+        if (data.version) lastServerVersionRef.current = data.version;
+      }
     } catch (e) {}
   };
 
   const handleReplyReview = async (id: string, reply: string) => {
+    lastMutationTimeRef.current = Date.now();
     const nextReviews = reviews.map(r => r.id === id ? { ...r, adminReply: reply } : r);
     setReviews(nextReviews);
     localStorage.setItem('tst_reviews', JSON.stringify(nextReviews));
     showToast('💬 บันทึกคำตอบกลับรีวิวเรียบร้อย');
     try {
-      await fetch(`/api/reviews/${id}/reply`, {
+      const res = await fetch(`/api/reviews/${id}/reply`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ reply })
       });
+      if (res.ok) {
+        const data = await res.json();
+        if (data.version) lastServerVersionRef.current = data.version;
+      }
     } catch (e) {}
   };
 
   const handleDeleteReview = async (id: string) => {
+    lastMutationTimeRef.current = Date.now();
     const nextReviews = reviews.filter(r => r.id !== id);
     setReviews(nextReviews);
     localStorage.setItem('tst_reviews', JSON.stringify(nextReviews));
     showToast('🗑️ ลบรีวิวเรียบร้อยแล้ว');
     try {
-      await fetch(`/api/reviews/${id}`, { method: 'DELETE' });
+      const res = await fetch(`/api/reviews/${id}`, { method: 'DELETE' });
+      if (res.ok) {
+        const data = await res.json();
+        if (data.version) lastServerVersionRef.current = data.version;
+      }
     } catch (e) {}
   };
 

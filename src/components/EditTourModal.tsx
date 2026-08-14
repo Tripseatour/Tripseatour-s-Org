@@ -26,8 +26,6 @@ export const EditTourModal: React.FC<EditTourModalProps> = ({
   onClose,
   onSave,
 }) => {
-  if (!isOpen) return null;
-
   const isEditing = Boolean(tour);
 
   // Tour Form State
@@ -123,6 +121,8 @@ export const EditTourModal: React.FC<EditTourModalProps> = ({
       setHighlightsTH(['ดำน้ำชมปะการังน้ำใส', 'ชมหาดทรายขาวละเอียด', 'รับประทานอาหารอร่อยริมทะเล']);
     }
   }, [tour, isOpen]);
+
+  if (!isOpen) return null;
 
   // Category map labels
   const categoryLabelsMap: Record<string, { TH: string; EN: string }> = {

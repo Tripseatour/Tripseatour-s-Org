@@ -21,10 +21,6 @@ export const BookingModal: React.FC<BookingModalProps> = ({
   onClose,
   onBookingCreated,
 }) => {
-  if (!tour) return null;
-
-  const t = translations[currentLang];
-
   // Default travel date tomorrow
   const tomorrow = new Date();
   tomorrow.setDate(tomorrow.getDate() + 1);
@@ -55,10 +51,13 @@ export const BookingModal: React.FC<BookingModalProps> = ({
   const [completedBooking, setCompletedBooking] = useState<Booking | null>(null);
 
   // Price Calculation
-  const totalAmount = (adults * tour.priceAdult) + (children * tour.priceChild);
+  const priceAdult = tour?.priceAdult || 0;
+  const priceChild = tour?.priceChild || 0;
+  const totalAmount = (adults * priceAdult) + (children * priceChild);
 
   // Generate PromptPay QR Data URL
   useEffect(() => {
+    if (!tour) return;
     let isMounted = true;
     async function loadQR() {
       const dataUrl = await generatePromptPayQRDataUrl(settings.promptPayId, totalAmount);
@@ -66,7 +65,11 @@ export const BookingModal: React.FC<BookingModalProps> = ({
     }
     loadQR();
     return () => { isMounted = false; };
-  }, [settings.promptPayId, totalAmount]);
+  }, [tour, settings.promptPayId, totalAmount]);
+
+  if (!tour) return null;
+
+  const t = translations[currentLang];
 
   // Handle Slip Upload
   const handleSlipChange = (e: React.ChangeEvent<HTMLInputElement>) => {

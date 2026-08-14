@@ -409,7 +409,7 @@ app.post('/api/tours', async (req, res) => {
   };
   tours.unshift(newTour);
   await persistState('tours');
-  res.json(newTour);
+  res.json({ ...newTour, version: syncMetadata.version });
 });
 
 app.put('/api/tours/:id', async (req, res) => {
@@ -418,7 +418,7 @@ app.put('/api/tours/:id', async (req, res) => {
   if (index !== -1) {
     tours[index] = { ...tours[index], ...req.body };
     await persistState('tours');
-    res.json(tours[index]);
+    res.json({ ...tours[index], version: syncMetadata.version });
   } else {
     res.status(404).json({ error: 'Tour not found' });
   }
@@ -428,7 +428,7 @@ app.delete('/api/tours/:id', async (req, res) => {
   const { id } = req.params;
   tours = tours.filter(t => t.id !== id);
   await persistState('tours');
-  res.json({ success: true, id });
+  res.json({ success: true, id, version: syncMetadata.version });
 });
 
 // --- Bookings ---
@@ -514,7 +514,7 @@ app.post('/api/bookings', async (req, res) => {
   await persistState('bookings');
   await persistState('customers');
 
-  res.json(newBooking);
+  res.json({ ...newBooking, version: syncMetadata.version });
 });
 
 app.post('/api/bookings/:id/upload-slip', async (req, res) => {
@@ -538,7 +538,7 @@ app.post('/api/bookings/:id/upload-slip', async (req, res) => {
   await sendLineNotification(msg, booking.bookingRef, 'NEW_ORDER', booking.slipUrl || booking.tourImage);
   await persistState('bookings');
 
-  res.json(booking);
+  res.json({ ...booking, version: syncMetadata.version });
 });
 
 app.put('/api/bookings/:id/status', async (req, res) => {
@@ -580,7 +580,7 @@ app.put('/api/bookings/:id/status', async (req, res) => {
 
   await persistState('bookings');
 
-  res.json(booking);
+  res.json({ ...booking, version: syncMetadata.version });
 });
 
 // Delete Booking Order API
@@ -595,7 +595,7 @@ app.delete('/api/bookings/:id', async (req, res) => {
       console.warn('Supabase row delete info:', e);
     }
   }
-  res.json({ success: true, id, message: 'Deleted booking successfully' });
+  res.json({ success: true, id, version: syncMetadata.version, message: 'Deleted booking successfully' });
 });
 
 // Supabase Connection Status API
@@ -686,7 +686,7 @@ app.post('/api/reviews', async (req, res) => {
   }
 
   await persistState('reviews');
-  res.json(newRev);
+  res.json({ ...newRev, version: syncMetadata.version });
 });
 
 app.put('/api/reviews/:id/reply', async (req, res) => {
@@ -697,7 +697,7 @@ app.put('/api/reviews/:id/reply', async (req, res) => {
     rev.adminReply = reply;
     rev.adminReplyDate = new Date().toISOString().split('T')[0];
     await persistState('reviews');
-    res.json(rev);
+    res.json({ ...rev, version: syncMetadata.version });
   } else {
     res.status(404).json({ error: 'Review not found' });
   }
@@ -710,7 +710,7 @@ app.put('/api/reviews/:id/status', async (req, res) => {
   if (rev) {
     rev.isApproved = isApproved !== undefined ? isApproved : !rev.isApproved;
     await persistState('reviews');
-    res.json(rev);
+    res.json({ ...rev, version: syncMetadata.version });
   } else {
     res.status(404).json({ error: 'Review not found' });
   }
@@ -722,7 +722,7 @@ app.delete('/api/reviews/:id', async (req, res) => {
   reviews = reviews.filter(r => r.id !== id);
   if (reviews.length < initialLen) {
     await persistState('reviews');
-    res.json({ success: true, message: 'Review deleted successfully' });
+    res.json({ success: true, id, version: syncMetadata.version, message: 'Review deleted successfully' });
   } else {
     res.status(404).json({ error: 'Review not found' });
   }
@@ -945,7 +945,7 @@ app.put('/api/customers/:id', async (req, res) => {
     if (nationality !== undefined) cust.nationality = nationality;
     
     await persistState('customers');
-    res.json(cust);
+    res.json({ ...cust, version: syncMetadata.version });
   } else {
     res.status(404).json({ error: 'Customer not found' });
   }
@@ -955,7 +955,7 @@ app.delete('/api/customers/:id', async (req, res) => {
   const { id } = req.params;
   customers = customers.filter(c => c.id !== id);
   await persistState('customers');
-  res.json({ success: true, message: 'Customer deleted successfully' });
+  res.json({ success: true, id, version: syncMetadata.version, message: 'Customer deleted successfully' });
 });
 
 // --- Stats Dashboard ---
@@ -1068,7 +1068,7 @@ app.get('/api/settings', (req, res) => {
 app.put('/api/settings', async (req, res) => {
   settings = { ...settings, ...req.body };
   await persistState('settings');
-  res.json(settings);
+  res.json({ ...settings, version: syncMetadata.version });
 });
 
 app.post('/api/line/notify', async (req, res) => {
