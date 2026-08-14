@@ -126,6 +126,13 @@ export const supabaseApi = {
     if (!client) return null;
 
     try {
+      // 1. Check app_store backup key 'bookings' FIRST because it holds the authoritative array (including deletions)
+      const { data: storeData } = await client.from('app_store').select('value').eq('key', 'bookings').maybeSingle();
+      if (storeData && storeData.value) {
+        return JSON.parse(storeData.value);
+      }
+
+      // 2. Fallback to relational 'bookings' table if app_store key not set yet
       const { data, error } = await client
         .from('bookings')
         .select('*')
@@ -164,12 +171,6 @@ export const supabaseApi = {
           reminderSent: b.reminder_sent,
           notes: b.notes,
         }));
-      }
-
-      // Check app_store backup key 'bookings'
-      const { data: storeData } = await client.from('app_store').select('value').eq('key', 'bookings').maybeSingle();
-      if (storeData && storeData.value) {
-        return JSON.parse(storeData.value);
       }
 
       if (!error && data && data.length === 0) {
@@ -557,24 +558,21 @@ ALTER TABLE public.reviews ENABLE ROW LEVEL SECURITY;
 -- Public RLS policies (Safe drop & create)
 DROP POLICY IF EXISTS "Allow public read app_store" ON public.app_store;
 DROP POLICY IF EXISTS "Allow public write app_store" ON public.app_store;
+DROP POLICY IF EXISTS "Allow public all app_store" ON public.app_store;
 DROP POLICY IF EXISTS "Allow public read settings" ON public.settings;
 DROP POLICY IF EXISTS "Allow public write settings" ON public.settings;
+DROP POLICY IF EXISTS "Allow public all settings" ON public.settings;
 DROP POLICY IF EXISTS "Allow public read bookings" ON public.bookings;
 DROP POLICY IF EXISTS "Allow public insert bookings" ON public.bookings;
 DROP POLICY IF EXISTS "Allow public update bookings" ON public.bookings;
+DROP POLICY IF EXISTS "Allow public delete bookings" ON public.bookings;
+DROP POLICY IF EXISTS "Allow public all bookings" ON public.bookings;
 DROP POLICY IF EXISTS "Allow public read reviews" ON public.reviews;
 DROP POLICY IF EXISTS "Allow public insert reviews" ON public.reviews;
+DROP POLICY IF EXISTS "Allow public all reviews" ON public.reviews;
 
-CREATE POLICY "Allow public read app_store" ON public.app_store FOR SELECT USING (true);
-CREATE POLICY "Allow public write app_store" ON public.app_store FOR ALL USING (true);
-
-CREATE POLICY "Allow public read settings" ON public.settings FOR SELECT USING (true);
-CREATE POLICY "Allow public write settings" ON public.settings FOR ALL USING (true);
-
-CREATE POLICY "Allow public read bookings" ON public.bookings FOR SELECT USING (true);
-CREATE POLICY "Allow public insert bookings" ON public.bookings FOR INSERT WITH CHECK (true);
-CREATE POLICY "Allow public update bookings" ON public.bookings FOR UPDATE USING (true);
-
-CREATE POLICY "Allow public read reviews" ON public.reviews FOR SELECT USING (true);
-CREATE POLICY "Allow public insert reviews" ON public.reviews FOR INSERT WITH CHECK (true);
+CREATE POLICY "Allow public all app_store" ON public.app_store FOR ALL USING (true);
+CREATE POLICY "Allow public all settings" ON public.settings FOR ALL USING (true);
+CREATE POLICY "Allow public all bookings" ON public.bookings FOR ALL USING (true);
+CREATE POLICY "Allow public all reviews" ON public.reviews FOR ALL USING (true);
 `;

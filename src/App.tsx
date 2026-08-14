@@ -175,30 +175,45 @@ export default function App() {
         const directBookings = await supabaseApi.getBookings();
         if (directBookings !== null) {
           serverBookings = directBookings;
+        } else {
+          serverBookings = initialBookings;
+          supabaseApi.saveBookingsBackup(initialBookings).catch(() => {});
         }
       }
       if (!serverSettings) {
         const directSettings = await supabaseApi.getSettings();
         if (directSettings) {
           serverSettings = directSettings;
+        } else {
+          serverSettings = initialSettings;
+          supabaseApi.saveSettings(initialSettings).catch(() => {});
         }
       }
       if (serverTours === null) {
         const directTours = await supabaseApi.getTours();
         if (directTours !== null) {
           serverTours = directTours;
+        } else {
+          serverTours = initialTours;
+          supabaseApi.saveTours(initialTours).catch(() => {});
         }
       }
       if (serverCustomers === null) {
         const directCustomers = await supabaseApi.getCustomers();
         if (directCustomers !== null) {
           serverCustomers = directCustomers;
+        } else {
+          serverCustomers = initialCustomers;
+          supabaseApi.saveCustomers(initialCustomers).catch(() => {});
         }
       }
       if (serverReviews === null) {
         const directReviews = await supabaseApi.getReviews();
         if (directReviews !== null) {
           serverReviews = directReviews;
+        } else {
+          serverReviews = initialReviews;
+          supabaseApi.saveReviews(initialReviews).catch(() => {});
         }
       }
 
@@ -638,6 +653,7 @@ export default function App() {
     const nextReviews = reviews.map(r => r.id === id ? { ...r, adminReply: reply } : r);
     setReviews(nextReviews);
     localStorage.setItem('tst_reviews', JSON.stringify(nextReviews));
+    supabaseApi.saveReviews(nextReviews).catch(() => {});
     showToast('💬 บันทึกคำตอบกลับรีวิวเรียบร้อย');
     try {
       const res = await fetch(`/api/reviews/${id}/reply`, {
@@ -657,6 +673,7 @@ export default function App() {
     const nextReviews = reviews.filter(r => r.id !== id);
     setReviews(nextReviews);
     localStorage.setItem('tst_reviews', JSON.stringify(nextReviews));
+    supabaseApi.saveReviews(nextReviews).catch(() => {});
     showToast('🗑️ ลบรีวิวเรียบร้อยแล้ว');
     try {
       const res = await fetch(`/api/reviews/${id}`, { method: 'DELETE' });
