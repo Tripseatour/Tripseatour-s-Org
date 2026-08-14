@@ -278,8 +278,12 @@ async function sendLineNotification(
     timestamp: new Date().toISOString()
   };
 
-  const channelToken = settings.lineMessagingChannelAccessToken || settings.lineNotifyToken;
-  const targetId = settings.lineMessagingUserId;
+  const channelToken = (settings.lineMessagingChannelAccessToken && settings.lineMessagingChannelAccessToken.trim().length > 0 && !settings.lineMessagingChannelAccessToken.startsWith('SIMULATED'))
+    ? settings.lineMessagingChannelAccessToken.trim()
+    : initialSettings.lineMessagingChannelAccessToken;
+  const targetId = (settings.lineMessagingUserId && settings.lineMessagingUserId.trim().length > 0)
+    ? settings.lineMessagingUserId.trim()
+    : initialSettings.lineMessagingUserId;
 
   if (channelToken && !channelToken.startsWith('SIMULATED')) {
     try {

@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import {
   BarChart3, DollarSign, ShoppingBag, Clock, CheckCircle2, AlertTriangle, Users,
-  Settings, MessageCircle, QrCode, Plus, Search, Eye, Check, X, RefreshCw, Send, Image as ImageIcon,
+  Settings, MessageCircle, QrCode, Plus, Search, Eye, EyeOff, Copy, Check, X, RefreshCw, Send, Image as ImageIcon,
   ChevronRight, Filter, FileSpreadsheet, Sparkles, LogOut, Lock, Key, Ticket, Trash2, Edit3, Calendar, ListChecks,
   Star, MessageSquare, Bot, UserPlus, UserMinus, ShieldCheck, Mail, Database
 } from 'lucide-react';
@@ -12,6 +12,7 @@ import { Booking, Tour, Customer, Review, AppSettings, LineNotificationLog, Sale
 import { TicketVoucher } from './TicketVoucher';
 import { EditTourModal } from './EditTourModal';
 import { isSupabaseConfigured, SUPABASE_SQL_SCHEMA } from '../lib/supabase';
+import { initialSettings } from '../data/mockData';
 
 interface AdminDashboardProps {
   bookings: Booking[];
@@ -103,6 +104,8 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
   const [groupFetchStatus, setGroupFetchStatus] = useState<string | null>(null);
   const [copiedSql, setCopiedSql] = useState(false);
   const [saveSuccess, setSaveSuccess] = useState(false);
+  const [showToken, setShowToken] = useState(false);
+  const [copiedToken, setCopiedToken] = useState(false);
 
   // Supabase Status & Purge State
   const [supabaseStatus, setSupabaseStatus] = useState<{ connected: boolean; url: string | null; error?: string | null } | null>(null);
@@ -1356,28 +1359,161 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                     />
                   </div>
 
-                  <div className="pt-2 border-t border-slate-700/80">
-                    <label className="text-slate-300 font-bold block mb-1">
-                      LINE Target Group ID (สำหรับส่งข้อความตรง Push Message เข้ากลุ่มแอดมิน)
-                    </label>
-                    <div className="flex gap-2">
-                      <input
-                        type="text"
-                        value={formSettings.lineMessagingUserId || ''}
-                        onChange={(e) => setFormSettings({ ...formSettings, lineMessagingUserId: e.target.value })}
-                        placeholder="ระบุ Group ID เช่น C1234567890abcdef1234567890abcdef"
-                        className="flex-1 bg-slate-900 border border-slate-700 rounded-xl p-3 text-white text-xs font-mono focus:ring-2 focus:ring-teal-500"
-                      />
-                      <button
-                        type="button"
-                        onClick={fetchDetectedGroups}
-                        disabled={isFetchingGroups}
-                        className="bg-teal-600/80 hover:bg-teal-500 text-white font-bold px-3.5 rounded-xl text-xs flex items-center gap-1.5 transition shrink-0 border border-teal-500/30"
-                      >
-                        <RefreshCw className={`w-3.5 h-3.5 ${isFetchingGroups ? 'animate-spin' : ''}`} />
-                        <span>ดึง Group ID</span>
-                      </button>
+                  {/* LINE Messaging API Configuration Card */}
+                  <div className="pt-4 border-t border-slate-700/80 space-y-4">
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-2">
+                        <MessageCircle className="w-4 h-4 text-emerald-400" />
+                        <span className="font-bold text-white text-xs">LINE Messaging API (แจ้งเตือนออเดอร์เข้าไลน์)</span>
+                      </div>
+                      {formSettings.lineMessagingChannelAccessToken && formSettings.lineMessagingChannelAccessToken.length > 20 ? (
+                        <span className="px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-300 text-[10px] font-bold border border-emerald-500/30 flex items-center gap-1">
+                          <Check className="w-3 h-3" /> Token พร้อมใช้งาน ({formSettings.lineMessagingChannelAccessToken.length} ตัวอักษร)
+                        </span>
+                      ) : (
+                        <span className="px-2 py-0.5 rounded-full bg-rose-500/20 text-rose-300 text-[10px] font-bold border border-rose-500/30 flex items-center gap-1">
+                          <AlertTriangle className="w-3 h-3" /> ยังไม่มี Token
+                        </span>
+                      )}
                     </div>
+
+                    {/* Channel Access Token Input */}
+                    <div>
+                      <div className="flex items-center justify-between mb-1">
+                        <label className="text-slate-300 font-bold text-xs flex items-center gap-1.5">
+                          <Key className="w-3.5 h-3.5 text-amber-400" />
+                          <span>Channel Access Token (Long-Lived)</span>
+                        </label>
+                        <div className="flex items-center gap-2 text-[11px]">
+                          <button
+                            type="button"
+                            onClick={() => {
+                              if (formSettings.lineMessagingChannelAccessToken) {
+                                navigator.clipboard.writeText(formSettings.lineMessagingChannelAccessToken);
+                                setCopiedToken(true);
+                                setTimeout(() => setCopiedToken(false), 2000);
+                              }
+                            }}
+                            className="text-slate-400 hover:text-teal-300 transition flex items-center gap-1"
+                          >
+                            <Copy className="w-3 h-3" />
+                            <span>{copiedToken ? 'คัดลอกแล้ว!' : 'คัดลอก'}</span>
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => setShowToken(!showToken)}
+                            className="text-slate-400 hover:text-white transition flex items-center gap-1"
+                          >
+                            {showToken ? <EyeOff className="w-3 h-3" /> : <Eye className="w-3 h-3" />}
+                            <span>{showToken ? 'ซ่อน' : 'แสดง Token'}</span>
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => setFormSettings({ ...formSettings, lineMessagingChannelAccessToken: initialSettings.lineMessagingChannelAccessToken })}
+                            className="text-amber-400 hover:text-amber-300 transition font-bold"
+                          >
+                            คืนค่าเริ่มต้น
+                          </button>
+                        </div>
+                      </div>
+
+                      {showToken ? (
+                        <textarea
+                          rows={3}
+                          value={formSettings.lineMessagingChannelAccessToken || ''}
+                          onChange={(e) => setFormSettings({ ...formSettings, lineMessagingChannelAccessToken: e.target.value })}
+                          placeholder="วาง Channel Access Token ของ LINE Messaging API ที่นี่..."
+                          className="w-full bg-slate-900 border border-slate-700 rounded-xl p-2.5 text-white text-xs font-mono break-all focus:ring-2 focus:ring-teal-500"
+                        />
+                      ) : (
+                        <input
+                          type="password"
+                          value={formSettings.lineMessagingChannelAccessToken || ''}
+                          onChange={(e) => setFormSettings({ ...formSettings, lineMessagingChannelAccessToken: e.target.value })}
+                          placeholder="วาง Channel Access Token ของ LINE Messaging API ที่นี่..."
+                          className="w-full bg-slate-900 border border-slate-700 rounded-xl p-2.5 text-white text-xs font-mono focus:ring-2 focus:ring-teal-500"
+                        />
+                      )}
+                      <p className="text-[10px] text-slate-400 mt-1">
+                        Token สำหรับให้ระบบส่งการแจ้งเตือนยอดจอง/สลิปโอนเงินเข้า LINE OA หรือ LINE Group ของแอดมินอัตโนมัติ
+                      </p>
+                    </div>
+
+                    {/* LINE OA ID & Group ID */}
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                      <div>
+                        <label className="text-slate-300 font-bold block mb-1 text-xs">
+                          LINE Official Account ID (@ID)
+                        </label>
+                        <input
+                          type="text"
+                          value={formSettings.lineOaId || '@056hxinu'}
+                          onChange={(e) => setFormSettings({ ...formSettings, lineOaId: e.target.value })}
+                          placeholder="เช่น @056hxinu"
+                          className="w-full bg-slate-900 border border-slate-700 rounded-xl p-2.5 text-white text-xs font-mono focus:ring-2 focus:ring-teal-500"
+                        />
+                      </div>
+
+                      <div>
+                        <label className="text-slate-300 font-bold block mb-1 text-xs">
+                          LINE Target Group ID / User ID
+                        </label>
+                        <div className="flex gap-1.5">
+                          <input
+                            type="text"
+                            value={formSettings.lineMessagingUserId || ''}
+                            onChange={(e) => setFormSettings({ ...formSettings, lineMessagingUserId: e.target.value })}
+                            placeholder="เช่น C1bb0d71ad5dbb960801dad6bd5208afa"
+                            className="flex-1 bg-slate-900 border border-slate-700 rounded-xl p-2.5 text-white text-xs font-mono focus:ring-2 focus:ring-teal-500"
+                          />
+                          <button
+                            type="button"
+                            onClick={fetchDetectedGroups}
+                            disabled={isFetchingGroups}
+                            title="ดึง Group ID ล่าสุดจากบอท"
+                            className="bg-teal-600/80 hover:bg-teal-500 text-white font-bold px-3 rounded-xl text-xs flex items-center gap-1 transition shrink-0 border border-teal-500/30"
+                          >
+                            <RefreshCw className={`w-3.5 h-3.5 ${isFetchingGroups ? 'animate-spin' : ''}`} />
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Detected Groups List if any */}
+                    {detectedGroups && detectedGroups.length > 0 && (
+                      <div className="bg-slate-900/90 border border-slate-700/80 p-3 rounded-xl space-y-2">
+                        <div className="text-[11px] font-bold text-teal-300 flex items-center justify-between">
+                          <span>กลุ่ม LINE ที่บอทตรวจพบ ({detectedGroups.length} กลุ่ม):</span>
+                          <span className="text-[10px] text-slate-400">คลิกเลือกเพื่อใช้งาน</span>
+                        </div>
+                        <div className="space-y-1.5 max-h-32 overflow-y-auto">
+                          {detectedGroups.map((g) => (
+                            <div key={g.groupId} className="flex items-center justify-between bg-slate-950 p-2 rounded-lg text-xs">
+                              <span className="font-mono text-[11px] text-slate-300 truncate max-w-[180px]">{g.groupId}</span>
+                              <div className="flex items-center gap-1">
+                                <button
+                                  type="button"
+                                  onClick={() => setFormSettings({ ...formSettings, lineMessagingUserId: g.groupId })}
+                                  className="bg-teal-600 hover:bg-teal-500 text-white px-2 py-0.5 rounded text-[10px] font-bold"
+                                >
+                                  เลือกกลุ่มนี้
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => handleSendGroupIdToBot(g.groupId)}
+                                  className="bg-slate-800 hover:bg-slate-700 text-slate-300 px-2 py-0.5 rounded text-[10px]"
+                                >
+                                  ส่งยืนยัน
+                                </button>
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+                    {groupFetchStatus && (
+                      <p className="text-[11px] text-teal-400 font-medium">{groupFetchStatus}</p>
+                    )}
                   </div>
 
                   {saveSuccess && (

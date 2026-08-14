@@ -1,5 +1,6 @@
 import { createClient, SupabaseClient } from '@supabase/supabase-js';
 import { Booking, Tour, Review, AppSettings, LineNotificationLog, Customer } from '../types';
+import { initialSettings } from '../data/mockData';
 
 // Retrieve Supabase environment variables
 const DEFAULT_SUPABASE_URL = 'https://tljofqremlconawmtndd.supabase.co';
@@ -105,16 +106,79 @@ CREATE TABLE IF NOT EXISTS public.settings (
 ALTER TABLE public.bookings ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.reviews ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.settings ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.app_store ENABLE ROW LEVEL SECURITY;
 
 -- Allow public read/write access policies (for client app)
+DROP POLICY IF EXISTS "Allow public read bookings" ON public.bookings;
+DROP POLICY IF EXISTS "Allow public insert bookings" ON public.bookings;
+DROP POLICY IF EXISTS "Allow public update bookings" ON public.bookings;
+DROP POLICY IF EXISTS "Allow public delete bookings" ON public.bookings;
 CREATE POLICY "Allow public read bookings" ON public.bookings FOR SELECT USING (true);
 CREATE POLICY "Allow public insert bookings" ON public.bookings FOR INSERT WITH CHECK (true);
 CREATE POLICY "Allow public update bookings" ON public.bookings FOR UPDATE USING (true);
+CREATE POLICY "Allow public delete bookings" ON public.bookings FOR DELETE USING (true);
 
+DROP POLICY IF EXISTS "Allow public read reviews" ON public.reviews;
+DROP POLICY IF EXISTS "Allow public insert reviews" ON public.reviews;
+DROP POLICY IF EXISTS "Allow public update reviews" ON public.reviews;
+DROP POLICY IF EXISTS "Allow public delete reviews" ON public.reviews;
 CREATE POLICY "Allow public read reviews" ON public.reviews FOR SELECT USING (true);
 CREATE POLICY "Allow public insert reviews" ON public.reviews FOR INSERT WITH CHECK (true);
+CREATE POLICY "Allow public update reviews" ON public.reviews FOR UPDATE USING (true);
+CREATE POLICY "Allow public delete reviews" ON public.reviews FOR DELETE USING (true);
 
+DROP POLICY IF EXISTS "Allow public read settings" ON public.settings;
+DROP POLICY IF EXISTS "Allow public insert settings" ON public.settings;
+DROP POLICY IF EXISTS "Allow public update settings" ON public.settings;
 CREATE POLICY "Allow public read settings" ON public.settings FOR SELECT USING (true);
+CREATE POLICY "Allow public insert settings" ON public.settings FOR INSERT WITH CHECK (true);
+CREATE POLICY "Allow public update settings" ON public.settings FOR UPDATE USING (true);
+
+DROP POLICY IF EXISTS "Allow public read app_store" ON public.app_store;
+DROP POLICY IF EXISTS "Allow public insert app_store" ON public.app_store;
+DROP POLICY IF EXISTS "Allow public update app_store" ON public.app_store;
+DROP POLICY IF EXISTS "Allow public delete app_store" ON public.app_store;
+CREATE POLICY "Allow public read app_store" ON public.app_store FOR SELECT USING (true);
+CREATE POLICY "Allow public insert app_store" ON public.app_store FOR INSERT WITH CHECK (true);
+CREATE POLICY "Allow public update app_store" ON public.app_store FOR UPDATE USING (true);
+CREATE POLICY "Allow public delete app_store" ON public.app_store FOR DELETE USING (true);
+
+-- 4. SEED / UPDATE DEFAULT SETTINGS WITH LINE CHANNEL ACCESS TOKEN
+INSERT INTO public.settings (
+  id, 
+  site_name, 
+  company_name, 
+  promptpay_id, 
+  promptpay_name, 
+  line_messaging_channel_access_token, 
+  line_messaging_user_id, 
+  line_oa_id, 
+  contact_phone, 
+  contact_email, 
+  address, 
+  admin_pin
+)
+VALUES (
+  1, 
+  'Trip Sea Tour Phuket', 
+  'บจก. ทริปซีทัวร์ ภูเก็ต', 
+  '0825257914', 
+  'นายธนพล สุขสวัสดิ์', 
+  'Na3ekdkIyTshDZwZItjOQGv4MXBqo/j6zzXfoES2K6Od6HEjLXDjookdpV5QzuUA6FqXknMZL3MwgiPNmupdAy9oZweKN5QKlTjdloODikwIgrlJEeyrWJW7vAzydq38jHDmKR1NZE58ji2oYNy9VwdB04t89/1O/w1cDnyilFU=', 
+  'C1bb0d71ad5dbb960801dad6bd5208afa', 
+  '@056hxinu', 
+  '082-525-7914, 076-123-456', 
+  'contact@tripseatour.com', 
+  '123/45 หมู่ 5 ต.รัษฎา อ.เมือง จ.ภูเก็ต 83000', 
+  '1234'
+)
+ON CONFLICT (id) DO UPDATE SET
+  line_messaging_channel_access_token = EXCLUDED.line_messaging_channel_access_token,
+  line_messaging_user_id = EXCLUDED.line_messaging_user_id,
+  line_oa_id = EXCLUDED.line_oa_id,
+  promptpay_id = EXCLUDED.promptpay_id,
+  promptpay_name = EXCLUDED.promptpay_name,
+  company_name = EXCLUDED.company_name;
 
 ======================================================================== */
 
@@ -201,18 +265,19 @@ export const supabaseApi = {
       }
       const s = data[0];
       return {
-        siteName: s.site_name || '',
-        companyName: s.company_name || '',
-        promptPayId: s.promptpay_id || '',
-        promptPayName: s.promptpay_name || '',
-        lineMessagingChannelAccessToken: s.line_messaging_channel_access_token || s.line_notify_token || '',
-        lineMessagingUserId: s.line_messaging_user_id || '',
-        lineNotifyToken: s.line_notify_token || '',
-        lineOaId: s.line_oa_id || '',
-        contactPhone: s.contact_phone || '',
-        contactEmail: s.contact_email || '',
-        address: s.address || '',
-        adminPin: s.admin_pin || '1234'
+        siteName: s.site_name || initialSettings.siteName,
+        companyName: s.company_name || initialSettings.companyName,
+        promptPayId: s.promptpay_id || initialSettings.promptPayId,
+        promptPayName: s.promptpay_name || initialSettings.promptPayName,
+        lineMessagingChannelAccessToken: s.line_messaging_channel_access_token || s.line_notify_token || initialSettings.lineMessagingChannelAccessToken,
+        lineMessagingUserId: s.line_messaging_user_id || initialSettings.lineMessagingUserId,
+        lineNotifyToken: s.line_notify_token || initialSettings.lineNotifyToken,
+        lineOaId: s.line_oa_id || initialSettings.lineOaId,
+        contactPhone: s.contact_phone || initialSettings.contactPhone,
+        contactEmail: s.contact_email || initialSettings.contactEmail,
+        address: s.address || initialSettings.address,
+        adminPin: s.admin_pin || initialSettings.adminPin,
+        adminGoogleEmails: s.admin_google_emails || initialSettings.adminGoogleEmails
       };
     } catch (e) {
       console.error('getSettings error, fallback to local:', e);
