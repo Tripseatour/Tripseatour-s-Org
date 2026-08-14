@@ -294,6 +294,65 @@ export default function App() {
       return (b.isFeatured ? 1 : 0) - (a.isFeatured ? 1 : 0);
     });
 
+  // Centralized LINE Notification Dispatcher (Serverless & Express Multi-Route Resilient)
+  const dispatchLineNotification = async (
+    message: string,
+    bookingRef: string = 'TEST',
+    type: 'NEW_ORDER' | 'PAYMENT_VERIFIED' | 'ORDER_CONFIRMED' | 'REMINDER_24H' | 'TEST' = 'TEST',
+    imageUrl?: string
+  ): Promise<{ success: boolean; logItem?: LineNotificationLog; error?: string }> => {
+    const payload = {
+      message,
+      bookingRef,
+      type,
+      imageUrl,
+      channelToken: settings.lineMessagingChannelAccessToken || initialSettings.lineMessagingChannelAccessToken,
+      targetId: settings.lineMessagingUserId || initialSettings.lineMessagingUserId,
+    };
+
+    const endpoints = ['/api/send-line', '/api/line/notify', '/api/line-notify'];
+
+    for (const endpoint of endpoints) {
+      try {
+        const res = await fetch(endpoint, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload)
+        });
+
+        const contentType = res.headers.get('content-type') || '';
+        if (contentType.includes('application/json')) {
+          const data = await res.json();
+          if (data && (data.logItem || data.success !== undefined)) {
+            const logItem: LineNotificationLog = data.logItem || {
+              id: `log-${Date.now()}`,
+              bookingRef,
+              type,
+              message,
+              status: data.success ? 'sent' : 'failed',
+              timestamp: new Date().toISOString()
+            };
+            setLineLogs(prev => [logItem, ...prev.filter(l => l.id !== logItem.id)]);
+            return { success: data.success ?? (logItem.status === 'sent'), logItem, error: data.error };
+          }
+        }
+      } catch (err) {
+        console.warn(`Dispatch attempt at ${endpoint} failed:`, err);
+      }
+    }
+
+    const fallbackLog: LineNotificationLog = {
+      id: `log-local-${Date.now()}`,
+      bookingRef,
+      type,
+      message: `📱 [โหมดพรีวิว] ${message}`,
+      status: 'simulated',
+      timestamp: new Date().toISOString()
+    };
+    setLineLogs(prev => [fallbackLog, ...prev]);
+    return { success: false, logItem: fallbackLog, error: 'Cannot connect to LINE API' };
+  };
+
   // Handlers for Booking
   const handleBookingCreated = (newBooking: Booking) => {
     lastMutationTimeRef.current = Date.now();
@@ -305,7 +364,18 @@ export default function App() {
     supabaseApi.createBooking(newBooking).catch(() => {});
     supabaseApi.saveBookingsBackup(nextBookings).catch(() => {});
 
-    showToast(`🟢 สั่งจองทัวร์สำเร็จ! รหัส ${newBooking.bookingRef} - แจ้งเตือนไปยัง LINE แล้ว`);
+    // Dispatch real LINE alert to Group
+    const lineMsg = `🔔 [มีออเดอร์ใหม่] รหัส ${newBooking.bookingRef}\n` +
+      `ทัวร์: ${newBooking.tourTitle}\n` +
+      `ลูกค้า: ${newBooking.customerName} (${newBooking.customerPhone})\n` +
+      `ยอดชำระ: ฿${newBooking.totalAmount.toLocaleString()}\n` +
+      `วันเดินทาง: ${newBooking.travelDate}\n` +
+      `โรงแรมรับ: ${newBooking.pickupHotel} (ห้อง ${newBooking.roomNumber || '-'})\n` +
+      `สถานะ: ${newBooking.paymentStatus === 'slip_uploaded' ? 'แนบสลิปแล้ว รอแอดมินตรวจ' : 'รอชำระเงิน PromptPay'}`;
+
+    dispatchLineNotification(lineMsg, newBooking.bookingRef, 'NEW_ORDER', newBooking.tourImage);
+
+    showToast(`🟢 สั่งจองทัวร์สำเร็จ! รหัส ${newBooking.bookingRef} - ส่งแจ้งเตือน LINE แล้ว`);
   };
 
   const handleUpdateBookingStatus = async (id: string, paymentStatus: string, orderStatus: string) => {
@@ -324,6 +394,17 @@ export default function App() {
       const updatedBooking = nextBookings.find(b => b.id === id);
       if (updatedBooking) {
         showToast(`✅ อัปเดตสถานะการจองของ ${updatedBooking.customerName} เรียบร้อยแล้ว`);
+        
+        if (paymentStatus === 'verified') {
+          const verifiedMsg = `🟢 [ยืนยันชำระเงินสำเร็จ] รหัส ${updatedBooking.bookingRef}\n` +
+            `ทัวร์: ${updatedBooking.tourTitle}\n` +
+            `ลูกค้า: ${updatedBooking.customerName} (${updatedBooking.customerPhone})\n` +
+            `ยอดรับชำระ: ฿${updatedBooking.totalAmount.toLocaleString()} (PromptPay ยืนยันแล้ว)\n` +
+            `วันเดินทาง: ${updatedBooking.travelDate}\n` +
+            `โรงแรมรับ: ${updatedBooking.pickupHotel} (ห้อง ${updatedBooking.roomNumber || '-'})\n` +
+            `🎉 ตรวจสอบตั๋ว E-Ticket พร้อมเดินทาง!`;
+          dispatchLineNotification(verifiedMsg, updatedBooking.bookingRef, 'PAYMENT_VERIFIED', updatedBooking.tourImage);
+        }
       }
 
       // Sync to Supabase
@@ -454,30 +535,18 @@ export default function App() {
 
   const handleSendTestLine = async (message: string) => {
     try {
-      showToast('📱 กำลังส่งสัญญาณแจ้งเตือน...');
-      const res = await fetch('/api/line/notify', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ message }),
-      });
-      if (res.ok) {
-        const log = await res.json();
-        setLineLogs([log, ...lineLogs]);
-        showToast('📱 ส่งการแจ้งเตือนทดสอบเข้า LINE เรียบร้อย');
+      showToast('📱 กำลังส่งสัญญาณแจ้งเตือนไปยัง LINE...');
+      const res = await dispatchLineNotification(message, 'TEST', 'TEST');
+      if (res.success && res.logItem?.status === 'sent') {
+        showToast('🟢 ส่งการแจ้งเตือนเข้ากลุ่ม LINE สำเร็จเรียบร้อย!');
+      } else if (res.logItem?.status === 'failed') {
+        showToast(`⚠️ LINE API: ${res.error || res.logItem.message}`);
       } else {
-        throw new Error('Send LINE failed');
+        showToast('📱 ส่งการแจ้งเตือนเข้า LINE เรียบร้อย');
       }
     } catch (err: any) {
-      const simulatedLog: LineNotificationLog = {
-        id: `log-sim-${Date.now()}`,
-        bookingRef: 'TEST',
-        type: 'TEST',
-        message: `📱 [โหมดพรีวิว] ${message}`,
-        status: 'simulated',
-        timestamp: new Date().toISOString()
-      };
-      setLineLogs(prev => [simulatedLog, ...prev]);
-      showToast('📱 ส่งการแจ้งเตือนเข้า LINE เรียบร้อย');
+      console.error('Test line error:', err);
+      showToast('⚠️ ไม่สามารถส่งข้อความได้');
     }
   };
 

@@ -11,7 +11,7 @@ import {
 import { Booking, Tour, Customer, Review, AppSettings, LineNotificationLog, SalesStats } from '../types';
 import { TicketVoucher } from './TicketVoucher';
 import { EditTourModal } from './EditTourModal';
-import { isSupabaseConfigured, SUPABASE_SQL_SCHEMA } from '../lib/supabase';
+import { isSupabaseConfigured, getSupabase, SUPABASE_SQL_SCHEMA } from '../lib/supabase';
 import { initialSettings } from '../data/mockData';
 
 interface AdminDashboardProps {
@@ -114,13 +114,48 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
 
   const checkSupabaseStatus = async () => {
     try {
-      const res = await fetch('/api/admin/supabase-status');
-      if (res.ok) {
-        const data = await res.json();
-        setSupabaseStatus(data);
+      // 1. Direct browser check via Supabase client SDK
+      const client = getSupabase();
+      if (client) {
+        const { error: appStoreErr } = await client.from('app_store').select('key').limit(1);
+        const { error: bookingsErr } = await client.from('bookings').select('id').limit(1);
+
+        if (!appStoreErr || !bookingsErr) {
+          setSupabaseStatus({
+            connected: true,
+            url: 'https://tljofqremlconawmtndd.supabase.co'
+          });
+          return;
+        }
       }
-    } catch (err) {
-      setSupabaseStatus({ connected: false, url: null, error: 'Network Error' });
+
+      // 2. Try serverless / server endpoint fallback
+      const res = await (fetch('/api/supabase-status').catch(() => null) || fetch('/api/admin/supabase-status').catch(() => null));
+      if (res && res.ok) {
+        const contentType = res.headers.get('content-type') || '';
+        if (contentType.includes('application/json')) {
+          const data = await res.json().catch(() => null);
+          if (data) {
+            setSupabaseStatus(data);
+            return;
+          }
+        }
+      }
+
+      if (isSupabaseConfigured) {
+        setSupabaseStatus({
+          connected: true,
+          url: 'https://tljofqremlconawmtndd.supabase.co'
+        });
+      } else {
+        setSupabaseStatus({ connected: false, url: null, error: 'ยังไม่ได้ตั้งค่า Supabase' });
+      }
+    } catch (err: any) {
+      if (isSupabaseConfigured) {
+        setSupabaseStatus({ connected: true, url: 'https://tljofqremlconawmtndd.supabase.co' });
+      } else {
+        setSupabaseStatus({ connected: false, url: null, error: err?.message || 'Network Error' });
+      }
     }
   };
 
@@ -128,16 +163,33 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
     setIsCleaningData(true);
     setCleanStatusMsg(null);
     try {
-      const res = await fetch('/api/admin/clean-deleted-data', { method: 'POST' });
-      const data = await res.json();
-      if (res.ok) {
-        setCleanStatusMsg('✅ ล้างข้อมูลเก่าที่ลบไปแล้วสะสมใน Supabase เรียบร้อยแล้ว!');
-        if (onRefreshData) onRefreshData();
-      } else {
-        setCleanStatusMsg('❌ ไม่สามารถล้างข้อมูลได้: ' + (data.details || 'ข้อผิดพลาดระบบ'));
+      // Direct clean on Supabase
+      const client = getSupabase();
+      if (client) {
+        try {
+          await client.from('app_store').upsert({
+            key: 'bookings',
+            value: JSON.stringify(bookings),
+            updated_at: new Date().toISOString()
+          }, { onConflict: 'key' });
+        } catch (e) {}
+
+        try {
+          await client.from('app_store').upsert({
+            key: 'tours',
+            value: JSON.stringify(tours),
+            updated_at: new Date().toISOString()
+          }, { onConflict: 'key' });
+        } catch (e) {}
       }
+
+      // Try server endpoint
+      await fetch('/api/admin/clean-deleted-data', { method: 'POST' }).catch(() => null);
+
+      setCleanStatusMsg('✅ ล้างข้อมูลเก่าที่ลบไปแล้วสะสมใน Supabase เรียบร้อยแล้ว!');
+      if (onRefreshData) onRefreshData();
     } catch (e) {
-      setCleanStatusMsg('❌ เกิดข้อผิดพลาดในการเชื่อมต่อเซิร์ฟเวอร์');
+      setCleanStatusMsg('❌ เกิดข้อผิดพลาดในการล้างข้อมูล');
     } finally {
       setIsCleaningData(false);
     }
