@@ -279,6 +279,11 @@ export default function App() {
     const nextBookings = [newBooking, ...bookings];
     setBookings(nextBookings);
     localStorage.setItem('tst_bookings', JSON.stringify(nextBookings));
+
+    // Save to Supabase (works on Vercel and production)
+    supabaseApi.createBooking(newBooking).catch(() => {});
+    supabaseApi.saveBookingsBackup(nextBookings).catch(() => {});
+
     showToast(`🟢 สั่งจองทัวร์สำเร็จ! รหัส ${newBooking.bookingRef} - แจ้งเตือนไปยัง LINE แล้ว`);
   };
 
@@ -300,13 +305,22 @@ export default function App() {
         showToast(`✅ อัปเดตสถานะการจองของ ${updatedBooking.customerName} เรียบร้อยแล้ว`);
       }
 
+      // Sync to Supabase
+      supabaseApi.updateBooking(id, { 
+        paymentStatus: paymentStatus as any, 
+        orderStatus: (paymentStatus === 'verified' ? 'confirmed' : orderStatus) as any,
+        paidAt: paymentStatus === 'verified' ? new Date().toISOString() : undefined 
+      }).catch(() => {});
+      supabaseApi.saveBookingsBackup(nextBookings).catch(() => {});
+
+      // Sync to Express API
       const res = await fetch(`/api/bookings/${id}/status`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ paymentStatus, orderStatus }),
-      });
-      if (res.ok) {
-        const data = await res.json();
+      }).catch(() => null);
+      if (res && res.ok) {
+        const data = await res.json().catch(() => ({}));
         if (data.version) lastServerVersionRef.current = data.version;
       }
     } catch (err) {
@@ -322,9 +336,14 @@ export default function App() {
       localStorage.setItem('tst_bookings', JSON.stringify(nextBookings));
       showToast('🗑️ ลบคำสั่งซื้อทัวร์เรียบร้อยแล้ว');
 
-      const res = await fetch(`/api/bookings/${id}`, { method: 'DELETE' });
-      if (res.ok) {
-        const data = await res.json();
+      // Sync to Supabase
+      supabaseApi.deleteBooking(id).catch(() => {});
+      supabaseApi.saveBookingsBackup(nextBookings).catch(() => {});
+
+      // Sync to Express API
+      const res = await fetch(`/api/bookings/${id}`, { method: 'DELETE' }).catch(() => null);
+      if (res && res.ok) {
+        const data = await res.json().catch(() => ({}));
         if (data.version) lastServerVersionRef.current = data.version;
       }
     } catch (err) {
@@ -339,13 +358,17 @@ export default function App() {
       localStorage.setItem('tst_settings', JSON.stringify(newSettings));
       showToast('💾 บันทึกการตั้งค่าแล้ว');
 
+      // Sync to Supabase
+      supabaseApi.saveSettings(newSettings).catch(() => {});
+
+      // Sync to Express API
       const res = await fetch('/api/settings', {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(newSettings),
-      });
-      if (res.ok) {
-        const data = await res.json();
+      }).catch(() => null);
+      if (res && res.ok) {
+        const data = await res.json().catch(() => ({}));
         if (data.version) lastServerVersionRef.current = data.version;
       }
     } catch (err) {
@@ -361,13 +384,17 @@ export default function App() {
       localStorage.setItem('tst_customers', JSON.stringify(nextCustomers));
       showToast('💾 อัปเดตข้อมูลลูกค้าใน CRM เรียบร้อยแล้ว');
 
+      // Sync to Supabase
+      supabaseApi.saveCustomers(nextCustomers).catch(() => {});
+
+      // Sync to Express API
       const res = await fetch(`/api/customers/${id}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(updatedCustomerData),
-      });
-      if (res.ok) {
-        const data = await res.json();
+      }).catch(() => null);
+      if (res && res.ok) {
+        const data = await res.json().catch(() => ({}));
         if (data.version) lastServerVersionRef.current = data.version;
       }
     } catch (err) {
@@ -383,9 +410,13 @@ export default function App() {
       localStorage.setItem('tst_customers', JSON.stringify(nextCustomers));
       showToast('🗑️ ลบข้อมูลลูกค้าเรียบร้อยแล้ว');
 
-      const res = await fetch(`/api/customers/${id}`, { method: 'DELETE' });
-      if (res.ok) {
-        const data = await res.json();
+      // Sync to Supabase
+      supabaseApi.saveCustomers(nextCustomers).catch(() => {});
+
+      // Sync to Express API
+      const res = await fetch(`/api/customers/${id}`, { method: 'DELETE' }).catch(() => null);
+      if (res && res.ok) {
+        const data = await res.json().catch(() => ({}));
         if (data.version) lastServerVersionRef.current = data.version;
       }
     } catch (err) {
@@ -457,13 +488,17 @@ export default function App() {
       localStorage.setItem('tst_tours', JSON.stringify(nextTours));
       showToast('🏝️ เพิ่มโปรแกรมทัวร์ใหม่เรียบร้อย');
 
+      // Sync to Supabase
+      supabaseApi.saveTours(nextTours).catch(() => {});
+
+      // Sync to Express API
       const res = await fetch('/api/tours', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(newTour),
-      });
-      if (res.ok) {
-        const data = await res.json();
+      }).catch(() => null);
+      if (res && res.ok) {
+        const data = await res.json().catch(() => ({}));
         if (data.version) lastServerVersionRef.current = data.version;
       }
     } catch (err) {
@@ -479,13 +514,17 @@ export default function App() {
       localStorage.setItem('tst_tours', JSON.stringify(nextTours));
       showToast('💾 บันทึกการแก้ไขโปรแกรมทัวร์เรียบร้อย');
 
+      // Sync to Supabase
+      supabaseApi.saveTours(nextTours).catch(() => {});
+
+      // Sync to Express API
       const res = await fetch(`/api/tours/${id}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(updatedTourData),
-      });
-      if (res.ok) {
-        const data = await res.json();
+      }).catch(() => null);
+      if (res && res.ok) {
+        const data = await res.json().catch(() => ({}));
         if (data.version) lastServerVersionRef.current = data.version;
       }
     } catch (err) {
@@ -501,9 +540,13 @@ export default function App() {
       localStorage.setItem('tst_tours', JSON.stringify(nextTours));
       showToast('🗑️ ลบโปรแกรมทัวร์เรียบร้อย');
 
-      const res = await fetch(`/api/tours/${id}`, { method: 'DELETE' });
-      if (res.ok) {
-        const data = await res.json();
+      // Sync to Supabase
+      supabaseApi.saveTours(nextTours).catch(() => {});
+
+      // Sync to Express API
+      const res = await fetch(`/api/tours/${id}`, { method: 'DELETE' }).catch(() => null);
+      if (res && res.ok) {
+        const data = await res.json().catch(() => ({}));
         if (data.version) lastServerVersionRef.current = data.version;
       }
     } catch (err) {
@@ -519,15 +562,39 @@ export default function App() {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(reviewData),
-      });
-      if (res.ok) {
-        const created = await res.json();
-        if (created.version) lastServerVersionRef.current = created.version;
-        const nextReviews = [created, ...reviews];
-        setReviews(nextReviews);
-        localStorage.setItem('tst_reviews', JSON.stringify(nextReviews));
-        showToast('⭐ ขอบพระคุณสำหรับรีวิวครับ!');
+      }).catch(() => null);
+
+      if (res && res.ok) {
+        const created = await res.json().catch(() => null);
+        if (created) {
+          if (created.version) lastServerVersionRef.current = created.version;
+          const nextReviews = [created, ...reviews];
+          setReviews(nextReviews);
+          localStorage.setItem('tst_reviews', JSON.stringify(nextReviews));
+          supabaseApi.saveReviews(nextReviews).catch(() => {});
+          showToast('⭐ ขอบพระคุณสำหรับรีวิวครับ!');
+          return;
+        }
       }
+
+      // Fallback local review creation if offline / Vercel
+      const localReview: Review = {
+        id: `rev-${Date.now()}`,
+        tourId: reviewData.tourId,
+        userName: reviewData.userName,
+        userAvatar: `https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=100&auto=format&fit=crop&q=80`,
+        rating: reviewData.rating,
+        comment: reviewData.comment,
+        date: new Date().toISOString().split('T')[0],
+        verifiedBooking: true,
+        photos: reviewData.photo ? [reviewData.photo] : [],
+        isApproved: true
+      };
+      const nextReviews = [localReview, ...reviews];
+      setReviews(nextReviews);
+      localStorage.setItem('tst_reviews', JSON.stringify(nextReviews));
+      supabaseApi.saveReviews(nextReviews).catch(() => {});
+      showToast('⭐ ขอบพระคุณสำหรับรีวิวครับ!');
     } catch (err) {
       console.error(err);
     }
@@ -538,15 +605,16 @@ export default function App() {
     const nextReviews = reviews.map(r => r.id === id ? { ...r, isApproved } : r);
     setReviews(nextReviews);
     localStorage.setItem('tst_reviews', JSON.stringify(nextReviews));
+    supabaseApi.saveReviews(nextReviews).catch(() => {});
     showToast(isApproved ? '✓ อนุมัติการแสดงผลรีวิวแล้ว' : '⏳ ซ่อนรีวิวเรียบร้อย');
     try {
       const res = await fetch(`/api/reviews/${id}/status`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ isApproved })
-      });
-      if (res.ok) {
-        const data = await res.json();
+      }).catch(() => null);
+      if (res && res.ok) {
+        const data = await res.json().catch(() => ({}));
         if (data.version) lastServerVersionRef.current = data.version;
       }
     } catch (e) {}
