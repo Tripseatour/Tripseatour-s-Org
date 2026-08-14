@@ -1,4 +1,4 @@
-import React, { useRef, useState } from 'react';
+import React, { useRef, useState, useEffect } from 'react';
 import { Download, CheckCircle2, QrCode, ShieldCheck, Sparkles } from 'lucide-react';
 import { toPng } from 'html-to-image';
 import { Booking, AppSettings } from '../types';
@@ -16,6 +16,42 @@ export const TicketVoucher: React.FC<TicketVoucherProps> = ({
   const ticketRef = useRef<HTMLDivElement>(null);
   const [isDownloading, setIsDownloading] = useState(false);
   const [downloadSuccess, setDownloadSuccess] = useState(false);
+
+  // Auto-capture high-res voucher image upon mount and cache to server
+  useEffect(() => {
+    let isMounted = true;
+    const captureAndCache = async () => {
+      if (!ticketRef.current || !booking.bookingRef) return;
+      try {
+        await new Promise(r => setTimeout(r, 400));
+        if (!ticketRef.current || !isMounted) return;
+
+        const dataUrl = await toPng(ticketRef.current, {
+          quality: 0.98,
+          pixelRatio: 2,
+          backgroundColor: '#ffffff',
+        });
+
+        if (dataUrl && isMounted) {
+          // Push to memory server cache
+          fetch('/api/cache-image', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              key: `ticket_${booking.bookingRef}`,
+              dataUrl,
+              mimeType: 'image/png'
+            })
+          }).catch(() => {});
+        }
+      } catch (e) {
+        console.warn('Auto voucher capture failed (non-blocking):', e);
+      }
+    };
+
+    captureAndCache();
+    return () => { isMounted = false; };
+  }, [booking.bookingRef]);
 
   // Download ticket as high-quality PNG image
   const handleDownloadPng = async () => {

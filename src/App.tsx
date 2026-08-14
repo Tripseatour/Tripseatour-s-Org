@@ -299,13 +299,18 @@ export default function App() {
     message: string,
     bookingRef: string = 'TEST',
     type: 'NEW_ORDER' | 'PAYMENT_VERIFIED' | 'ORDER_CONFIRMED' | 'REMINDER_24H' | 'TEST' = 'TEST',
-    imageUrl?: string
+    imageUrl?: string,
+    ticketImageUrl?: string,
+    slipImageUrl?: string
   ): Promise<{ success: boolean; logItem?: LineNotificationLog; error?: string }> => {
     const payload = {
       message,
       bookingRef,
       type,
       imageUrl,
+      ticketImageUrl,
+      slipImageUrl,
+      slipUrl: slipImageUrl,
       channelToken: settings.lineMessagingChannelAccessToken || initialSettings.lineMessagingChannelAccessToken,
       targetId: settings.lineMessagingUserId || initialSettings.lineMessagingUserId,
     };
@@ -323,13 +328,13 @@ export default function App() {
         const contentType = res.headers.get('content-type') || '';
         if (contentType.includes('application/json')) {
           const data = await res.json();
-          if (data && (data.logItem || data.success !== undefined)) {
+          if (data && (data.logItem || data.success !== undefined || data.status)) {
             const logItem: LineNotificationLog = data.logItem || {
               id: `log-${Date.now()}`,
               bookingRef,
               type,
               message,
-              status: data.success ? 'sent' : 'failed',
+              status: (data.success || data.status === 'sent') ? 'sent' : 'failed',
               timestamp: new Date().toISOString()
             };
             setLineLogs(prev => [logItem, ...prev.filter(l => l.id !== logItem.id)]);
@@ -364,18 +369,27 @@ export default function App() {
     supabaseApi.createBooking(newBooking).catch(() => {});
     supabaseApi.saveBookingsBackup(nextBookings).catch(() => {});
 
-    // Dispatch real LINE alert to Group
+    // Dispatch real LINE alert to Group with Ticket & Slip images
     const lineMsg = `🔔 [มีออเดอร์ใหม่] รหัส ${newBooking.bookingRef}\n` +
-      `ทัวร์: ${newBooking.tourTitle}\n` +
-      `ลูกค้า: ${newBooking.customerName} (${newBooking.customerPhone})\n` +
-      `ยอดชำระ: ฿${newBooking.totalAmount.toLocaleString()}\n` +
-      `วันเดินทาง: ${newBooking.travelDate}\n` +
-      `โรงแรมรับ: ${newBooking.pickupHotel} (ห้อง ${newBooking.roomNumber || '-'})\n` +
-      `สถานะ: ${newBooking.paymentStatus === 'slip_uploaded' ? 'แนบสลิปแล้ว รอแอดมินตรวจ' : 'รอชำระเงิน PromptPay'}`;
+      `📍 ทัวร์: ${newBooking.tourTitle}\n` +
+      `👤 ลูกค้า: ${newBooking.customerName} (${newBooking.customerPhone})\n` +
+      `💰 ยอดชำระ: ฿${newBooking.totalAmount.toLocaleString()}\n` +
+      `📅 วันเดินทาง: ${newBooking.travelDate}\n` +
+      `🏨 โรงแรมรับ: ${newBooking.pickupHotel} (ห้อง ${newBooking.roomNumber || '-'})\n` +
+      `👥 จำนวน: ผู้ใหญ่ ${newBooking.adults} ท่าน / เด็ก ${newBooking.children || 0} ท่าน\n` +
+      `💳 สถานะ: ${newBooking.paymentStatus === 'slip_uploaded' ? 'แนบสลิปแล้ว (รอตรวจ)' : 'รอชำระเงิน'}\n` +
+      `🎟️ ตั๋ว E-Ticket และสลิปโอนเงินแนบมาในรูปภาพด้านบน`;
 
-    dispatchLineNotification(lineMsg, newBooking.bookingRef, 'NEW_ORDER', newBooking.tourImage);
+    dispatchLineNotification(
+      lineMsg, 
+      newBooking.bookingRef, 
+      'NEW_ORDER', 
+      newBooking.tourImage,
+      newBooking.ticketImageUrl,
+      newBooking.slipUrl
+    );
 
-    showToast(`🟢 สั่งจองทัวร์สำเร็จ! รหัส ${newBooking.bookingRef} - ส่งแจ้งเตือน LINE แล้ว`);
+    showToast(`🟢 สั่งจองทัวร์สำเร็จ! รหัส ${newBooking.bookingRef} - ส่งแจ้งเตือน LINE พร้อมรูปตั๋วและสลิปแล้ว`);
   };
 
   const handleUpdateBookingStatus = async (id: string, paymentStatus: string, orderStatus: string) => {
@@ -396,14 +410,21 @@ export default function App() {
         showToast(`✅ อัปเดตสถานะการจองของ ${updatedBooking.customerName} เรียบร้อยแล้ว`);
         
         if (paymentStatus === 'verified') {
-          const verifiedMsg = `🟢 [ยืนยันชำระเงินสำเร็จ] รหัส ${updatedBooking.bookingRef}\n` +
-            `ทัวร์: ${updatedBooking.tourTitle}\n` +
-            `ลูกค้า: ${updatedBooking.customerName} (${updatedBooking.customerPhone})\n` +
-            `ยอดรับชำระ: ฿${updatedBooking.totalAmount.toLocaleString()} (PromptPay ยืนยันแล้ว)\n` +
-            `วันเดินทาง: ${updatedBooking.travelDate}\n` +
-            `โรงแรมรับ: ${updatedBooking.pickupHotel} (ห้อง ${updatedBooking.roomNumber || '-'})\n` +
-            `🎉 ตรวจสอบตั๋ว E-Ticket พร้อมเดินทาง!`;
-          dispatchLineNotification(verifiedMsg, updatedBooking.bookingRef, 'PAYMENT_VERIFIED', updatedBooking.tourImage);
+          const verifiedMsg = `🟢 [ยืนยันชำระเงินสำเร็จ & ออกตั๋ว] รหัส ${updatedBooking.bookingRef}\n` +
+            `📍 ทัวร์: ${updatedBooking.tourTitle}\n` +
+            `👤 ลูกค้า: ${updatedBooking.customerName} (${updatedBooking.customerPhone})\n` +
+            `💰 ยอดรับชำระ: ฿${updatedBooking.totalAmount.toLocaleString()} (PromptPay ยืนยันแล้ว)\n` +
+            `📅 วันเดินทาง: ${updatedBooking.travelDate}\n` +
+            `🏨 โรงแรมรับ: ${updatedBooking.pickupHotel} (ห้อง ${updatedBooking.roomNumber || '-'})\n` +
+            `🎉 ออกตั๋ว E-Ticket E-Voucher เรียบร้อย พร้อมเดินทาง!`;
+          dispatchLineNotification(
+            verifiedMsg, 
+            updatedBooking.bookingRef, 
+            'PAYMENT_VERIFIED', 
+            updatedBooking.tourImage,
+            updatedBooking.ticketImageUrl,
+            updatedBooking.slipUrl
+          );
         }
       }
 

@@ -178,11 +178,21 @@ export const BookingModal: React.FC<BookingModalProps> = ({
         }
       }
 
-      // If slip uploaded, upload slip
+      // If slip uploaded, upload and cache slip
       if (slipFile) {
         bookingData.paymentStatus = 'slip_uploaded';
         bookingData.slipUrl = slipFile;
         bookingData.slipUploadedAt = new Date().toISOString();
+
+        // Cache image to server for public LINE delivery
+        fetch('/api/cache-image', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            key: `slip_${bookingData.bookingRef}`,
+            dataUrl: slipFile
+          })
+        }).catch(() => {});
 
         // 1. Double-write slip info direct to Supabase
         await supabaseApi.updateBooking(bookingData.id, {

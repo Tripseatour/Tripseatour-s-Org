@@ -63,6 +63,7 @@ export interface Booking {
   orderStatus: OrderStatus;
   slipUrl?: string;
   slipUploadedAt?: string;
+  ticketImageUrl?: string;
   paidAt?: string;
   createdAt: string;
   lineNotifySent: boolean;
