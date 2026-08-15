@@ -1,6 +1,6 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { MessageCircle, X, Send, Sparkles, Bot, User, RefreshCw, ChevronRight, Compass, ShieldCheck, CreditCard, Clock, PhoneCall } from 'lucide-react';
-import { Language } from '../types';
+import { Language, Tour, AppSettings } from '../types';
 
 interface Message {
   id: string;
@@ -10,18 +10,33 @@ interface Message {
 }
 
 interface TripSeaAiChatbotProps {
-  currentLanguage: Language;
+  currentLang?: Language;
+  currentLanguage?: Language;
+  tours?: Tour[];
+  settings?: AppSettings;
   onBookTourClick?: (tourId: string) => void;
   contactPhone?: string;
   lineOaId?: string;
+  facebookUrl?: string;
+  currentCurrency?: any;
 }
 
 export const TripSeaAiChatbot: React.FC<TripSeaAiChatbotProps> = ({
+  currentLang,
   currentLanguage,
+  tours = [],
+  settings,
   onBookTourClick,
   contactPhone = '+66 (0) 62 681 6494',
-  lineOaId = '@056hxinu'
+  lineOaId = '@056hxinu',
+  facebookUrl = 'https://www.facebook.com/tripseatoursphuket/'
 }) => {
+  const activeLang: Language = currentLang || currentLanguage || 'TH';
+  const phone = settings?.contactPhone || contactPhone || '062-681-6494 / 097-924-1399';
+  const line = settings?.lineOaId || lineOaId || '@056hxinu';
+  const fb = settings?.facebookUrl || facebookUrl;
+  const tat = settings?.tatLicenseNo || '33/11100';
+
   const [isOpen, setIsOpen] = useState(false);
   const [inputMessage, setInputMessage] = useState('');
   const [isLoading, setIsLoading] = useState(false);
@@ -56,6 +71,126 @@ export const TripSeaAiChatbot: React.FC<TripSeaAiChatbotProps> = ({
     { label: '⏰ การรับส่งที่โรงแรม', query: 'มีบริการรถรับส่งจากโรงแรมไหนบ้าง นัดกี่โมงครับ' }
   ];
 
+  // Comprehensive Client-side Smart Engine
+  const generateClientSmartAnswer = (query: string): string => {
+    const lower = (query || '').toLowerCase().trim();
+
+    const tourListText = tours && tours.length > 0
+      ? tours.map((t, idx) => `🏝️ **${idx + 1}. ${activeLang === 'EN' ? t.title.EN : t.title.TH}**\n   • ราคาโปรโมชั่น: ผู้ใหญ่ **฿${t.priceAdult.toLocaleString()}** / เด็ก **฿${t.priceChild.toLocaleString()}** (จากปกติ ฿${t.originalPriceAdult.toLocaleString()})\n   • ไฮไลท์: ${t.highlights.TH?.slice(0, 3).join(', ')}`).join('\n\n')
+      : `🏝️ **1. ทัวร์เกาะพีพี - อ่าวมาหยา - ปิเละลากูน สปีดโบ๊ท**: ผู้ใหญ่ **฿1,590** / เด็ก **฿1,190**\n` +
+        `🚣 **2. ทัวร์อ่าวพังงา - เกาะเจมส์บอนด์ - แคนูเกาะห้อง**: ผู้ใหญ่ **฿1,690** / เด็ก **฿1,290**\n` +
+        `⛵ **3. ล่องเรือยอชท์คาทามารัน เกาะเฮ & พระอาทิตย์ตกแหลมพรหมเทพ**: ผู้ใหญ่ **฿2,490** / เด็ก **฿1,790**`;
+
+    // 1. Greetings
+    if (lower === 'สวัสดี' || lower === 'สวัสดีครับ' || lower === 'สวัสดีค่ะ' || lower.includes('hello') || lower.includes('hi') || lower === 'หวัดดี' || lower === 'ดีครับ' || lower === 'ดีค่ะ' || lower.includes('hey')) {
+      return `สวัสดีค่ะ! ยินดีต้อนรับสู่ **Trip Sea Tour Phuket** ค่ะ 🌊✨\n\nเรามีบริการนำเที่ยวทางทะเลภูเก็ตครบวงจร พร้อมใบอนุญาต ททท. เลขที่ **${tat}**\n\nโปรแกรมแนะนำยอดนิยมวันนี้:\n${tourListText}\n\n💬 ท่านสามารถสอบถามรายละเอียดโปรแกรม หรือจองทัวร์ผ่านระบบบนเว็บได้ทันที หรือแอดไลน์ **${line}** (โทร **${phone}**) ได้ตลอด 24 ชม. เลยนะคะ!`;
+    }
+
+    // 2. Specific Islands / Tour Queries
+    if (lower.includes('พีพี') || lower.includes('phi phi') || lower.includes('มาหยา') || lower.includes('maya') || lower.includes('ปิเละ') || lower.includes('pileh')) {
+      const ppTour = tours.find(t => t.id.includes('phi-phi') || t.title.TH.includes('พีพี'));
+      const priceA = ppTour ? ppTour.priceAdult.toLocaleString() : '1,590';
+      const priceC = ppTour ? ppTour.priceChild.toLocaleString() : '1,190';
+      return `🏝️ **ทัวร์เกาะพีพี - อ่าวมาหยา - ปิเละลากูน - เกาะไข่ (เรือสปีดโบ๊ท)**\n\n` +
+        `• **ราคาโปรโมชั่นพิเศษ**: ผู้ใหญ่ **฿${priceA}** / เด็ก **฿${priceC}**\n` +
+        `• **จุดท่องเที่ยวไฮไลท์**:\n` +
+        `  - ถ่ายรูปชมความงามระดับโลกที่ **อ่าวมาหยา** (Maya Bay)\n` +
+        `  - กระโดดเล่นน้ำ พายแพดเดิลบอร์ดที่ **ปิเละลากูน** (Pileh Lagoon สระว่ายน้ำกลางทะเล)\n` +
+        `  - ดำน้ำตื้นชมปะการังและฝูงปลาหลากสีสัน\n` +
+        `  - พักผ่อนชายหาดขาวละเอียดที่ **เกาะไข่นอก**\n` +
+        `• **บริการที่รวมในแพ็กเกจ**: รถตู้ VIP รับส่งโรงแรม, บุฟเฟต์อาหารกลางวัน, ผลไม้และเครื่องดื่ม, อุปกรณ์ดำน้ำ Snorkel, เสื้อชูชีพ, ไกด์มืออาชีพ และประกันภัยอุบัติเหตุทางทะเลค่ะ\n\n` +
+        `กดปุ่ม **"จองทัวร์นี้"** บนหน้าเว็บเพื่อรับสิทธิ์โปรโมชั่นได้เลยค่ะ!`;
+    }
+
+    if (lower.includes('พังงา') || lower.includes('phang nga') || lower.includes('เจมส์บอนด์') || lower.includes('james bond') || lower.includes('เกาะห้อง') || lower.includes('เกาะปันหยี') || lower.includes('แคนู')) {
+      const jbTour = tours.find(t => t.id.includes('james-bond') || t.title.TH.includes('เจมส์บอนด์') || t.title.TH.includes('พังงา'));
+      const priceA = jbTour ? jbTour.priceAdult.toLocaleString() : '1,690';
+      const priceC = jbTour ? jbTour.priceChild.toLocaleString() : '1,290';
+      return `🚣 **ทัวร์อ่าวพังงา - เขาตะปู - เกาะเจมส์บอนด์ & พายแคนูเกาะห้อง**\n\n` +
+        `• **ราคาโปรโมชั่นพิเศษ**: ผู้ใหญ่ **฿${priceA}** / เด็ก **฿${priceC}**\n` +
+        `• **จุดท่องเที่ยวไฮไลท์**:\n` +
+        `  - สัมผัสความมหัศจรรย์ของ **เขาตะปู (James Bond Island)** สถานที่ถ่ายทำภาพยนตร์ 007\n` +
+        `  - ล่องเรือแคนูลอดถ้ำหินงอกหินย้อยตระการตาที่ **เกาะห้อง พังงา** (มีสต๊าฟพายให้ นั่งชิลล์สบาย)\n` +
+        `  - ทานอาหารกลางวันบน **เกาะปันหยี** หมู่บ้านชาวเลกลางน้ำชื่อดัง\n` +
+        `• **บริการที่รวมในแพ็กเกจ**: รถตู้รับส่ง, อาหารกลางวัน, เรือแคนูพร้อมคนพาย, ไกด์ และประกันภัย ททท. ค่ะ!`;
+    }
+
+    if (lower.includes('ยอชท์') || lower.includes('yacht') || lower.includes('คาทามารัน') || lower.includes('catamaran') || lower.includes('พระอาทิตย์ตก') || lower.includes('sunset') || lower.includes('แหลมพรหมเทพ') || lower.includes('เกาะเฮ') || lower.includes('coral island')) {
+      const yachtTour = tours.find(t => t.id.includes('yacht') || t.title.TH.includes('ยอชท์'));
+      const priceA = yachtTour ? yachtTour.priceAdult.toLocaleString() : '2,490';
+      const priceC = yachtTour ? yachtTour.priceChild.toLocaleString() : '1,790';
+      return `⛵ **ล่องเรือยอชท์คาทามารันสุดหรู เกาะเฮ (Coral Island) & ชมพระอาทิตย์ตกแหลมพรหมเทพ**\n\n` +
+        `• **ราคาโปรโมชั่นพิเศษ**: ผู้ใหญ่ **฿${priceA}** / เด็ก **฿${priceC}**\n` +
+        `• **ความพิเศษและไฮไลท์**:\n` +
+        `  - พักผ่อนและถ่ายรูปสวยสไตล์ Luxury บนตาข่ายหน้าเรือยอชท์\n` +
+        `  - ดำน้ำและเล่นกิจกรรมทางน้ำที่ **เกาะเฮ (Banana Beach / Coral Island)**\n` +
+        `  - ล่องเรือชมแสงทไวไลท์และพระอาทิตย์ตกดินสุดโรแมนติก ณ จุดชมวิว **แหลมพรหมเทพ**\n` +
+        `• **บริการที่รวม**: เซ็ตอาหารและเครื่องดื่มบนเรือ, อุปกรณ์ดำน้ำ Snorkeling, ผ้าเช็ดตัว, ไกด์ และประกันภัยค่ะ!`;
+    }
+
+    // 3. Price & Promotions
+    if (lower.includes('ราคา') || lower.includes('price') || lower.includes('โปร') || lower.includes('แพง') || lower.includes('cost') || lower.includes('เท่าไหร่') || lower.includes('กี่บาท')) {
+      return `💰 **ราคาโปรโมชั่นทัวร์ภูเก็ตสุดคุ้มประจำวันนี้ค่ะ**:\n\n${tourListText}\n\n✅ ทุกแพ็กเกจเป็นราคารวมทุกอย่างแล้ว ไม่มีค่าใช้จ่ายแอบแฝง\n✅ รวมรถตู้รับ-ส่งฟรีจากโรงแรมในภูเก็ต (ป่าตอง, กะรน, กะตะ, ตัวเมืองภูเก็ต ฯลฯ)\n✅ ชำระง่ายผ่าน PromptPay QR Code พร้อมออก E-Ticket ทันทีค่ะ!`;
+    }
+
+    // 4. Booking & Payment Steps
+    if (lower.includes('จอง') || lower.includes('book') || lower.includes('ชำระ') || lower.includes('จ่าย') || lower.includes('โอน') || lower.includes('สแกน') || lower.includes('พร้อมเพย์') || lower.includes('promptpay') || lower.includes('สลิป') || lower.includes('slip') || lower.includes('เงิน')) {
+      return `💳 **ขั้นตอนการจองและชำระเงินง่ายๆ ใน 4 ขั้นตอนค่ะ**:\n\n` +
+        `1️⃣ **เลือกทัวร์และวันที่ต้องการเดินทาง**: กดปุ่ม "จองทัวร์นี้" บนโปรแกรมที่ท่านต้องการ\n` +
+        `2️⃣ **กรอกข้อมูลผู้เดินทาง**: ระบุชื่อ, เบอร์โทร และชื่อโรงแรมที่พักในภูเก็ตสำหรับให้รถตู้ไปรับ\n` +
+        `3️⃣ **สแกนจ่ายผ่าน PromptPay QR**: สแกนจ่ายได้ทุกแอปธนาคาร ยอดเงินตรง สะดวก รวดเร็ว ไม่มีค่าธรรมเนียม\n` +
+        `4️⃣ **แนบสลิป รับ E-Ticket ทันที**: ระบบจะตรวจสอบและออกตั๋ว Voucher อิเล็กทรอนิกส์พร้อมส่งแจ้งเตือนเข้า LINE ทันทีค่ะ\n\n` +
+        `💬 หรือหากสะดวกจองผ่านแอดมิน ทัก LINE ได้ที่: **${line}** ได้ตลอด 24 ชม. ค่ะ`;
+    }
+
+    // 5. Hotel Transfer & Pickup Time
+    if (lower.includes('รับส่ง') || lower.includes('โรงแรม') || lower.includes('hotel') || lower.includes('pickup') || lower.includes('เวลารับ') || lower.includes('กี่โมง') || lower.includes('zone') || lower.includes('โซน')) {
+      return `🚐 **บริการรถรับ-ส่งโรงแรมในจังหวัดภูเก็ต**:\n\n` +
+        `• **เวลานัดรับช่วงเช้า**: ประมาณ **07:30 - 08:00 น.** (ขึ้นอยู่กับทำเลที่ตั้งของโรงแรมท่าน)\n` +
+        `• **เวลาเดินทางกลับส่งโรงแรม**: ประมาณ **16:30 - 17:30 น.**\n` +
+        `• **โซนรับส่งฟรี**: ป่าตอง, กะรน, กะตะ, ในหาน, ราไวย์, ฉลอง และตัวเมืองภูเก็ต\n` +
+        `• **การนัดหมาย**: คนขับรถตู้ VIP จะไปรับท่านที่หน้าล็อบบี้โรงแรมตามเวลาที่ระบุบนตั๋ว E-Ticket ค่ะ\n\n` +
+        `📌 ก่อนวันเดินทาง 1 วัน ระบบจะมีข้อความแจ้งเตือนคอนเฟิร์มเวลารับส่งผ่านทาง LINE อีกครั้งเพื่อความอุ่นใจค่ะ!`;
+    }
+
+    // 6. TAT License & Safety & Insurance
+    if (lower.includes('ใบอนุญาต') || lower.includes('ททท') || lower.includes('tat') || lower.includes('ประกัน') || lower.includes('ถูกต้อง') || lower.includes('ปลอดภัย') || lower.includes('license') || lower.includes('safe') || lower.includes('insurance')) {
+      return `🛡️ **ความปลอดภัยและความน่าเชื่อถือที่ Trip Sea Tour Phuket**:\n\n` +
+        `• **ใบอนุญาตประกอบธุรกิจนำเที่ยว ททท.**: เลขที่ **${tat}** (ออกโดยกรมการท่องเที่ยวแห่งประเทศไทย ตรวจสอบได้ 100%)\n` +
+        `• **ประกันภัยอุบัติเหตุทางทะเล**: คุ้มครองผู้โดยสารทุกท่าน ทุกที่นั่ง ตามมาตรฐานสากล\n` +
+        `• **กัปตันและทีมงานมืออาชีพ**: ผ่านการอบรมด้านความปลอดภัยและการปฐมพยาบาลเบื้องต้น (CPR)\n` +
+        `• **อุปกรณ์ความปลอดภัยครบครัน**: เสื้อชูชีพมาตรฐานสำหรับผู้ใหญ่และเด็กเล็กบนเรือทุกลำค่ะ!`;
+    }
+
+    // 7. Things to prepare / Weather
+    if (lower.includes('เตรียม') || lower.includes('เตรียมตัว') || lower.includes('นำอะไรไป') || lower.includes('แต่งตัว') || lower.includes('เสื้อผ้า') || lower.includes('pack') || lower.includes('weather') || lower.includes('ฝน') || lower.includes('คลื่น')) {
+      return `🎒 **สิ่งที่ควรเตรียมสำหรับทริปทะเลภูเก็ตค่ะ**:\n\n` +
+        `1. ชุดว่ายน้ำ หรือชุดลำลองที่แห้งง่าย\n` +
+        `2. ชุดเปลี่ยน 1 ชุดสำหรับเปลี่ยนขากลับ\n` +
+        `3. ผ้าเช็ดตัว, หมวกปีกกว้าง, แว่นตากันแดด\n` +
+        `4. ครีมกันแดดที่เป็นมิตรต่อปะการัง (Reef-Safe Sunscreen)\n` +
+        `5. ซองกันน้ำสำหรับโทรศัพท์มือถือ\n` +
+        `6. ยาประจำตัว (บนเรือมีบริการยาแก้เมาคลื่นและกล่องปฐมพยาบาลฟรีค่ะ)\n\n` +
+        `🌊 กรณีคลื่นลมหรือสภาพอากาศไม่เอื้ออำนวย บริษัทจะแจ้งล่วงหน้าและปรับเปลี่ยนวันเดินทางหรือคืนเงินตามเงื่อนไขอย่างปลอดภัยที่สุดค่ะ!`;
+    }
+
+    // 8. Contact Hotline / Social Links
+    if (lower.includes('ติดต่อ') || lower.includes('เบอร์') || lower.includes('โทร') || lower.includes('ไลน์') || lower.includes('line') || lower.includes('facebook') || lower.includes('เฟส') || lower.includes('call') || lower.includes('phone')) {
+      return `📞 **ช่องทางติดต่อ บริษัท ทริปซีทัวร์ ภูเก็ต จำกัด**:\n\n` +
+        `• 📱 **เบอร์โทรศัพท์สายด่วน (Hotline 24 ชม.)**: **${phone}**\n` +
+        `• 💬 **LINE Official Account**: **${line}** (แอดไลน์สอบถามได้ตลอด 24 ชม.)\n` +
+        `• 🌐 **Facebook Page**: [Trip Sea Tour Phuket](${fb})\n` +
+        `• 📍 **สำนักงาน**: ภูเก็ต ประเทศไทย\n` +
+        `• 🛡️ **ใบอนุญาต ททท.**: เลขที่ **${tat}**\n\n` +
+        `ทีมงานพร้อมให้บริการและดูแลทุกท่านด้วยความยินดียิ่งค่ะ!`;
+    }
+
+    // General Comprehensive Answer
+    return `ขอบคุณสำหรับคำถามค่ะ 😊🌊\n\n**Trip Sea Tour Phuket** ยินดีให้บริการข้อมูลทัวร์ทะเลภูเก็ต เกาะพีพี อ่าวพังงา และเรือยอชท์ชมพระอาทิตย์ตก พร้อมใบอนุญาต ททท. เลขที่ **${tat}**\n\n` +
+      `📌 **โปรแกรมแนะนำยอดนิยม**:\n${tourListText}\n\n` +
+      `ท่านสามารถคลิกดูรายละเอียดและกด **"จองทัวร์"** บนหน้าเว็บได้ทันที หรือสอบถามเจ้าหน้าที่ทาง LINE: **${line}** (โทร **${phone}**) ได้ตลอด 24 ชม. เลยนะคะ!`;
+  };
+
   const handleSendMessage = async (textToSend?: string) => {
     const query = (textToSend || inputMessage).trim();
     if (!query || isLoading) return;
@@ -77,31 +212,41 @@ export const TripSeaAiChatbot: React.FC<TripSeaAiChatbotProps> = ({
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           message: query,
-          language: currentLanguage
+          language: activeLang
         })
       });
 
       if (res.ok) {
         const data = await res.json();
+        const replyText = data.reply || generateClientSmartAnswer(query);
         const aiMsg: Message = {
           id: `ai-${Date.now()}`,
           sender: 'ai',
-          text: data.reply || 'ขออภัยค่ะ ขณะนี้ระบบไม่สามารถประมวลผลคำตอบได้ โปรดลองอีกครั้งนะคะ',
+          text: replyText,
           timestamp: new Date().toLocaleTimeString('th-TH', { hour: '2-digit', minute: '2-digit' })
         };
         setMessages(prev => [...prev, aiMsg]);
       } else {
-        throw new Error('Chat API response not ok');
+        // Safe fallback without error
+        const fallbackText = generateClientSmartAnswer(query);
+        const aiMsg: Message = {
+          id: `ai-${Date.now()}`,
+          sender: 'ai',
+          text: fallbackText,
+          timestamp: new Date().toLocaleTimeString('th-TH', { hour: '2-digit', minute: '2-digit' })
+        };
+        setMessages(prev => [...prev, aiMsg]);
       }
     } catch (err) {
-      console.error('Chat error:', err);
-      const errorMsg: Message = {
-        id: `ai-err-${Date.now()}`,
+      console.warn('Chat network notice, using local intelligent engine:', err);
+      const fallbackText = generateClientSmartAnswer(query);
+      const aiMsg: Message = {
+        id: `ai-${Date.now()}`,
         sender: 'ai',
-        text: `ขออภัยค่ะ มีข้อผิดพลาดในการเชื่อมต่อ AI ชั่วคราว 🙏\n\nท่านสามารถติดต่อสอบถามทีมงานได้โดยตรงทาง LINE: **${lineOaId}** หรือโทรสายด่วน **${contactPhone}** ได้ตลอด 24 ชม. ค่ะ`,
+        text: fallbackText,
         timestamp: new Date().toLocaleTimeString('th-TH', { hour: '2-digit', minute: '2-digit' })
       };
-      setMessages(prev => [...prev, errorMsg]);
+      setMessages(prev => [...prev, aiMsg]);
     } finally {
       setIsLoading(false);
     }
@@ -121,11 +266,10 @@ export const TripSeaAiChatbot: React.FC<TripSeaAiChatbotProps> = ({
   // Helper to render bold markdown and newlines
   const renderMessageContent = (text: string) => {
     const lines = text.split('\n');
-    return lines.map((line, idx) => {
-      // Process bold **text**
-      const parts = line.split(/(\*\*.*?\*\*)/g);
+    return lines.map((lineText, idx) => {
+      const parts = lineText.split(/(\*\*.*?\*\*)/g);
       return (
-        <p key={idx} className={`${line.trim() === '' ? 'h-2' : 'min-h-[1.25rem]'} leading-relaxed`}>
+        <p key={idx} className={`${lineText.trim() === '' ? 'h-2' : 'min-h-[1.25rem]'} leading-relaxed`}>
           {parts.map((part, pIdx) => {
             if (part.startsWith('**') && part.endsWith('**')) {
               return (
@@ -158,40 +302,39 @@ export const TripSeaAiChatbot: React.FC<TripSeaAiChatbotProps> = ({
             id="open-ai-chatbot-btn"
             type="button"
             onClick={() => setIsOpen(true)}
-            className="relative group flex items-center justify-center w-14 h-14 bg-gradient-to-tr from-teal-600 to-cyan-500 hover:from-teal-700 hover:to-cyan-600 text-white rounded-full shadow-xl hover:shadow-teal-500/30 transition-all duration-300 hover:scale-105 active:scale-95 focus:outline-none"
-            title="TripSeaTour AI Chatbot (24/7 Powered by Gemini)"
+            className="w-14 h-14 bg-gradient-to-tr from-teal-600 to-teal-500 hover:from-teal-500 hover:to-teal-400 text-white rounded-full shadow-xl shadow-teal-900/30 flex items-center justify-center transition-all hover:scale-105 active:scale-95 group relative"
+            title="คุยกับ TripSeaTour AI ผู้ช่วย 24 ชม."
           >
-            <Sparkles className="absolute top-1.5 right-1.5 w-4 h-4 text-amber-300 animate-spin" style={{ animationDuration: '6s' }} />
-            <MessageCircle className="w-7 h-7" />
+            <Bot className="w-7 h-7 group-hover:rotate-12 transition-transform" />
+            <span className="absolute -top-1 -right-1 bg-amber-400 text-slate-950 text-[9px] font-black px-1.5 py-0.5 rounded-full uppercase tracking-wider border border-white">
+              AI 24/7
+            </span>
           </button>
         </div>
       )}
 
-      {/* Main Chatbot Window */}
+      {/* Floating Chat Modal */}
       {isOpen && (
-        <div
-          id="ai-chatbot-window"
-          className="fixed bottom-4 right-4 sm:bottom-6 sm:right-6 w-[calc(100vw-2rem)] sm:w-[410px] h-[580px] max-h-[85vh] bg-white rounded-2xl shadow-2xl border border-slate-200/80 flex flex-col z-50 overflow-hidden animate-in fade-in slide-in-from-bottom-5 duration-200"
-        >
+        <div className="fixed bottom-4 right-4 sm:bottom-6 sm:right-6 z-50 w-[calc(100vw-2rem)] sm:w-[420px] h-[580px] max-h-[85vh] bg-white rounded-3xl shadow-2xl border border-teal-100 flex flex-col overflow-hidden animate-in slide-in-from-bottom-5 duration-200">
           {/* Header */}
-          <div className="bg-gradient-to-r from-teal-700 via-teal-600 to-cyan-700 text-white p-4 flex items-center justify-between shadow-md">
+          <div className="bg-gradient-to-r from-teal-800 via-teal-700 to-teal-800 text-white p-4 flex items-center justify-between shadow-md">
             <div className="flex items-center gap-3">
               <div className="relative">
-                <div className="w-10 h-10 rounded-xl bg-white/10 backdrop-blur-sm flex items-center justify-center border border-white/20">
-                  <Bot className="w-6 h-6 text-teal-100" />
+                <div className="w-10 h-10 rounded-2xl bg-teal-600/60 border border-teal-400/40 flex items-center justify-center">
+                  <Bot className="w-6 h-6 text-teal-200" />
                 </div>
-                <span className="absolute -bottom-0.5 -right-0.5 w-3 h-3 bg-emerald-400 border-2 border-teal-700 rounded-full"></span>
+                <span className="absolute -bottom-0.5 -right-0.5 w-3 h-3 bg-emerald-400 border-2 border-teal-800 rounded-full"></span>
               </div>
               <div>
-                <div className="flex items-center gap-1.5">
-                  <h3 className="font-bold text-sm text-white tracking-wide">TripSeaTour AI</h3>
-                  <span className="inline-flex items-center gap-0.5 bg-amber-400/20 text-amber-200 text-[10px] px-1.5 py-0.5 rounded-full font-medium border border-amber-300/30">
-                    <Sparkles className="w-2.5 h-2.5" />
+                <div className="flex items-center gap-2">
+                  <h3 className="font-extrabold text-sm tracking-tight">TripSeaTour AI</h3>
+                  <span className="bg-teal-900/80 text-teal-300 text-[10px] font-bold px-2 py-0.5 rounded-full border border-teal-600/40 flex items-center gap-1">
+                    <Sparkles className="w-2.5 h-2.5 text-amber-300" />
                     Gemini 24/7
                   </span>
                 </div>
-                <p className="text-[11px] text-teal-100/90 font-light flex items-center gap-1">
-                  <span>ผู้ช่วยอัจฉริยะตอบคำถามทันที</span>
+                <p className="text-[11px] text-teal-200/90 font-medium">
+                  ผู้ช่วยอัจฉริยะตอบคำถามทันที
                 </p>
               </div>
             </div>
@@ -200,16 +343,15 @@ export const TripSeaAiChatbot: React.FC<TripSeaAiChatbotProps> = ({
               <button
                 type="button"
                 onClick={handleClearChat}
-                className="p-1.5 text-teal-100 hover:text-white hover:bg-white/10 rounded-lg transition-colors"
-                title="ล้างการสนทนา"
+                className="p-1.5 text-teal-200 hover:text-white hover:bg-teal-600/50 rounded-xl transition"
+                title="ล้างบทสนทนา"
               >
                 <RefreshCw className="w-4 h-4" />
               </button>
               <button
-                id="close-ai-chatbot-btn"
                 type="button"
                 onClick={() => setIsOpen(false)}
-                className="p-1.5 text-teal-100 hover:text-white hover:bg-white/10 rounded-lg transition-colors"
+                className="p-1.5 text-teal-200 hover:text-white hover:bg-teal-600/50 rounded-xl transition"
                 title="ปิดหน้าต่างแชท"
               >
                 <X className="w-5 h-5" />
@@ -217,8 +359,22 @@ export const TripSeaAiChatbot: React.FC<TripSeaAiChatbotProps> = ({
             </div>
           </div>
 
-          {/* Chat Messages List */}
-          <div className="flex-1 overflow-y-auto p-4 space-y-3.5 bg-slate-50/60 text-xs sm:text-sm">
+          {/* Quick FAQ Chips */}
+          <div className="bg-teal-50/70 border-b border-teal-100/80 px-3 py-2 overflow-x-auto no-scrollbar flex items-center gap-1.5 shrink-0">
+            {quickQuestions.map((q, idx) => (
+              <button
+                key={idx}
+                type="button"
+                onClick={() => handleSendMessage(q.query)}
+                className="whitespace-nowrap bg-white hover:bg-teal-100/60 text-teal-900 border border-teal-200/80 text-[11px] font-semibold px-2.5 py-1 rounded-full transition shadow-xs shrink-0 active:scale-95"
+              >
+                {q.label}
+              </button>
+            ))}
+          </div>
+
+          {/* Messages Area */}
+          <div className="flex-1 overflow-y-auto p-4 space-y-3 bg-slate-50/50 text-xs">
             {messages.map((msg) => {
               const isAi = msg.sender === 'ai';
               return (
@@ -227,21 +383,23 @@ export const TripSeaAiChatbot: React.FC<TripSeaAiChatbotProps> = ({
                   className={`flex gap-2.5 ${isAi ? 'justify-start' : 'justify-end'}`}
                 >
                   {isAi && (
-                    <div className="w-7 h-7 rounded-lg bg-teal-600 text-white flex items-center justify-center flex-shrink-0 mt-0.5 shadow-sm">
-                      <Sparkles className="w-3.5 h-3.5" />
+                    <div className="w-7 h-7 rounded-xl bg-teal-600 text-white flex items-center justify-center shrink-0 mt-0.5 shadow-xs">
+                      <Sparkles className="w-3.5 h-3.5 text-amber-200" />
                     </div>
                   )}
 
                   <div
-                    className={`max-w-[82%] rounded-2xl px-3.5 py-2.5 shadow-sm text-xs sm:text-[13px] ${
+                    className={`max-w-[82%] rounded-2xl p-3 shadow-xs ${
                       isAi
-                        ? 'bg-white text-slate-800 border border-slate-100 rounded-tl-none'
-                        : 'bg-teal-600 text-white rounded-tr-none'
+                        ? 'bg-white text-slate-800 border border-slate-200/80 rounded-tl-xs'
+                        : 'bg-teal-600 text-white font-medium rounded-tr-xs shadow-teal-900/10'
                     }`}
                   >
-                    {renderMessageContent(msg.text)}
+                    <div className="space-y-1">
+                      {renderMessageContent(msg.text)}
+                    </div>
                     <div
-                      className={`text-[10px] mt-1 text-right ${
+                      className={`text-[9px] mt-1 text-right ${
                         isAi ? 'text-slate-400' : 'text-teal-200'
                       }`}
                     >
@@ -250,7 +408,7 @@ export const TripSeaAiChatbot: React.FC<TripSeaAiChatbotProps> = ({
                   </div>
 
                   {!isAi && (
-                    <div className="w-7 h-7 rounded-lg bg-slate-700 text-white flex items-center justify-center flex-shrink-0 mt-0.5 shadow-sm">
+                    <div className="w-7 h-7 rounded-xl bg-slate-700 text-white flex items-center justify-center shrink-0 mt-0.5 shadow-xs">
                       <User className="w-3.5 h-3.5" />
                     </div>
                   )}
@@ -259,62 +417,51 @@ export const TripSeaAiChatbot: React.FC<TripSeaAiChatbotProps> = ({
             })}
 
             {isLoading && (
-              <div className="flex gap-2.5 justify-start items-center">
-                <div className="w-7 h-7 rounded-lg bg-teal-600 text-white flex items-center justify-center flex-shrink-0 shadow-sm animate-pulse">
-                  <Bot className="w-3.5 h-3.5" />
+              <div className="flex gap-2.5 justify-start">
+                <div className="w-7 h-7 rounded-xl bg-teal-600 text-white flex items-center justify-center shrink-0 mt-0.5">
+                  <Bot className="w-3.5 h-3.5 animate-pulse" />
                 </div>
-                <div className="bg-white border border-slate-100 rounded-2xl rounded-tl-none px-4 py-2.5 shadow-sm text-xs text-slate-500 flex items-center gap-2">
-                  <Sparkles className="w-3.5 h-3.5 text-teal-600 animate-spin" />
-                  <span>Gemini AI กำลังพิมพ์คำตอบ...</span>
+                <div className="bg-white border border-slate-200 rounded-2xl rounded-tl-xs p-3 shadow-xs">
+                  <div className="flex items-center gap-1.5 text-teal-600">
+                    <span className="w-1.5 h-1.5 bg-teal-500 rounded-full animate-bounce [animation-delay:-0.3s]"></span>
+                    <span className="w-1.5 h-1.5 bg-teal-500 rounded-full animate-bounce [animation-delay:-0.15s]"></span>
+                    <span className="w-1.5 h-1.5 bg-teal-500 rounded-full animate-bounce"></span>
+                    <span className="text-[11px] text-slate-500 ml-1">กำลังคิดคำตอบ...</span>
+                  </div>
                 </div>
               </div>
             )}
             <div ref={messagesEndRef} />
           </div>
 
-          {/* Quick Suggestions Chips */}
-          <div className="bg-white border-t border-slate-100 px-3 py-2 overflow-x-auto no-scrollbar flex items-center gap-1.5">
-            {quickQuestions.map((q, idx) => (
-              <button
-                key={idx}
-                type="button"
-                onClick={() => handleSendMessage(q.query)}
-                disabled={isLoading}
-                className="whitespace-nowrap text-[11px] font-medium bg-slate-100 hover:bg-teal-50 hover:text-teal-700 text-slate-600 border border-slate-200/70 hover:border-teal-200 px-2.5 py-1 rounded-full transition-all duration-150 flex-shrink-0"
-              >
-                {q.label}
-              </button>
-            ))}
-          </div>
-
-          {/* Input Box */}
-          <form
-            onSubmit={(e) => {
-              e.preventDefault();
-              handleSendMessage();
-            }}
-            className="p-3 bg-white border-t border-slate-200 flex items-center gap-2"
-          >
-            <input
-              ref={inputRef}
-              id="ai-chatbot-input"
-              type="text"
-              value={inputMessage}
-              onChange={(e) => setInputMessage(e.target.value)}
-              placeholder="พิมพ์คำถามเกี่ยวกับทัวร์ภูเก็ต เช่น ราคา เกาะพีพี..."
-              disabled={isLoading}
-              className="flex-1 bg-slate-100/90 border border-slate-200 rounded-xl px-3.5 py-2.5 text-xs sm:text-sm text-slate-800 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-teal-500 focus:bg-white transition-all"
-            />
-            <button
-              id="ai-chatbot-send-btn"
-              type="submit"
-              disabled={!inputMessage.trim() || isLoading}
-              className="w-10 h-10 bg-teal-600 hover:bg-teal-700 disabled:bg-slate-200 text-white disabled:text-slate-400 rounded-xl flex items-center justify-center shadow-md transition-all duration-150 flex-shrink-0"
-              title="ส่งคำถาม"
+          {/* Input Footer */}
+          <div className="p-3 bg-white border-t border-slate-200">
+            <form
+              onSubmit={(e) => {
+                e.preventDefault();
+                handleSendMessage();
+              }}
+              className="flex items-center gap-2"
             >
-              <Send className="w-4 h-4" />
-            </button>
-          </form>
+              <input
+                ref={inputRef}
+                type="text"
+                value={inputMessage}
+                onChange={(e) => setInputMessage(e.target.value)}
+                placeholder="พิมพ์คำถามเกี่ยวกับทัวร์ภูเก็ต เช่น ราคา เกาะพีพี..."
+                className="flex-1 bg-slate-100/90 border border-slate-200 rounded-2xl px-3.5 py-2.5 text-xs text-slate-900 focus:bg-white focus:outline-none focus:ring-2 focus:ring-teal-500 transition"
+                disabled={isLoading}
+              />
+              <button
+                type="submit"
+                disabled={!inputMessage.trim() || isLoading}
+                className="w-10 h-10 bg-teal-600 hover:bg-teal-500 disabled:opacity-40 disabled:hover:bg-teal-600 text-white rounded-2xl flex items-center justify-center transition shrink-0 shadow-md shadow-teal-900/20 active:scale-95"
+                title="ส่งข้อความ"
+              >
+                <Send className="w-4 h-4" />
+              </button>
+            </form>
+          </div>
         </div>
       )}
     </>

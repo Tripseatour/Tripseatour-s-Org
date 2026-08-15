@@ -14,17 +14,20 @@ import {
   Printer,
   Download
 } from 'lucide-react';
+import { AppSettings } from '../types';
 
 interface TatLicenseCertificateProps {
   currentLang: string;
   className?: string;
   showFullDocument?: boolean;
+  settings?: AppSettings;
 }
 
 export const TatLicenseCertificate: React.FC<TatLicenseCertificateProps> = ({
   currentLang,
   className = '',
-  showFullDocument = true
+  showFullDocument = true,
+  settings
 }) => {
   const [isZoomModalOpen, setIsZoomModalOpen] = useState(false);
   const [modalViewTab, setModalViewTab] = useState<'image' | 'formatted'>('image');
@@ -52,9 +55,10 @@ export const TatLicenseCertificate: React.FC<TatLicenseCertificateProps> = ({
               {/* Actual Document Image Frame */}
               <div className="relative rounded-xl overflow-hidden bg-slate-100 aspect-[3/4] border border-slate-200 shadow-inner">
                 <img
-                  src="/tat_license_original.jpg"
-                  alt="ใบอนุญาตประกอบธุรกิจนำเที่ยว ทริป ซี ทัวร์ เลขที่ 33/11100"
+                  src={settings?.tatLicenseImgUrl || "/tat_license_original.jpg"}
+                  alt={`ใบอนุญาตประกอบธุรกิจนำเที่ยว ทริป ซี ทัวร์ เลขที่ ${settings?.tatLicenseNo || '33/11100'}`}
                   className="w-full h-full object-cover object-top filter brightness-[0.98] contrast-[1.02] group-hover:scale-105 transition-transform duration-500"
+                  referrerPolicy="no-referrer"
                 />
                 <div className="absolute bottom-2 right-2 bg-slate-900/80 text-white text-[10px] font-bold px-2.5 py-1 rounded-full backdrop-blur-sm flex items-center gap-1">
                   <ZoomIn className="w-3 h-3 text-amber-300" />
@@ -93,9 +97,9 @@ export const TatLicenseCertificate: React.FC<TatLicenseCertificateProps> = ({
                 <span>สถานะ: ได้รับอนุญาตถูกต้องตามกฎหมาย 100% (Active & Verified)</span>
               </div>
               <h3 className="text-xl sm:text-2xl font-black text-slate-900 tracking-tight">
-                {currentLang === 'TH' ? 'ใบอนุญาตประกอบธุรกิจนำเที่ยว เลขที่ 33/11100' :
-                 currentLang === 'EN' ? 'Official TAT Tourism Business License No. 33/11100' :
-                 currentLang === 'ZH' ? '泰国国家旅游局官方特许营业执照 编号 33/11100' : 'Лицензия туроператора TAT № 33/11100'}
+                {currentLang === 'TH' ? `ใบอนุญาตประกอบธุรกิจนำเที่ยว เลขที่ ${settings?.tatLicenseNo || '33/11100'}` :
+                 currentLang === 'EN' ? `Official TAT Tourism Business License No. ${settings?.tatLicenseNo || '33/11100'}` :
+                 currentLang === 'ZH' ? `泰国国家旅游局官方特许营业执照 编号 ${settings?.tatLicenseNo || '33/11100'}` : `Лицензия туроператора TAT № ${settings?.tatLicenseNo || '33/11100'}`}
               </h3>
               <p className="text-xs text-slate-500 mt-1">
                 {currentLang === 'TH' ? 'ออกตามมาตรา 15 แห่งพระราชบัญญัติธุรกิจนำเที่ยวและมัคคุเทศก์ พ.ศ. 2551 โดยกรมการท่องเที่ยว สาขาภาคใต้ เขต 2' :
@@ -175,7 +179,7 @@ export const TatLicenseCertificate: React.FC<TatLicenseCertificateProps> = ({
                 <Award className="w-5 h-5 text-amber-400" />
                 <div>
                   <h4 className="font-extrabold text-sm text-white">ใบอนุญาตประกอบธุรกิจนำเที่ยว (แบบ ธ.1)</h4>
-                  <p className="text-[10px] text-teal-300">TRIP SEA TOUR • ใบอนุญาตเลขที่ 33/11100</p>
+                  <p className="text-[10px] text-teal-300">TRIP SEA TOUR • ใบอนุญาตเลขที่ {settings?.tatLicenseNo || '33/11100'}</p>
                 </div>
               </div>
 
@@ -218,9 +222,10 @@ export const TatLicenseCertificate: React.FC<TatLicenseCertificateProps> = ({
               <div className="p-4 sm:p-6 bg-slate-950/90 flex flex-col items-center justify-center min-h-[450px]">
                 <div className="relative max-w-lg w-full bg-white rounded-2xl overflow-hidden shadow-2xl border border-slate-700">
                   <img
-                    src="/tat_license_original.jpg"
+                    src={settings?.tatLicenseImgUrl || "/tat_license_original.jpg"}
                     alt="รูปภาพใบอนุญาตประกอบธุรกิจนำเที่ยวฉบับจริง ทริป ซี ทัวร์"
                     className="w-full h-auto object-contain max-h-[70vh] mx-auto"
+                    referrerPolicy="no-referrer"
                   />
                   <div className="absolute top-3 right-3 bg-slate-900/85 text-white text-[10px] font-bold px-3 py-1 rounded-full backdrop-blur-sm border border-slate-700 flex items-center gap-1">
                     <CheckCircle className="w-3 h-3 text-emerald-400" />
@@ -264,7 +269,7 @@ export const TatLicenseCertificate: React.FC<TatLicenseCertificateProps> = ({
                   <div className="flex flex-wrap items-baseline gap-2">
                     <span>ใบอนุญาต เลขที่</span>
                     <span className="font-extrabold text-base border-b-2 border-dotted border-slate-700 px-3 py-0.5 text-teal-800">
-                      33/11100
+                      {settings?.tatLicenseNo || '33/11100'}
                     </span>
                   </div>
 

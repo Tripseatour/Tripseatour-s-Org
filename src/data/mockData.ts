@@ -568,5 +568,8 @@ export const initialSettings: AppSettings = {
   contactEmail: 'tripseatourphuket@gmail.com',
   address: 'ภูเก็ต ประเทศไทย',
   adminPin: '1234',
-  adminGoogleEmails: ['asmr9941@gmail.com', 'admin@tripseatour.com']
+  adminGoogleEmails: ['asmr9941@gmail.com', 'admin@tripseatour.com'],
+  tatLicenseNo: '33/11100',
+  tatLicenseImgUrl: '/tat_license_original.jpg',
+  facebookUrl: 'https://www.facebook.com/tripseatoursphuket/'
 };

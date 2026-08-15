@@ -125,6 +125,10 @@ export interface AppSettings {
   address: string;
   adminPin?: string;
   adminGoogleEmails?: string[];
+  adminPermissions?: string[]; // Allowed tab IDs for standard admins, e.g. ['overview', 'orders', 'tours', 'reviews', 'manifest']
+  tatLicenseNo?: string; // TAT License Number e.g. "33/11100"
+  tatLicenseImgUrl?: string; // URL of TAT License Image
+  facebookUrl?: string; // Facebook Page URL
 }
 
 export interface LineNotificationLog {

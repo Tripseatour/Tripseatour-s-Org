@@ -1,1 +1,103 @@
 @import "tailwindcss";
+
+@media print {
+  /* Hide all elements that are marked as no-print */
+  .no-print,
+  #chatbot-container,
+  .admin-auth-modal,
+  iframe,
+  button:not(.bg-slate-900) {
+    display: none !important;
+    visibility: hidden !important;
+    height: 0 !important;
+    margin: 0 !important;
+    padding: 0 !important;
+  }
+
+  /* Reset body and html settings for standard A4 layout and eliminate dark page blocks */
+  html, body, #root, .min-h-screen, .bg-slate-900, .bg-slate-950 {
+    background-color: white !important;
+    background: white !important;
+    color: black !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    height: auto !important;
+    min-height: 0 !important;
+    overflow: visible !important;
+    box-shadow: none !important;
+  }
+
+  /* Clear backgrounds of any other arbitrary layout div that might cause dark print regions */
+  div:not(.print-manifest-container):not(.print-manifest-container *) {
+    background-color: transparent !important;
+    background: transparent !important;
+    box-shadow: none !important;
+    border-color: transparent !important;
+  }
+
+  /* Style the modal backdrop wrapper so it doesn't render dark colors or shadows */
+  .print-manifest-modal {
+    position: static !important; /* Change from fixed to static to flow normally on the page */
+    background: transparent !important;
+    background-color: transparent !important;
+    backdrop-filter: none !important;
+    -webkit-backdrop-filter: none !important;
+    padding: 0 !important;
+    margin: 0 !important;
+    overflow: visible !important;
+    width: 100% !important;
+    height: auto !important;
+    display: block !important;
+    box-shadow: none !important;
+  }
+
+  /* Format the print manifest container to fit A4 page beautifully */
+  .print-manifest-container {
+    background-color: white !important;
+    background: white !important;
+    color: black !important;
+    box-shadow: none !important;
+    border: none !important;
+    border-radius: 0 !important; /* Perfect square corners for professional documents */
+    padding: 12mm !important; /* Ideal A4 printable padding margins */
+    margin: 0 !important;
+    width: 100% !important;
+    max-width: 100% !important;
+    height: auto !important;
+    position: relative !important;
+    display: block !important;
+  }
+
+  /* Optimize tables and colors for physical print */
+  * {
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
+  }
+
+  /* Avoid row breaking inside tables on page boundary */
+  tr {
+    page-break-inside: avoid !important;
+  }
+
+  /* Ensure table borders look perfectly sharp in black and white */
+  table, th, td {
+    border-color: #cbd5e1 !important; /* Slate 300 equivalent for crisp borders */
+  }
+
+  /* Optimize font colors for printers */
+  .text-slate-900, .text-slate-800, .text-slate-700 {
+    color: #000000 !important;
+  }
+  
+  .text-slate-500, .text-slate-400 {
+    color: #4b5563 !important; /* Gray-600 for legible secondary text */
+  }
+
+  .bg-slate-50, tr:nth-child(even) {
+    background-color: #f8fafc !important; /* Very soft gray background for rows */
+  }
+
+  .bg-slate-100 {
+    background-color: #f1f5f9 !important; /* Header background for table */
+  }
+}

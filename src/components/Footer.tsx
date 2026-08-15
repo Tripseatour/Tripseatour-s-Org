@@ -1,5 +1,5 @@
 import React from 'react';
-import { Compass, Phone, Mail, MapPin, MessageCircle, ShieldCheck, QrCode, Lock } from 'lucide-react';
+import { Compass, Phone, Mail, MapPin, MessageCircle, ShieldCheck, QrCode, Lock, Facebook } from 'lucide-react';
 import { Language, AppSettings } from '../types';
 import { translations } from '../data/translations';
 
@@ -113,6 +113,18 @@ export const Footer: React.FC<FooterProps> = ({ currentLang, settings, onNavigat
               <MessageCircle className="w-4 h-4" />
               <span>แอด LINE Official ({settings.lineOaId})</span>
             </a>
+
+            {settings.facebookUrl && (
+              <a
+                href={settings.facebookUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="inline-flex items-center justify-center gap-2 w-full bg-[#1877F2] hover:bg-[#166FE5] text-white font-bold px-4 py-2.5 rounded-xl text-xs transition shadow-md shadow-blue-950/40"
+              >
+                <Facebook className="w-4 h-4 text-blue-100 fill-current" />
+                <span>เยี่ยมชม Facebook Page</span>
+              </a>
+            )}
           </div>
         </div>
 

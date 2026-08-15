@@ -90,7 +90,10 @@ async function loadStateFromSupabase() {
           contactEmail: s.contact_email || settings.contactEmail,
           address: s.address || settings.address,
           adminPin: s.admin_pin || settings.adminPin,
-          adminGoogleEmails: s.admin_google_emails || (settings.adminGoogleEmails && settings.adminGoogleEmails.length > 0 ? settings.adminGoogleEmails : ['asmr9941@gmail.com', 'admin@tripseatour.com'])
+          adminGoogleEmails: s.admin_google_emails || (settings.adminGoogleEmails && settings.adminGoogleEmails.length > 0 ? settings.adminGoogleEmails : ['asmr9941@gmail.com', 'admin@tripseatour.com']),
+          tatLicenseNo: s.tat_license_no || settings.tatLicenseNo,
+          tatLicenseImgUrl: s.tat_license_img_url || settings.tatLicenseImgUrl,
+          facebookUrl: s.facebook_url || settings.facebookUrl
         };
       }
     }
@@ -243,6 +246,9 @@ async function persistState(key: 'tours' | 'bookings' | 'settings' | 'reviews' |
           address: settings.address,
           admin_pin: settings.adminPin,
           admin_google_emails: settings.adminGoogleEmails,
+          tat_license_no: settings.tatLicenseNo,
+          tat_license_img_url: settings.tatLicenseImgUrl,
+          facebook_url: settings.facebookUrl,
           updated_at: new Date().toISOString()
         }, { onConflict: 'id' });
         if (setErr) console.log('[Supabase settings upsert info]:', setErr.message);
@@ -715,6 +721,83 @@ app.post('/api/admin/clean-deleted-data', async (req, res) => {
   }
 });
 
+// Manual Backup Database API to force write state to Supabase
+app.post('/api/admin/backup-database', async (req, res) => {
+  try {
+    if (!supabase) {
+      return res.status(503).json({
+        success: false,
+        message: 'Supabase client is not initialized. Cannot perform backup.'
+      });
+    }
+
+    // Force persist all memory states
+    await persistState('tours');
+    await persistState('bookings');
+    await persistState('reviews');
+    await persistState('customers');
+    await persistState('settings');
+
+    // Synchronize individual bookings inside the relational 'bookings' table for extra manual data safety
+    for (const b of bookings) {
+      try {
+        await supabase.from('bookings').upsert({
+          id: b.id,
+          booking_ref: b.bookingRef,
+          tour_id: b.tourId,
+          tour_title: b.tourTitle,
+          tour_image: b.tourImage,
+          customer_name: b.customerName,
+          customer_email: b.customerEmail,
+          customer_phone: b.customerPhone,
+          customer_line_id: b.customerLineId,
+          nationality: b.nationality || 'Thai',
+          travel_date: b.travelDate,
+          pickup_hotel: b.pickupHotel,
+          pickup_zone: b.pickupZone,
+          room_number: b.roomNumber,
+          special_requests: b.specialRequests,
+          adults: b.adults,
+          children: b.children,
+          infants: b.infants,
+          total_amount: b.totalAmount,
+          payment_method: b.paymentMethod,
+          promptpay_id_used: b.promptPayIdUsed,
+          payment_status: b.paymentStatus,
+          order_status: b.orderStatus,
+          slip_url: b.slipUrl,
+          slip_uploaded_at: b.slipUploadedAt,
+          paid_at: b.paidAt,
+          created_at: b.createdAt || new Date().toISOString(),
+          line_notify_sent: b.lineNotifySent,
+          reminder_sent: b.reminderSent,
+          notes: b.notes
+        }, { onConflict: 'id' });
+      } catch (upsertErr) {
+        console.warn(`Could not sync individual booking ${b.bookingRef} to relational DB:`, upsertErr);
+      }
+    }
+
+    res.json({
+      success: true,
+      message: 'สำรองข้อมูลทั้งหมดและซิงค์ความปลอดภัยไปยัง Supabase เรียบร้อยแล้ว',
+      backupTime: new Date().toISOString(),
+      counts: {
+        tours: tours.length,
+        bookings: bookings.length,
+        reviews: reviews.length,
+        customers: customers.length
+      }
+    });
+  } catch (err: any) {
+    res.status(500).json({
+      success: false,
+      error: 'เกิดข้อผิดพลาดในการสำรองข้อมูล',
+      details: err?.message || 'Unknown error'
+    });
+  }
+});
+
 // --- Reviews Management API ---
 app.get('/api/reviews', (req, res) => {
   res.json(reviews);
@@ -845,31 +928,158 @@ Requirements:
   }
 });
 
-// --- TripSeaTour AI Chatbot (Powered by Gemini AI 24/7) ---
-app.post('/api/chat', async (req, res) => {
-  try {
-    const { message, language = 'TH' } = req.body;
-    if (!message || typeof message !== 'string') {
-      return res.status(400).json({ error: 'Message is required' });
-    }
+// --- TripSeaTour AI Chatbot (Powered by Gemini AI with Smart Knowledge Fallback) ---
+function generateSmartFallbackReply(message: string, language: string = 'TH'): string {
+  const lower = (message || '').toLowerCase().trim();
+  const phone = settings.contactPhone || '062-681-6494 / 097-924-1399';
+  const lineOa = settings.lineOaId || '@056hxinu';
+  const fb = settings.facebookUrl || 'https://www.facebook.com/tripseatoursphuket/';
+  const tat = settings.tatLicenseNo || '33/11100';
 
-    const availableToursSummary = tours.map(t =>
-      `• [${t.title.TH} / ${t.title.EN}] (ID: ${t.id})
+  // Format list of active tours dynamically
+  const tourListText = tours.map((t, idx) => {
+    const title = language === 'EN' ? t.title.EN : t.title.TH;
+    return `🏝️ **${idx + 1}. ${title}**\n   • ราคาโปรโมชั่น: ผู้ใหญ่ **฿${t.priceAdult.toLocaleString()}** / เด็ก **฿${t.priceChild.toLocaleString()}** (จากปกติ ฿${t.originalPriceAdult.toLocaleString()})\n   • ไฮไลท์: ${t.highlights.TH?.slice(0, 3).join(', ')}`;
+  }).join('\n\n');
+
+  // 1. Greetings
+  if (lower === 'สวัสดี' || lower === 'สวัสดีครับ' || lower === 'สวัสดีค่ะ' || lower.includes('hello') || lower.includes('hi') || lower === 'หวัดดี' || lower === 'ดีครับ' || lower === 'ดีค่ะ' || lower.includes('hey')) {
+    return `สวัสดีค่ะ! ยินดีต้อนรับสู่ **Trip Sea Tour Phuket** ค่ะ 🌊✨\n\nเรามีบริการนำเที่ยวทางทะเลภูเก็ตครบวงจร พร้อมใบอนุญาต ททท. เลขที่ **${tat}**\n\nโปรแกรมแนะนำยอดนิยมวันนี้:\n${tourListText}\n\n💬 ท่านสามารถสอบถามรายละเอียดโปรแกรม หรือจองทัวร์ผ่านระบบบนเว็บได้ทันที หรือแอดไลน์ **${lineOa}** (โทร **${phone}**) ได้ตลอด 24 ชม. เลยนะคะ!`;
+  }
+
+  // 2. Specific Islands / Tour Queries
+  if (lower.includes('พีพี') || lower.includes('phi phi') || lower.includes('มาหยา') || lower.includes('maya') || lower.includes('ปิเละ') || lower.includes('pileh')) {
+    const ppTour = tours.find(t => t.id.includes('phi-phi') || t.title.TH.includes('พีพี'));
+    const priceA = ppTour ? ppTour.priceAdult.toLocaleString() : '1,590';
+    const priceC = ppTour ? ppTour.priceChild.toLocaleString() : '1,190';
+    return `🏝️ **ทัวร์เกาะพีพี - อ่าวมาหยา - ปิเละลากูน - เกาะไข่ (เรือสปีดโบ๊ท)**\n\n` +
+      `• **ราคาโปรโมชั่นพิเศษ**: ผู้ใหญ่ **฿${priceA}** / เด็ก **฿${priceC}**\n` +
+      `• **จุดท่องเที่ยวไฮไลท์**:\n` +
+      `  - ถ่ายรูปชมความงามระดับโลกที่ **อ่าวมาหยา** (Maya Bay)\n` +
+      `  - กระโดดเล่นน้ำ พายแพดเดิลบอร์ดที่ **ปิเละลากูน** (Pileh Lagoon สระว่ายน้ำกลางทะเล)\n` +
+      `  - ดำน้ำตื้นชมปะการังและฝูงปลาหลากสีสัน\n` +
+      `  - พักผ่อนชายหาดขาวละเอียดที่ **เกาะไข่นอก**\n` +
+      `• **บริการที่รวมในแพ็กเกจ**: รถตู้ VIP รับส่งโรงแรม, บุฟเฟต์อาหารกลางวัน, ผลไม้และเครื่องดื่ม, อุปกรณ์ดำน้ำ Snorkel, เสื้อชูชีพ, ไกด์มืออาชีพ และประกันภัยอุบัติเหตุทางทะเลค่ะ\n\n` +
+      `กดปุ่ม **"จองทัวร์นี้"** บนหน้าเว็บเพื่อรับสิทธิ์โปรโมชั่นได้เลยค่ะ!`;
+  }
+
+  if (lower.includes('พังงา') || lower.includes('phang nga') || lower.includes('เจมส์บอนด์') || lower.includes('james bond') || lower.includes('เกาะห้อง') || lower.includes('เกาะปันหยี') || lower.includes('แคนู')) {
+    const jbTour = tours.find(t => t.id.includes('james-bond') || t.title.TH.includes('เจมส์บอนด์') || t.title.TH.includes('พังงา'));
+    const priceA = jbTour ? jbTour.priceAdult.toLocaleString() : '1,690';
+    const priceC = jbTour ? jbTour.priceChild.toLocaleString() : '1,290';
+    return `🚣 **ทัวร์อ่าวพังงา - เขาตะปู - เกาะเจมส์บอนด์ & พายแคนูเกาะห้อง**\n\n` +
+      `• **ราคาโปรโมชั่นพิเศษ**: ผู้ใหญ่ **฿${priceA}** / เด็ก **฿${priceC}**\n` +
+      `• **จุดท่องเที่ยวไฮไลท์**:\n` +
+      `  - สัมผัสความมหัศจรรย์ของ **เขาตะปู (James Bond Island)** สถานที่ถ่ายทำภาพยนตร์ 007\n` +
+      `  - ล่องเรือแคนูลอดถ้ำหินงอกหินย้อยตระการตาที่ **เกาะห้อง พังงา** (มีสต๊าฟพายให้ นั่งชิลล์สบาย)\n` +
+      `  - ทานอาหารกลางวันบน **เกาะปันหยี** หมู่บ้านชาวเลกลางน้ำชื่อดัง\n` +
+      `• **บริการที่รวมในแพ็กเกจ**: รถตู้รับส่ง, อาหารกลางวัน, เรือแคนูพร้อมคนพาย, ไกด์ และประกันภัย ททท. ค่ะ!`;
+  }
+
+  if (lower.includes('ยอชท์') || lower.includes('yacht') || lower.includes('คาทามารัน') || lower.includes('catamaran') || lower.includes('พระอาทิตย์ตก') || lower.includes('sunset') || lower.includes('แหลมพรหมเทพ') || lower.includes('เกาะเฮ') || lower.includes('coral island')) {
+    const yachtTour = tours.find(t => t.id.includes('yacht') || t.title.TH.includes('ยอชท์'));
+    const priceA = yachtTour ? yachtTour.priceAdult.toLocaleString() : '2,490';
+    const priceC = yachtTour ? yachtTour.priceChild.toLocaleString() : '1,790';
+    return `⛵ **ล่องเรือยอชท์คาทามารันสุดหรู เกาะเฮ (Coral Island) & ชมพระอาทิตย์ตกแหลมพรหมเทพ**\n\n` +
+      `• **ราคาโปรโมชั่นพิเศษ**: ผู้ใหญ่ **฿${priceA}** / เด็ก **฿${priceC}**\n` +
+      `• **ความพิเศษและไฮไลท์**:\n` +
+      `  - พักผ่อนและถ่ายรูปสวยสไตล์ Luxury บนตาข่ายหน้าเรือยอชท์\n` +
+      `  - ดำน้ำและเล่นกิจกรรมทางน้ำที่ **เกาะเฮ (Banana Beach / Coral Island)**\n` +
+      `  - ล่องเรือชมแสงทไวไลท์และพระอาทิตย์ตกดินสุดโรแมนติก ณ จุดชมวิว **แหลมพรหมเทพ**\n` +
+      `• **บริการที่รวม**: เซ็ตอาหารและเครื่องดื่มบนเรือ, อุปกรณ์ดำน้ำ Snorkeling, ผ้าเช็ดตัว, ไกด์ และประกันภัยค่ะ!`;
+  }
+
+  // 3. Price & Promotions
+  if (lower.includes('ราคา') || lower.includes('price') || lower.includes('โปร') || lower.includes('แพง') || lower.includes('cost') || lower.includes('เท่าไหร่') || lower.includes('กี่บาท')) {
+    return `💰 **ราคาโปรโมชั่นทัวร์ภูเก็ตสุดคุ้มประจำวันนี้ค่ะ**:\n\n${tourListText}\n\n✅ ทุกแพ็กเกจเป็นราคารวมทุกอย่างแล้ว ไม่มีค่าใช้จ่ายแอบแฝง\n✅ รวมรถตู้รับ-ส่งฟรีจากโรงแรมในภูเก็ต (ป่าตอง, กะรน, กะตะ, ตัวเมืองภูเก็ต ฯลฯ)\n✅ ชำระง่ายผ่าน PromptPay QR Code พร้อมออก E-Ticket ทันทีค่ะ!`;
+  }
+
+  // 4. Booking & Payment Steps
+  if (lower.includes('จอง') || lower.includes('book') || lower.includes('ชำระ') || lower.includes('จ่าย') || lower.includes('โอน') || lower.includes('สแกน') || lower.includes('พร้อมเพย์') || lower.includes('promptpay') || lower.includes('สลิป') || lower.includes('slip') || lower.includes('เงิน')) {
+    return `💳 **ขั้นตอนการจองและชำระเงินง่ายๆ ใน 4 ขั้นตอนค่ะ**:\n\n` +
+      `1️⃣ **เลือกทัวร์และวันที่ต้องการเดินทาง**: กดปุ่ม "จองทัวร์นี้" บนโปรแกรมที่ท่านต้องการ\n` +
+      `2️⃣ **กรอกข้อมูลผู้เดินทาง**: ระบุชื่อ, เบอร์โทร และชื่อโรงแรมที่พักในภูเก็ตสำหรับให้รถตู้ไปรับ\n` +
+      `3️⃣ **สแกนจ่ายผ่าน PromptPay QR**: สแกนจ่ายได้ทุกแอปธนาคาร ยอดเงินตรง สะดวก รวดเร็ว ไม่มีค่าธรรมเนียม\n` +
+      `4️⃣ **แนบสลิป รับ E-Ticket ทันที**: ระบบจะตรวจสอบและออกตั๋ว Voucher อิเล็กทรอนิกส์พร้อมส่งแจ้งเตือนเข้า LINE ทันทีค่ะ\n\n` +
+      `💬 หรือหากสะดวกจองผ่านแอดมิน ทัก LINE ได้ที่: **${lineOa}** ได้ตลอด 24 ชม. ค่ะ`;
+  }
+
+  // 5. Hotel Transfer & Pickup Time
+  if (lower.includes('รับส่ง') || lower.includes('โรงแรม') || lower.includes('hotel') || lower.includes('pickup') || lower.includes('เวลารับ') || lower.includes('กี่โมง') || lower.includes('zone') || lower.includes('โซน')) {
+    return `🚐 **บริการรถรับ-ส่งโรงแรมในจังหวัดภูเก็ต**:\n\n` +
+      `• **เวลานัดรับช่วงเช้า**: ประมาณ **07:30 - 08:00 น.** (ขึ้นอยู่กับทำเลที่ตั้งของโรงแรมท่าน)\n` +
+      `• **เวลาเดินทางกลับส่งโรงแรม**: ประมาณ **16:30 - 17:30 น.**\n` +
+      `• **โซนรับส่งฟรี**: ป่าตอง, กะรน, กะตะ, ในหาน, ราไวย์, ฉลอง และตัวเมืองภูเก็ต\n` +
+      `• **การนัดหมาย**: คนขับรถตู้ VIP จะไปรับท่านที่หน้าล็อบบี้โรงแรมตามเวลาที่ระบุบนตั๋ว E-Ticket ค่ะ\n\n` +
+      `📌 ก่อนวันเดินทาง 1 วัน ระบบจะมีข้อความแจ้งเตือนคอนเฟิร์มเวลารับส่งผ่านทาง LINE อีกครั้งเพื่อความอุ่นใจค่ะ!`;
+  }
+
+  // 6. TAT License & Safety & Insurance
+  if (lower.includes('ใบอนุญาต') || lower.includes('ททท') || lower.includes('tat') || lower.includes('ประกัน') || lower.includes('ถูกต้อง') || lower.includes('ปลอดภัย') || lower.includes('license') || lower.includes('safe') || lower.includes('insurance')) {
+    return `🛡️ **ความปลอดภัยและความน่าเชื่อถือที่ Trip Sea Tour Phuket**:\n\n` +
+      `• **ใบอนุญาตประกอบธุรกิจนำเที่ยว ททท.**: เลขที่ **${tat}** (ออกโดยกรมการท่องเที่ยวแห่งประเทศไทย ตรวจสอบได้ 100%)\n` +
+      `• **ประกันภัยอุบัติเหตุทางทะเล**: คุ้มครองผู้โดยสารทุกท่าน ทุกที่นั่ง ตามมาตรฐานสากล\n` +
+      `• **กัปตันและทีมงานมืออาชีพ**: ผ่านการอบรมด้านความปลอดภัยและการปฐมพยาบาลเบื้องต้น (CPR)\n` +
+      `• **อุปกรณ์ความปลอดภัยครบครัน**: เสื้อชูชีพมาตรฐานสำหรับผู้ใหญ่และเด็กเล็กบนเรือทุกลำค่ะ!`;
+  }
+
+  // 7. Things to prepare / Weather
+  if (lower.includes('เตรียม') || lower.includes('เตรียมตัว') || lower.includes('นำอะไรไป') || lower.includes('แต่งตัว') || lower.includes('เสื้อผ้า') || lower.includes('pack') || lower.includes('weather') || lower.includes('ฝน') || lower.includes('คลื่น')) {
+    return `🎒 **สิ่งที่ควรเตรียมสำหรับทริปทะเลภูเก็ตค่ะ**:\n\n` +
+      `1. ชุดว่ายน้ำ หรือชุดลำลองที่แห้งง่าย\n` +
+      `2. ชุดเปลี่ยน 1 ชุดสำหรับเปลี่ยนขากลับ\n` +
+      `3. ผ้าเช็ดตัว, หมวกปีกกว้าง, แว่นตากันแดด\n` +
+      `4. ครีมกันแดดที่เป็นมิตรต่อปะการัง (Reef-Safe Sunscreen)\n` +
+      `5. ซองกันน้ำสำหรับโทรศัพท์มือถือ\n` +
+      `6. ยาประจำตัว (บนเรือมีบริการยาแก้เมาคลื่นและกล่องปฐมพยาบาลฟรีค่ะ)\n\n` +
+      `🌊 กรณีคลื่นลมหรือสภาพอากาศไม่เอื้ออำนวย บริษัทจะแจ้งล่วงหน้าและปรับเปลี่ยนวันเดินทางหรือคืนเงินตามเงื่อนไขอย่างปลอดภัยที่สุดค่ะ!`;
+  }
+
+  // 8. Contact Hotline / Social Links
+  if (lower.includes('ติดต่อ') || lower.includes('เบอร์') || lower.includes('โทร') || lower.includes('ไลน์') || lower.includes('line') || lower.includes('facebook') || lower.includes('เฟส') || lower.includes('call') || lower.includes('phone')) {
+    return `📞 **ช่องทางติดต่อ บริษัท ทริปซีทัวร์ ภูเก็ต จำกัด**:\n\n` +
+      `• 📱 **เบอร์โทรศัพท์สายด่วน (Hotline 24 ชม.)**: **${phone}**\n` +
+      `• 💬 **LINE Official Account**: **${lineOa}** (แอดไลน์สอบถามได้ตลอด 24 ชม.)\n` +
+      `• 🌐 **Facebook Page**: [Trip Sea Tour Phuket](${fb})\n` +
+      `• 📍 **สำนักงาน**: ภูเก็ต ประเทศไทย\n` +
+      `• 🛡️ **ใบอนุญาต ททท.**: เลขที่ **${tat}**\n\n` +
+      `ทีมงานพร้อมให้บริการและดูแลทุกท่านด้วยความยินดียิ่งค่ะ!`;
+  }
+
+  // General Comprehensive Answer
+  return `ขอบคุณสำหรับคำถามค่ะ 😊🌊\n\n**Trip Sea Tour Phuket** ยินดีให้บริการข้อมูลทัวร์ทะเลภูเก็ต เกาะพีพี อ่าวพังงา และเรือยอชท์ชมพระอาทิตย์ตก พร้อมใบอนุญาต ททท. เลขที่ **${tat}**\n\n` +
+    `📌 **โปรแกรมแนะนำยอดนิยม**:\n${tourListText}\n\n` +
+    `ท่านสามารถคลิกดูรายละเอียดและกด **"จองทัวร์"** บนหน้าเว็บได้ทันที หรือสอบถามเจ้าหน้าที่ทาง LINE: **${lineOa}** (โทร **${phone}**) ได้ตลอด 24 ชม. เลยนะคะ!`;
+}
+
+app.post('/api/chat', async (req, res) => {
+  const { message = '', language = 'TH' } = req.body || {};
+  
+  if (!message || typeof message !== 'string') {
+    return res.status(400).json({ error: 'Message is required' });
+  }
+
+  // 1. If Gemini API Key is available, try generating response via modern models with fallback
+  if (process.env.GEMINI_API_KEY) {
+    try {
+      const availableToursSummary = tours.map(t =>
+        `• [${t.title.TH} / ${t.title.EN}] (ID: ${t.id})
   - หมวดหมู่: ${t.categoryLabel?.TH || t.category}
   - ราคา: ผู้ใหญ่ ฿${t.priceAdult.toLocaleString()}, เด็ก ฿${t.priceChild.toLocaleString()} (จากปกติ ฿${t.originalPriceAdult.toLocaleString()})
   - ระยะเวลา: ${t.duration.TH}
   - ไฮไลท์: ${t.highlights.TH?.join(', ')}
   - บริการรวม: ${t.included.TH?.join(', ')}
   - จุดรับส่ง: ${t.pickupAreas?.join(', ')}`
-    ).join('\n\n');
+      ).join('\n\n');
 
-    const systemInstruction = `You are "TripSeaTour AI Assistant" (ผู้ช่วยอัจฉริยะ TripSeaTour 24/7 Powered by Gemini AI), the official 24/7 AI travel concierge for "Trip Sea Tour Phuket" (บริษัท ทริปซีทัวร์ ภูเก็ต จำกัด).
+      const systemInstruction = `You are "TripSeaTour AI Assistant" (ผู้ช่วยอัจฉริยะ TripSeaTour 24/7 Powered by Gemini AI), the official 24/7 AI travel concierge for "Trip Sea Tour Phuket" (บริษัท ทริปซีทัวร์ ภูเก็ต จำกัด).
 
 ABOUT TRIP SEA TOUR PHUKET:
-- Official TAT License (ใบอนุญาตประกอบธุรกิจนำเที่ยว ททท.): เลขที่ 33/11100 (จดทะเบียนถูกต้องตามกฎหมาย มีประกันภัยอุบัติเหตุทางทะเลคุ้มครองทุกที่นั่ง)
+- Official TAT License (ใบอนุญาตประกอบธุรกิจนำเที่ยว ททท.): เลขที่ ${settings.tatLicenseNo || '33/11100'} (จดทะเบียนถูกต้องตามกฎหมาย มีประกันภัยอุบัติเหตุทางทะเลคุ้มครองทุกที่นั่ง)
 - Location: Phuket, Thailand
-- Contact Hotline: ${settings.contactPhone || '+66 (0) 62 681 6494 / +66 (0) 97 924 1399'}
+- Contact Hotline: ${settings.contactPhone || '062-681-6494 / 097-924-1399'}
 - Official LINE OA: ${settings.lineOaId || '@056hxinu'}
+- Official Facebook: ${settings.facebookUrl || 'https://www.facebook.com/tripseatoursphuket/'}
 - Official Website: ${SITE_URL}
 
 CURRENT TOUR PACKAGES:
@@ -882,52 +1092,28 @@ HOW TO BOOK & PAYMENT:
 4. อัปโหลดสลิป ระบบจะออก E-Ticket / Voucher ทางหน้าจอพร้อมส่งแจ้งเตือนเข้า LINE ทันที
 5. มีระบบแจ้งเตือนวันเดินทางล่วงหน้า 24 ชม. ผ่าน LINE
 
-THINGS TO PREPARE FOR SEA TOURS:
-- ครีมกันแดดที่เป็นมิตรกับปะการัง (Reef-safe sunscreen)
-- แว่นกันแดด, หมวก, ผ้าเช็ดตัว, ชุดว่ายน้ำ, ชุดเปลี่ยน
-- ซองกันน้ำสำหรับสมาร์ทโฟน
-- ยาแก้เมาคลื่น (บนเรือมีบริการฟรี)
-
 YOUR INSTRUCTIONS:
-- Answer in the user's requested language (${language}) or matching the user's input language (Thai, English, Chinese, Russian).
-- In Thai, use warm and polite particles (ค่ะ/ครับ).
-- Provide accurate, helpful, inspiring travel advice about Phuket sea trips, weather, itineraries, packing tips, and booking details.
-- Recommend specific tour packages with exact prices when requested.
-- If customer wants to book immediately, guide them to click "จองทัวร์นี้" or contact LINE: ${settings.lineOaId || '@056hxinu'}.
-- Keep replies well-structured, formatted with neat bullet points, bold highlights, and friendly emojis.`;
+- Answer in the user's requested language (${language}) or matching the user's input language.
+- In Thai, use warm, polite, and helpful particles (ค่ะ/ครับ).
+- Keep replies well-structured with neat markdown bullet points, bold highlights, and friendly emojis.
+- Recommend specific tour packages with exact prices when requested.`;
 
-    if (process.env.GEMINI_API_KEY) {
       const response = await ai.models.generateContent({
-        model: 'gemini-3.7-flash',
+        model: 'gemini-2.5-flash',
         contents: `${systemInstruction}\n\nUser Question: ${message}`,
       });
 
-      const reply = response.text || 'ขออภัยค่ะ ขณะนี้ระบบไม่สามารถประมวลผลคำตอบได้ โปรดลองอีกครั้งหรือติดต่อเจ้าหน้าที่ทาง LINE: @056hxinu';
-      return res.json({ reply });
-    } else {
-      // Smart offline fallback
-      let fallbackReply = `สวัสดีค่ะ ยินดีต้อนรับสู่ Trip Sea Tour Phuket 🌊\n\nเราพร้อมให้บริการข้อมูลทัวร์ภูเก็ต เกาะพีพี อ่าวพังงา และเรือยอชท์ชมพระอาทิตย์ตก พร้อมใบอนุญาต ททท. เลขที่ 33/11100\n\n📌 สนใจทัวร์ไหนเป็นพิเศษ สามารถกดเลือกดูรายละเอียดบนหน้าเว็บ หรือสอบถามแอดมินทาง LINE: ${settings.lineOaId || '@056hxinu'} (โทร ${settings.contactPhone}) ได้ตลอด 24 ชม. ค่ะ!`;
-      
-      const lower = message.toLowerCase();
-      if (lower.includes('ราคา') || lower.includes('price') || lower.includes('เท่าไหร่') || lower.includes('cost')) {
-        fallbackReply = `ราคาโปรโมชั่นพิเศษของ Trip Sea Tour Phuket วันนี้ค่ะ:\n` +
-          `🏝️ 1. ทัวร์เกาะพีพี - มาหยา - ปิเละลากูน สปีดโบ๊ท: ผู้ใหญ่ ฿1,590 / เด็ก ฿1,190\n` +
-          `🚣 2. ทัวร์อ่าวพังงา - เกาะเจมส์บอนด์ - แคนูเกาะห้อง: ผู้ใหญ่ ฿1,690 / เด็ก ฿1,290\n` +
-          `⛵ 3. ล่องเรือยอชท์คาทามารัน เกาะเฮ & พระอาทิตย์ตกแหลมพรหมเทพ: ผู้ใหญ่ ฿2,490 / เด็ก ฿1,790\n\n` +
-          `ทุกโปรแกรมรวม: รถรับส่งโรงแรม, อาหารกลางวัน/ค่ำ, อุปกรณ์ดำน้ำ, ประกันอุบัติเหตุทางทะเล ททท. ค่ะ!`;
-      } else if (lower.includes('จอง') || lower.includes('book') || lower.includes('ชำระ') || lower.includes('จ่าย') || lower.includes('pay')) {
-        fallbackReply = `ขั้นตอนการจองและชำระเงินง่ายๆ 4 ขั้นตอนค่ะ:\n` +
-          `1️⃣ เลือกโปรแกรมทัวร์และวันที่ต้องการเดินทาง\n` +
-          `2️⃣ กรอกข้อมูลผู้เดินทางและชื่อโรงแรมที่พัก\n` +
-          `3️⃣ สแกนจ่ายด้วย PromptPay QR Code ผ่านแอปธนาคาร\n` +
-          `4️⃣ แนบสลิป รับ E-Ticket ทันที พร้อมรับการแจ้งเตือนทาง LINE 24 ชม. ค่ะ!`;
+      if (response && response.text) {
+        return res.json({ reply: response.text });
       }
-      return res.json({ reply: fallbackReply });
+    } catch (aiErr: any) {
+      console.warn('Gemini API call warning (falling back to smart local knowledge base):', aiErr?.message || aiErr);
     }
-  } catch (err: any) {
-    console.error('Chatbot API error:', err);
-    res.status(500).json({ error: 'Chat processing failed', details: err?.message });
   }
+
+  // 2. High-speed, guaranteed smart rule-based knowledge engine
+  const fallbackReply = generateSmartFallbackReply(message, language);
+  return res.json({ reply: fallbackReply });
 });
 
 // --- Admin Google Authentication & Account Management ---

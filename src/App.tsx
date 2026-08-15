@@ -412,6 +412,8 @@ export default function App() {
         showToast(`✅ อัปเดตสถานะการจองของ ${updatedBooking.customerName} เรียบร้อยแล้ว`);
         
         if (paymentStatus === 'verified') {
+          // Do not send PAYMENT_VERIFIED notification to LINE group as per user request
+          /*
           const verifiedMsg = `🟢 [ยืนยันชำระเงินสำเร็จ & ออกตั๋ว] รหัส ${updatedBooking.bookingRef}\n` +
             `📍 ทัวร์: ${updatedBooking.tourTitle}\n` +
             `👤 ลูกค้า: ${updatedBooking.customerName} (${updatedBooking.customerPhone})\n` +
@@ -427,6 +429,7 @@ export default function App() {
             updatedBooking.ticketImageUrl,
             updatedBooking.slipUrl
           );
+          */
         }
       }
 
@@ -823,7 +826,15 @@ export default function App() {
     const targetPin = settings.adminPin || '1234';
     if (pin === targetPin) {
       setIsAdminAuthenticated(true);
+      const pinUser: AdminUser = {
+        email: 'pin-admin@tripseatour.com',
+        name: 'แอดมิน (PIN สำรอง)',
+        role: 'admin',
+        lastLogin: new Date().toISOString()
+      };
+      setAdminUser(pinUser);
       localStorage.setItem('tst_admin_auth', 'true');
+      localStorage.setItem('tst_admin_user', JSON.stringify(pinUser));
       setIsAdminAuthModalOpen(false);
       setActiveView('admin');
       showToast('🔓 เข้าสู่ระบบแอดมินสำเร็จ');
@@ -863,21 +874,24 @@ export default function App() {
       )}
 
       {/* Header Navbar */}
-      <Navbar
-        currentLang={currentLang}
-        onLanguageChange={setCurrentLang}
-        currentCurrency={currentCurrency}
-        onCurrencyChange={setCurrentCurrency}
-        onNavigate={handleNavigate}
-        activeView={activeView}
-        onOpenLookup={() => setIsLookupOpen(true)}
-        promptPayId={settings.promptPayId}
-        isAdminAuthenticated={isAdminAuthenticated}
-      />
+      <div className="no-print">
+        <Navbar
+          currentLang={currentLang}
+          onLanguageChange={setCurrentLang}
+          currentCurrency={currentCurrency}
+          onCurrencyChange={setCurrentCurrency}
+          onNavigate={handleNavigate}
+          activeView={activeView}
+          onOpenLookup={() => setIsLookupOpen(true)}
+          promptPayId={settings.promptPayId}
+          isAdminAuthenticated={isAdminAuthenticated}
+        />
+      </div>
 
       {/* View Routing */}
       {activeView === 'admin' && isAdminAuthenticated ? (
         <AdminDashboard
+          adminUser={adminUser}
           bookings={bookings}
           tours={tours}
           customers={customers}
@@ -1022,7 +1036,7 @@ export default function App() {
 
               {/* Official License Certificate Component with Full Details & Zoom Lightbox */}
               <div className="mb-12">
-                <TatLicenseCertificate currentLang={currentLang} />
+                <TatLicenseCertificate currentLang={currentLang} settings={settings} />
               </div>
 
               {/* Bio & Details Grid */}
@@ -1139,14 +1153,19 @@ export default function App() {
       )}
 
       {/* 24/7 AI Chatbot Assistant Powered by Gemini AI */}
-      <TripSeaAiChatbot
-        currentLang={currentLang}
-        currentCurrency={currentCurrency}
-        tours={tours}
-      />
+      <div className="no-print">
+        <TripSeaAiChatbot
+          currentLang={currentLang}
+          currentCurrency={currentCurrency}
+          tours={tours}
+          settings={settings}
+        />
+      </div>
 
       {/* Footer */}
-      <Footer currentLang={currentLang} settings={settings} onNavigate={handleNavigate} />
+      <div className="no-print">
+        <Footer currentLang={currentLang} settings={settings} onNavigate={handleNavigate} />
+      </div>
 
       {/* Modals */}
       <AdminAuthModal

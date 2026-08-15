@@ -3,18 +3,19 @@ import {
   BarChart3, DollarSign, ShoppingBag, Clock, CheckCircle2, AlertTriangle, Users,
   Settings, MessageCircle, QrCode, Plus, Search, Eye, EyeOff, Copy, Check, X, RefreshCw, Send, Image as ImageIcon,
   ChevronRight, Filter, FileSpreadsheet, Sparkles, LogOut, Lock, Key, Ticket, Trash2, Edit3, Calendar, ListChecks,
-  Star, MessageSquare, Bot, UserPlus, UserMinus, ShieldCheck, Mail, Database, Printer, Ship, FileText, ClipboardList, PhoneCall
+  Star, MessageSquare, Bot, UserPlus, UserMinus, ShieldCheck, Mail, Database, Printer, Ship, FileText, ClipboardList, PhoneCall, Award
 } from 'lucide-react';
 import {
   BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid, PieChart, Pie, Cell, Legend
 } from 'recharts';
-import { Booking, Tour, Customer, Review, AppSettings, LineNotificationLog, SalesStats } from '../types';
+import { Booking, Tour, Customer, Review, AppSettings, LineNotificationLog, SalesStats, AdminUser } from '../types';
 import { TicketVoucher } from './TicketVoucher';
 import { EditTourModal } from './EditTourModal';
 import { isSupabaseConfigured, getSupabase, SUPABASE_SQL_SCHEMA } from '../lib/supabase';
 import { initialSettings } from '../data/mockData';
 
 interface AdminDashboardProps {
+  adminUser?: AdminUser | null;
   bookings: Booking[];
   tours: Tour[];
   customers: Customer[];
@@ -44,6 +45,7 @@ interface AdminDashboardProps {
 }
 
 export const AdminDashboard: React.FC<AdminDashboardProps> = ({
+  adminUser,
   bookings,
   tours,
   customers,
@@ -108,9 +110,94 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
   const [editingReviewPhotos, setEditingReviewPhotos] = useState<Review | null>(null);
   const [newPhotoUrl, setNewPhotoUrl] = useState<string>('');
 
+  const isSuperAdmin = adminUser?.role === 'superadmin' || adminUser?.email?.trim().toLowerCase() === 'asmr9941@gmail.com';
+
+  const hasAccess = (tab: 'overview' | 'orders' | 'tours' | 'customers' | 'reviews' | 'settings' | 'manifest') => {
+    if (isSuperAdmin) return true;
+    const allowed = settings.adminPermissions || ['overview', 'orders', 'tours', 'reviews', 'manifest'];
+    return allowed.includes(tab);
+  };
+
+  const renderRestrictedArea = (title: string) => {
+    return (
+      <div className="bg-slate-900 border border-slate-800 rounded-3xl p-10 text-center max-w-lg mx-auto my-12 shadow-2xl relative overflow-hidden animate-in fade-in zoom-in duration-300">
+        <div className="absolute top-0 inset-x-0 h-[2px] bg-gradient-to-r from-amber-500 via-rose-500 to-amber-500" />
+        <div className="w-16 h-16 bg-rose-500/10 border border-rose-500/30 text-rose-400 rounded-full flex items-center justify-center mx-auto mb-6 shadow-lg shadow-rose-950/50">
+          <Lock className="w-8 h-8" />
+        </div>
+        <h3 className="text-lg font-black text-slate-100 mb-2">🔒 สิทธิ์การเข้าถึงถูกจำกัด</h3>
+        <p className="text-slate-400 text-xs leading-relaxed mb-6">
+          บัญชีของคุณยังไม่มีสิทธิ์เข้าใช้งานหน้าเมนู <span className="text-amber-400 font-bold">"{title}"</span> กรุณาติดต่อผู้ดูแลระบบระดับสูงสุดเพื่อขอรับสิทธิ์
+        </p>
+        <div className="bg-slate-950/50 border border-slate-800 p-4 rounded-2xl text-left space-y-2 mb-6">
+          <div className="flex items-center gap-2 text-xs text-slate-400">
+            <Mail className="w-3.5 h-3.5 text-slate-500" />
+            <span>บัญชีของคุณ: <strong className="text-slate-200">{adminUser?.email || 'แอดมิน (PIN สำรอง)'}</strong></span>
+          </div>
+          <div className="flex items-center gap-2 text-xs text-slate-400">
+            <ShieldCheck className="w-3.5 h-3.5 text-slate-500" />
+            <span>สิทธิ์ปัจจุบัน: <span className="text-rose-400 font-bold">แอดมินทั่วไป (Standard Admin)</span></span>
+          </div>
+        </div>
+        <p className="text-[11px] text-slate-500 leading-relaxed">
+          * Super Administrator สามารถปรับแต่งสิทธิ์การเข้าถึงเมนูต่างๆ ของคุณได้แบบเรียลไทม์ ผ่านแท็บเมนูการตั้งค่าระบบหลังบ้าน
+        </p>
+      </div>
+    );
+  };
+
   // Settings State & Admin Google Account Management
   const [formSettings, setFormSettings] = useState<AppSettings>({ ...settings });
   const [newAdminEmail, setNewAdminEmail] = useState('');
+  const [isDraggingTat, setIsDraggingTat] = useState(false);
+  const tatFileInputRef = React.useRef<HTMLInputElement>(null);
+
+  const readAndSetTatLicenseFile = (file: File) => {
+    if (!file.type.startsWith('image/')) {
+      alert('กรุณาเลือกไฟล์รูปภาพเท่านั้น (Only image files are allowed)');
+      return;
+    }
+    if (file.size > 5 * 1024 * 1024) {
+      alert('ขนาดไฟล์ต้องไม่เกิน 5MB (File size must not exceed 5MB)');
+      return;
+    }
+
+    const reader = new FileReader();
+    reader.onloadend = () => {
+      const base64String = reader.result as string;
+      setFormSettings(prev => ({
+        ...prev,
+        tatLicenseImgUrl: base64String
+      }));
+    };
+    reader.readAsDataURL(file);
+  };
+
+  const handleTatLicenseFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      readAndSetTatLicenseFile(file);
+    }
+  };
+
+  const handleTatDragOver = (e: React.DragEvent) => {
+    e.preventDefault();
+    setIsDraggingTat(true);
+  };
+
+  const handleTatDragLeave = () => {
+    setIsDraggingTat(false);
+  };
+
+  const handleTatDrop = (e: React.DragEvent) => {
+    e.preventDefault();
+    setIsDraggingTat(false);
+    const file = e.dataTransfer.files?.[0];
+    if (file) {
+      readAndSetTatLicenseFile(file);
+    }
+  };
+
   const [detectedGroups, setDetectedGroups] = useState<Array<{ groupId: string; groupName?: string; lastSeen: string }>>([]);
   const [isFetchingGroups, setIsFetchingGroups] = useState(false);
   const [groupFetchStatus, setGroupFetchStatus] = useState<string | null>(null);
@@ -204,6 +291,52 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
       setCleanStatusMsg('❌ เกิดข้อผิดพลาดในการล้างข้อมูล');
     } finally {
       setIsCleaningData(false);
+    }
+  };
+
+  const [isBackingUp, setIsBackingUp] = useState(false);
+  const [backupStatusMsg, setBackupStatusMsg] = useState<{
+    success: boolean;
+    message: string;
+    backupTime?: string;
+    counts?: { tours: number; bookings: number; reviews: number; customers: number };
+  } | null>(null);
+
+  const handleManualBackup = async () => {
+    setIsBackingUp(true);
+    setBackupStatusMsg(null);
+    try {
+      const res = await fetch('/api/admin/backup-database', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        }
+      });
+      
+      if (res.ok) {
+        const data = await res.json();
+        setBackupStatusMsg({
+          success: true,
+          message: data.message || 'สำรองข้อมูลสำเร็จ!',
+          backupTime: data.backupTime,
+          counts: data.counts
+        });
+        if (onRefreshData) onRefreshData();
+      } else {
+        const data = await res.json().catch(() => null);
+        setBackupStatusMsg({
+          success: false,
+          message: data?.message || data?.error || 'เกิดข้อผิดพลาดในการสำรองข้อมูลไปยังเซิร์ฟเวอร์'
+        });
+      }
+    } catch (e: any) {
+      console.error('Error backup database:', e);
+      setBackupStatusMsg({
+        success: false,
+        message: `❌ เชื่อมต่อล้มเหลว: ${e?.message || 'โปรดตรวจสอบการเชื่อมต่ออินเทอร์เน็ต'}`
+      });
+    } finally {
+      setIsBackingUp(false);
     }
   };
 
@@ -419,7 +552,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
   return (
     <div className="bg-slate-900 text-slate-100 min-h-screen pb-16">
       {/* Backoffice Header */}
-      <div className="bg-slate-950 border-b border-slate-800 px-4 py-4 sm:px-8">
+      <div className="no-print bg-slate-950 border-b border-slate-800 px-4 py-4 sm:px-8">
         <div className="max-w-7xl mx-auto flex flex-col sm:flex-row sm:items-center justify-between gap-4">
           <div>
             <div className="flex items-center gap-2">
@@ -497,6 +630,12 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
           >
             <BarChart3 className="w-4 h-4" />
             <span>แดชบอร์ดสถิติ</span>
+            {!hasAccess('overview') && (
+              <span className="bg-rose-500/20 text-rose-300 text-[9px] font-extrabold px-1.5 py-0.5 rounded-full flex items-center gap-1 border border-rose-500/30">
+                <Lock className="w-2.5 h-2.5" />
+                <span>จำกัดสิทธิ์</span>
+              </span>
+            )}
           </button>
 
           <button
@@ -512,6 +651,12 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                 {bookings.filter(b => b.paymentStatus === 'slip_uploaded').length}
               </span>
             )}
+            {!hasAccess('orders') && (
+              <span className="bg-rose-500/20 text-rose-300 text-[9px] font-extrabold px-1.5 py-0.5 rounded-full flex items-center gap-1 border border-rose-500/30">
+                <Lock className="w-2.5 h-2.5" />
+                <span>จำกัดสิทธิ์</span>
+              </span>
+            )}
           </button>
 
           <button
@@ -522,6 +667,12 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
           >
             <FileSpreadsheet className="w-4 h-4" />
             <span>โปรแกรมทัวร์ ({tours.length})</span>
+            {!hasAccess('tours') && (
+              <span className="bg-rose-500/20 text-rose-300 text-[9px] font-extrabold px-1.5 py-0.5 rounded-full flex items-center gap-1 border border-rose-500/30">
+                <Lock className="w-2.5 h-2.5" />
+                <span>จำกัดสิทธิ์</span>
+              </span>
+            )}
           </button>
 
           <button
@@ -532,6 +683,12 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
           >
             <Users className="w-4 h-4" />
             <span>ฐานข้อมูลลูกค้า CRM ({customers.length})</span>
+            {!hasAccess('customers') && (
+              <span className="bg-rose-500/20 text-rose-300 text-[9px] font-extrabold px-1.5 py-0.5 rounded-full flex items-center gap-1 border border-rose-500/30">
+                <Lock className="w-2.5 h-2.5" />
+                <span>จำกัดสิทธิ์</span>
+              </span>
+            )}
           </button>
 
           <button
@@ -542,6 +699,12 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
           >
             <Ship className="w-4 h-4 text-cyan-400" />
             <span>ใบบัญชีรายชื่อผู้โดยสาร & ประกันภัย</span>
+            {!hasAccess('manifest') && (
+              <span className="bg-rose-500/20 text-rose-300 text-[9px] font-extrabold px-1.5 py-0.5 rounded-full flex items-center gap-1 border border-rose-500/30 mr-1.5">
+                <Lock className="w-2.5 h-2.5" />
+                <span>จำกัดสิทธิ์</span>
+              </span>
+            )}
             <span className="bg-cyan-500/30 text-cyan-200 text-[10px] font-extrabold px-2 py-0.5 rounded-full border border-cyan-400/30">
               Insurance List
             </span>
@@ -555,6 +718,12 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
           >
             <Star className="w-4 h-4 text-amber-400" />
             <span>จัดการรีวิว & ตอบกลับ ({reviews.length})</span>
+            {!hasAccess('reviews') && (
+              <span className="bg-rose-500/20 text-rose-300 text-[9px] font-extrabold px-1.5 py-0.5 rounded-full flex items-center gap-1 border border-rose-500/30">
+                <Lock className="w-2.5 h-2.5" />
+                <span>จำกัดสิทธิ์</span>
+              </span>
+            )}
           </button>
 
           <button
@@ -565,15 +734,24 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
           >
             <Settings className="w-4 h-4" />
             <span>ตั้งค่า & บัญชี Google Admin</span>
+            {!hasAccess('settings') && (
+              <span className="bg-rose-500/20 text-rose-300 text-[9px] font-extrabold px-1.5 py-0.5 rounded-full flex items-center gap-1 border border-rose-500/30">
+                <Lock className="w-2.5 h-2.5" />
+                <span>จำกัดสิทธิ์</span>
+              </span>
+            )}
           </button>
         </div>
       </div>
 
       {/* Main Backoffice Content Area */}
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+      <div className="no-print max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         {/* TAB 1: OVERVIEW DASHBOARD */}
         {activeTab === 'overview' && (
-          <div className="space-y-8 animate-in fade-in">
+          !hasAccess('overview') ? (
+            renderRestrictedArea('แดชบอร์ดสถิติ')
+          ) : (
+            <div className="space-y-8 animate-in fade-in">
             {/* Top Metric Cards */}
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
               <div className="bg-slate-800/80 border border-slate-700/80 p-5 rounded-2xl shadow-lg relative overflow-hidden">
@@ -709,11 +887,15 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
               </div>
             </div>
           </div>
+          )
         )}
 
         {/* TAB 2: ORDER MANAGEMENT */}
         {activeTab === 'orders' && (
-          <div className="space-y-6 animate-in fade-in">
+          !hasAccess('orders') ? (
+            renderRestrictedArea('จัดการออเดอร์และการเงิน')
+          ) : (
+            <div className="space-y-6 animate-in fade-in">
             {/* Filter & Search Bar */}
             <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-4 bg-slate-800/80 border border-slate-700/80 p-4 rounded-2xl">
               <div className="relative flex-1 max-w-md">
@@ -882,7 +1064,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                             </button>
                           ) : (
                             <span className="bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 px-3 py-1 rounded-lg font-bold block text-[11px]">
-                              ✓ อนุมัติแล้ว (ส่ง LINE แล้ว)
+                              ✓ อนุมัติแล้ว
                             </span>
                           )}
 
@@ -933,11 +1115,15 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
               </div>
             </div>
           </div>
+          )
         )}
 
         {/* TAB 3: TOUR PROGRAM MANAGEMENT */}
         {activeTab === 'tours' && (
-          <div className="space-y-6 animate-in fade-in">
+          !hasAccess('tours') ? (
+            renderRestrictedArea('จัดการโปรแกรมทัวร์')
+          ) : (
+            <div className="space-y-6 animate-in fade-in">
             <div className="flex items-center justify-between">
               <div>
                 <h2 className="text-lg font-bold text-white">จัดการรายการโปรแกรมทัวร์ (Tour Programs)</h2>
@@ -1004,92 +1190,100 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
               ))}
             </div>
           </div>
+          )
         )}
 
         {/* TAB 4: CRM CUSTOMER DATABASE */}
         {activeTab === 'customers' && (
-          <div className="space-y-6 animate-in fade-in">
-            <div className="flex items-center justify-between">
-              <div>
-                <h2 className="text-lg font-bold text-white">ฐานข้อมูลลูกค้า (CRM Database)</h2>
-                <p className="text-xs text-slate-400">รายชื่อลูกค้าทั้งหมด ประวัติการสั่งซื้อ และยอดการใช้จ่ายสะสม</p>
+          !hasAccess('customers') ? (
+            renderRestrictedArea('ฐานข้อมูลลูกค้า CRM')
+          ) : (
+            <div className="space-y-6 animate-in fade-in">
+              <div className="flex items-center justify-between">
+                <div>
+                  <h2 className="text-lg font-bold text-white">ฐานข้อมูลลูกค้า (CRM Database)</h2>
+                  <p className="text-xs text-slate-400">รายชื่อลูกค้าทั้งหมด ประวัติการสั่งซื้อ และยอดการใช้จ่ายสะสม</p>
+                </div>
               </div>
-            </div>
 
-            <div className="bg-slate-800/80 border border-slate-700 rounded-2xl overflow-hidden shadow-xl">
-              <div className="overflow-x-auto">
-                <table className="w-full text-left text-xs">
-                  <thead className="bg-slate-950 text-slate-400 border-b border-slate-700 uppercase font-bold">
-                    <tr>
-                      <th className="p-3.5">ชื่อลูกค้า</th>
-                      <th className="p-3.5">เบอร์โทรศัพท์ / LINE</th>
-                      <th className="p-3.5">อีเมล & สัญชาติ</th>
-                      <th className="p-3.5">จำนวนครั้งที่จอง</th>
-                      <th className="p-3.5">ยอดใช้จ่ายสะสม</th>
-                      <th className="p-3.5 text-center">จัดการ</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-slate-700/50">
-                    {customers.map((c) => (
-                      <tr key={c.id} className="hover:bg-slate-700/30 transition">
-                        <td className="p-3.5 font-bold text-white">{c.name}</td>
-                        <td className="p-3.5 space-y-1">
-                          <div className="text-slate-300 flex items-center gap-1">
-                            <span className="text-slate-400">📞</span>
-                            <a href={`tel:${c.phone}`} className="hover:text-teal-300 font-mono font-medium">{c.phone}</a>
-                          </div>
-                          {c.lineId ? (
-                            <div className="inline-flex items-center gap-1 bg-emerald-950/70 border border-emerald-700/60 text-emerald-300 px-2 py-0.5 rounded text-[10px] font-bold">
-                              <MessageCircle className="w-3 h-3 text-[#06C755] shrink-0" />
-                              <span>LINE: {c.lineId}</span>
-                              <a
-                                href={`https://line.me/R/ti/p/~${c.lineId.replace(/^@/, '')}`}
-                                target="_blank"
-                                rel="noopener noreferrer"
-                                className="ml-1 text-[9px] bg-[#06C755] hover:bg-[#05b34c] text-white px-1 py-0.2 rounded font-bold"
-                              >
-                                ทักไลน์
-                              </a>
-                            </div>
-                          ) : (
-                            <div className="text-[10px] text-slate-500">LINE: ใช้เบอร์โทร</div>
-                          )}
-                        </td>
-                        <td className="p-3.5 text-slate-300">
-                          <div>{c.email}</div>
-                          <span className="text-[10px] bg-slate-900 text-slate-400 px-1.5 py-0.5 rounded">{c.nationality}</span>
-                        </td>
-                        <td className="p-3.5 font-bold text-teal-300">{c.bookingCount} ครั้ง</td>
-                        <td className="p-3.5 font-bold text-amber-400 font-mono">฿{c.totalSpent.toLocaleString()}</td>
-                        <td className="p-3.5 text-center space-x-2">
-                          <button
-                            onClick={() => {
-                              setEditingCustomer(c);
-                              setIsCustomerModalOpen(true);
-                            }}
-                            className="bg-slate-700 hover:bg-slate-600 text-slate-200 px-2.5 py-1 rounded-lg text-[11px] font-bold"
-                          >
-                            แก้ไข
-                          </button>
-                          <button
-                            onClick={() => setDeleteCustomerTarget(c)}
-                            className="bg-rose-950 hover:bg-rose-900 text-rose-300 px-2.5 py-1 rounded-lg text-[11px] font-bold border border-rose-800"
-                          >
-                            ลบ
-                          </button>
-                        </td>
+              <div className="bg-slate-800/80 border border-slate-700 rounded-2xl overflow-hidden shadow-xl">
+                <div className="overflow-x-auto">
+                  <table className="w-full text-left text-xs">
+                    <thead className="bg-slate-950 text-slate-400 border-b border-slate-700 uppercase font-bold">
+                      <tr>
+                        <th className="p-3.5">ชื่อลูกค้า</th>
+                        <th className="p-3.5">เบอร์โทรศัพท์ / LINE</th>
+                        <th className="p-3.5">อีเมล & สัญชาติ</th>
+                        <th className="p-3.5">จำนวนครั้งที่จอง</th>
+                        <th className="p-3.5">ยอดใช้จ่ายสะสม</th>
+                        <th className="p-3.5 text-center">จัดการ</th>
                       </tr>
-                    ))}
-                  </tbody>
-                </table>
+                    </thead>
+                    <tbody className="divide-y divide-slate-700/50">
+                      {customers.map((c) => (
+                        <tr key={c.id} className="hover:bg-slate-700/30 transition">
+                          <td className="p-3.5 font-bold text-white">{c.name}</td>
+                          <td className="p-3.5 space-y-1">
+                            <div className="text-slate-300 flex items-center gap-1">
+                              <span className="text-slate-400">📞</span>
+                              <a href={`tel:${c.phone}`} className="hover:text-teal-300 font-mono font-medium">{c.phone}</a>
+                            </div>
+                            {c.lineId ? (
+                              <div className="inline-flex items-center gap-1 bg-emerald-950/70 border border-emerald-700/60 text-emerald-300 px-2 py-0.5 rounded text-[10px] font-bold">
+                                <MessageCircle className="w-3 h-3 text-[#06C755] shrink-0" />
+                                <span>LINE: {c.lineId}</span>
+                                <a
+                                  href={`https://line.me/R/ti/p/~${c.lineId.replace(/^@/, '')}`}
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                  className="ml-1 text-[9px] bg-[#06C755] hover:bg-[#05b34c] text-white px-1 py-0.2 rounded font-bold"
+                                >
+                                  ทักไลน์
+                                </a>
+                              </div>
+                            ) : (
+                              <div className="text-[10px] text-slate-500">LINE: ใช้เบอร์โทร</div>
+                            )}
+                          </td>
+                          <td className="p-3.5 text-slate-300">
+                            <div>{c.email}</div>
+                            <span className="text-[10px] bg-slate-900 text-slate-400 px-1.5 py-0.5 rounded">{c.nationality}</span>
+                          </td>
+                          <td className="p-3.5 font-bold text-teal-300">{c.bookingCount} ครั้ง</td>
+                          <td className="p-3.5 font-bold text-amber-400 font-mono">฿{c.totalSpent.toLocaleString()}</td>
+                          <td className="p-3.5 text-center space-x-2">
+                            <button
+                              onClick={() => {
+                                setEditingCustomer(c);
+                                setIsCustomerModalOpen(true);
+                              }}
+                              className="bg-slate-700 hover:bg-slate-600 text-slate-200 px-2.5 py-1 rounded-lg text-[11px] font-bold"
+                            >
+                              แก้ไข
+                            </button>
+                            <button
+                              onClick={() => setDeleteCustomerTarget(c)}
+                              className="bg-rose-950 hover:bg-rose-900 text-rose-300 px-2.5 py-1 rounded-lg text-[11px] font-bold border border-rose-800"
+                            >
+                              ลบ
+                            </button>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
               </div>
             </div>
-          </div>
+          )
         )}
 
         {/* TAB 5: REVIEWS & AI REPLIES MANAGEMENT */}
         {activeTab === 'reviews' && (
-          <div className="space-y-6 animate-in fade-in">
+          !hasAccess('reviews') ? (
+            renderRestrictedArea('จัดการรีวิว & ตอบกลับ')
+          ) : (
+            <div className="space-y-6 animate-in fade-in">
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
               <div>
                 <h2 className="text-lg font-bold text-white flex items-center gap-2">
@@ -1284,11 +1478,15 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                 })}
             </div>
           </div>
+          )
         )}
 
         {/* TAB 6: SETTINGS & GOOGLE ADMIN MANAGEMENT */}
         {activeTab === 'settings' && (
-          <div className="space-y-8 animate-in fade-in">
+          !hasAccess('settings') ? (
+            renderRestrictedArea('ตั้งค่า & บัญชี Google Admin')
+          ) : (
+            <div className="space-y-8 animate-in fade-in">
             {/* Supabase Database Connection Status Banner */}
             <div className="bg-slate-800/80 border border-slate-700/80 p-5 rounded-2xl shadow-xl flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
               <div className="flex items-center gap-3">
@@ -1308,7 +1506,17 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                 </div>
               </div>
 
-              <div className="flex items-center gap-2">
+              <div className="flex flex-wrap items-center gap-2">
+                <button
+                  type="button"
+                  onClick={handleManualBackup}
+                  disabled={isBackingUp}
+                  className="bg-teal-600 hover:bg-teal-500 text-white font-extrabold px-3.5 py-2 rounded-xl text-xs flex items-center gap-1.5 transition disabled:opacity-50 shadow-md shadow-teal-900/30"
+                  title="ทำการสำรองข้อมูลทัวร์และออเดอร์สะสมเข้าเซิร์ฟเวอร์สำรอง Supabase ทันที"
+                >
+                  <Database className={`w-3.5 h-3.5 ${isBackingUp ? 'animate-spin' : ''}`} />
+                  <span>{isBackingUp ? 'กำลังสำรองข้อมูล...' : 'สำรองข้อมูล (Backup Database)'}</span>
+                </button>
                 <button
                   type="button"
                   onClick={handleCleanDeletedData}
@@ -1329,6 +1537,43 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                 </button>
               </div>
             </div>
+
+            {backupStatusMsg && (
+              <div className={`border p-4 rounded-xl text-xs animate-in fade-in space-y-2 ${backupStatusMsg.success ? 'bg-emerald-500/10 border-emerald-500/30 text-emerald-300' : 'bg-rose-500/10 border-rose-500/30 text-rose-300'}`}>
+                <div className="flex items-center justify-between font-bold">
+                  <div className="flex items-center gap-2">
+                    <Database className="w-4 h-4 text-emerald-400" />
+                    <span>{backupStatusMsg.success ? '💾 สำรองข้อมูลสำเร็จแล้ว (Supabase Safe Manual Backup)' : '❌ การสำรองข้อมูลขัดข้อง'}</span>
+                  </div>
+                  <button onClick={() => setBackupStatusMsg(null)} className="text-slate-400 hover:text-white text-xs">✕</button>
+                </div>
+                <p className="text-[11px] text-slate-300 font-medium">
+                  {backupStatusMsg.message}
+                </p>
+                {backupStatusMsg.success && backupStatusMsg.counts && (
+                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 pt-1 font-mono text-[10px]">
+                    <div className="bg-slate-900/60 p-1.5 rounded border border-slate-700/50">
+                      📋 โปรแกรมทัวร์: <span className="text-teal-300 font-bold">{backupStatusMsg.counts.tours}</span> รายการ
+                    </div>
+                    <div className="bg-slate-900/60 p-1.5 rounded border border-slate-700/50">
+                      🛍️ ยอดการจอง: <span className="text-teal-300 font-bold">{backupStatusMsg.counts.bookings}</span> บุ๊คกิ้ง
+                    </div>
+                    <div className="bg-slate-900/60 p-1.5 rounded border border-slate-700/50">
+                      ⭐ รีวิวจากผู้ใช้: <span className="text-teal-300 font-bold">{backupStatusMsg.counts.reviews}</span> รายการ
+                    </div>
+                    <div className="bg-slate-900/60 p-1.5 rounded border border-slate-700/50">
+                      👥 ลูกค้าในระบบ: <span className="text-teal-300 font-bold">{backupStatusMsg.counts.customers}</span> คน
+                    </div>
+                  </div>
+                )}
+                {backupStatusMsg.success && backupStatusMsg.backupTime && (
+                  <p className="text-[10px] text-slate-400">
+                    เวลาสำรองข้อมูลล่าสุด: {new Date(backupStatusMsg.backupTime).toLocaleString('th-TH')}
+                  </p>
+                )}
+              </div>
+            )}
+
             {cleanStatusMsg && (
               <div className="bg-slate-800 border border-teal-500/40 p-3.5 rounded-xl text-xs text-teal-300 font-bold animate-in fade-in flex items-center justify-between">
                 <span>{cleanStatusMsg}</span>
@@ -1420,6 +1665,96 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
               </div>
             </div>
 
+            {/* Standard Admin Permissions Configuration Section */}
+            {isSuperAdmin && (
+              <div className="bg-slate-800/80 border border-slate-700/80 p-6 rounded-2xl shadow-xl space-y-5 animate-in fade-in">
+                <div className="flex items-center justify-between border-b border-slate-700/80 pb-4">
+                  <div>
+                    <div className="flex items-center gap-2">
+                      <ShieldCheck className="w-5 h-5 text-teal-400" />
+                      <h3 className="text-base font-bold text-white">
+                        กำหนดสิทธิ์เข้าใช้งานหน้าเมนู (Standard Admin Permissions)
+                      </h3>
+                    </div>
+                    <p className="text-xs text-slate-400 mt-1">
+                      ระบุแท็บเมนูที่อนุญาตให้แอดมินทั่วไป (Standard Admin) สามารถเปิดอ่านหรือปรับแต่งข้อมูลได้
+                    </p>
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                  {[
+                    { id: 'overview', name: '📊 แดชบอร์ดสถิติ', desc: 'สถิติรายได้ ยอดขาย และกราฟเปรียบเทียบต่างๆ' },
+                    { id: 'orders', name: '🛍️ จัดการออเดอร์และการเงิน', desc: 'ตรวจสอบสลิปการโอนเงิน ยืนยันยอด และออกตั๋ว E-Ticket' },
+                    { id: 'tours', name: '📋 จัดการโปรแกรมทัวร์', desc: 'สร้าง ปรับปรุงราคาทัวร์ และกำหนดสถานะการเปิดขาย' },
+                    { id: 'customers', name: '👥 ฐานข้อมูลลูกค้า CRM', desc: 'ดูรายชื่อลูกค้า เบอร์ติดต่อ และประวัติการจองสะสม' },
+                    { id: 'manifest', name: '🚢 ใบบัญชีรายชื่อ & ประกันภัย', desc: 'รายชื่อผู้ลงเรือ รายชื่อทำประกันภัยประจำวัน และการออกรายงาน' },
+                    { id: 'reviews', name: '⭐ จัดการรีวิว & ตอบกลับ', desc: 'ตรวจสอบคะแนนรีวิว ตอบกลับข้อความด้วย AI และจัดการรูปรีวิว' },
+                    { id: 'settings', name: '⚙️ ตั้งค่า & บัญชี Google Admin', desc: 'ปรับแต่งระบบบัญชีธนาคาร, Token แจ้งเตือน และสิทธิ์ระบบ' },
+                  ].map((tab) => {
+                    const currentPermissions = formSettings.adminPermissions || ['overview', 'orders', 'tours', 'reviews', 'manifest'];
+                    const isChecked = currentPermissions.includes(tab.id);
+
+                    const handleTogglePermission = () => {
+                      let updatedPermissions = [...currentPermissions];
+                      if (isChecked) {
+                        updatedPermissions = updatedPermissions.filter(p => p !== tab.id);
+                      } else {
+                        updatedPermissions.push(tab.id);
+                      }
+                      const updatedSettings = {
+                        ...formSettings,
+                        adminPermissions: updatedPermissions
+                      };
+                      setFormSettings(updatedSettings);
+                      onSaveSettings(updatedSettings);
+                    };
+
+                    return (
+                      <button
+                        key={tab.id}
+                        type="button"
+                        onClick={handleTogglePermission}
+                        className={`text-left p-4 rounded-xl border transition-all duration-200 flex items-start gap-3 cursor-pointer ${
+                          isChecked 
+                            ? 'bg-teal-950/40 border-teal-500/40 hover:border-teal-400 text-slate-100' 
+                            : 'bg-slate-900/40 border-slate-800 hover:border-slate-700 text-slate-500'
+                        }`}
+                      >
+                        <div className="mt-0.5">
+                          <div className={`w-4 h-4 rounded flex items-center justify-center border transition ${
+                            isChecked ? 'bg-teal-500 border-teal-500 text-slate-950' : 'border-slate-700'
+                          }`}>
+                            {isChecked && <Check className="w-3 h-3 stroke-[3]" />}
+                          </div>
+                        </div>
+                        <div>
+                          <span className={`text-xs font-bold block mb-0.5 ${isChecked ? 'text-teal-300' : 'text-slate-300'}`}>
+                            {tab.name}
+                          </span>
+                          <span className="text-[10px] leading-relaxed text-slate-400 block">
+                            {tab.desc}
+                          </span>
+                        </div>
+                      </button>
+                    );
+                  })}
+                </div>
+
+                <div className="bg-slate-900/60 border border-slate-800 p-4 rounded-xl text-[11px] text-slate-400 space-y-1">
+                  <span className="font-bold text-amber-400 flex items-center gap-1">
+                    💡 คำชี้แจงสำหรับระบบควบคุมสิทธิ์:
+                  </span>
+                  <p>
+                    • สิทธิ์ของแอดมินทั่วไปจะถูกจำกัดทันทีแบบ Real-time หลังจากกดเปิด/ปิด สิทธิ์ในหน้านี้ (ไม่ต้องรีสตาร์ทระบบ)
+                  </p>
+                  <p>
+                    • แท็บใดที่ไม่มีสิทธิ์เข้าถึง จะแสดงตราสัญลักษณ์สีแดง <span className="text-rose-400 font-bold bg-rose-500/10 px-1 py-0.5 rounded">🔒 จำกัดสิทธิ์</span> และผู้เข้าใช้จะพบหน้าจอแจ้งปฏิเสธการเข้าถึงแบบปลอดภัย
+                  </p>
+                </div>
+              </div>
+            )}
+
             {/* PromptPay & LINE Notify Settings Form */}
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
               <div className="bg-slate-800/80 border border-slate-700/80 p-6 rounded-2xl shadow-xl space-y-6">
@@ -1508,6 +1843,97 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                       onChange={(e) => setFormSettings({ ...formSettings, address: e.target.value })}
                       className="w-full bg-slate-900 border border-slate-700 rounded-xl p-3 text-white text-xs"
                     />
+                  </div>
+
+                  <div>
+                    <label className="text-slate-300 font-bold block mb-1">ลิงก์ Facebook Page ของร้านค้า</label>
+                    <input
+                      type="url"
+                      value={formSettings.facebookUrl || ''}
+                      onChange={(e) => setFormSettings({ ...formSettings, facebookUrl: e.target.value })}
+                      placeholder="เช่น https://www.facebook.com/tripseatoursphuket/"
+                      className="w-full bg-slate-900 border border-slate-700 rounded-xl p-3 text-white text-xs font-mono focus:ring-2 focus:ring-teal-500"
+                    />
+                    <p className="text-[10px] text-slate-500 mt-1">ลิงก์เพจเฟซบุ๊กจะใช้แสดงในส่วน Footer ล่างสุดเพื่อให้ผู้ใช้สามารถกดเชื่อมโยงไปเยี่ยมชมหรือทักแชทได้ทันที</p>
+                  </div>
+
+                  {/* ใบอนุญาตประกอบธุรกิจนำเที่ยว ททท. */}
+                  <div className="pt-4 border-t border-slate-700/80 space-y-4">
+                    <div className="flex items-center gap-2">
+                      <Award className="w-5 h-5 text-amber-400" />
+                      <span className="font-bold text-white text-xs">ใบอนุญาตประกอบธุรกิจนำเที่ยว ททท. (TAT Tourism License)</span>
+                    </div>
+
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      <div>
+                        <label className="text-slate-300 font-bold block mb-1">
+                          เลขที่ใบอนุญาตประกอบธุรกิจนำเที่ยว
+                        </label>
+                        <input
+                          type="text"
+                          value={formSettings.tatLicenseNo || ''}
+                          onChange={(e) => setFormSettings({ ...formSettings, tatLicenseNo: e.target.value })}
+                          placeholder="เช่น 33/11100"
+                          className="w-full bg-slate-900 border border-slate-700 rounded-xl p-3 text-white text-xs font-mono font-bold focus:ring-2 focus:ring-teal-500"
+                        />
+                        <p className="text-[10px] text-slate-500 mt-1">เลขใบอนุญาตจะปรากฏบนหัวตั๋ว E-Ticket และหน้าตรวจสอบใบอนุญาต</p>
+                      </div>
+
+                      <div className="space-y-2">
+                        <label className="text-slate-300 font-bold block mb-1 flex items-center justify-between">
+                          <span>รูปภาพใบอนุญาตประกอบธุรกิจนำเที่ยวต้นฉบับ</span>
+                          {formSettings.tatLicenseImgUrl && formSettings.tatLicenseImgUrl !== '/tat_license_original.jpg' && (
+                            <button
+                              type="button"
+                              onClick={() => setFormSettings({ ...formSettings, tatLicenseImgUrl: '/tat_license_original.jpg' })}
+                              className="text-[10px] text-amber-400 hover:underline font-semibold"
+                            >
+                              รีเซ็ตเป็นรูปเริ่มต้น
+                            </button>
+                          )}
+                        </label>
+                        
+                        <div
+                          onDragOver={handleTatDragOver}
+                          onDragLeave={handleTatDragLeave}
+                          onDrop={handleTatDrop}
+                          onClick={() => tatFileInputRef.current?.click()}
+                          className={`border-2 border-dashed rounded-xl p-4 text-center cursor-pointer transition-all ${
+                            isDraggingTat
+                              ? 'border-teal-400 bg-teal-500/10'
+                              : 'border-slate-700 hover:border-slate-500 bg-slate-900/40 hover:bg-slate-900/80'
+                          }`}
+                        >
+                          <input
+                            type="file"
+                            ref={tatFileInputRef}
+                            onChange={handleTatLicenseFileChange}
+                            accept="image/*"
+                            className="hidden"
+                          />
+                          
+                          {formSettings.tatLicenseImgUrl ? (
+                            <div className="flex items-center gap-3 justify-center">
+                              <img
+                                src={formSettings.tatLicenseImgUrl}
+                                alt="TAT License Preview"
+                                className="w-14 h-16 object-cover rounded border border-slate-700 shadow-sm"
+                                referrerPolicy="no-referrer"
+                              />
+                              <div className="text-left">
+                                <p className="text-[11px] font-bold text-teal-400">อัปโหลดรูปภาพสำเร็จ</p>
+                                <p className="text-[10px] text-slate-400">ลากรูปภาพมาวางหรือคลิกที่นี่เพื่อเปลี่ยนรูปภาพใหม่</p>
+                              </div>
+                            </div>
+                          ) : (
+                            <div className="space-y-1">
+                              <p className="text-[11px] text-slate-300">ลากและวางรูปภาพใบอนุญาต หรือคลิกเพื่อเลือกไฟล์</p>
+                              <p className="text-[9px] text-slate-500">รองรับไฟล์ PNG, JPG (ขนาดไม่เกิน 5MB)</p>
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    </div>
                   </div>
 
                   {/* LINE Messaging API Configuration Card */}
@@ -1728,11 +2154,15 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
               </div>
             </div>
           </div>
+          )
         )}
 
         {/* TAB 7: PASSENGER MANIFEST & MARINE INSURANCE */}
         {activeTab === 'manifest' && (
-          <div className="space-y-6 animate-in fade-in">
+          !hasAccess('manifest') ? (
+            renderRestrictedArea('ใบบัญชีรายชื่อผู้โดยสาร & ประกันภัย')
+          ) : (
+            <div className="space-y-6 animate-in fade-in">
             {/* Top Operational Header */}
             <div className="bg-slate-900 border border-slate-800 p-6 rounded-3xl shadow-xl flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
               <div className="space-y-1">
@@ -1955,104 +2385,8 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                 </div>
               );
             })()}
-
-            {/* Printable Insurance Manifest Lightbox Modal */}
-            {isPrintManifestOpen && (
-              <div className="fixed inset-0 z-50 bg-slate-950/90 backdrop-blur-md flex items-center justify-center p-3 sm:p-6 overflow-y-auto animate-in fade-in">
-                <div className="bg-white text-slate-900 rounded-3xl max-w-4xl w-full p-6 sm:p-8 shadow-2xl border border-slate-300 relative space-y-6 my-auto">
-                  <div className="flex items-center justify-between border-b border-slate-200 pb-4">
-                    <div className="flex items-center gap-3">
-                      <Ship className="w-7 h-7 text-teal-600" />
-                      <div>
-                        <h3 className="text-lg sm:text-xl font-extrabold text-slate-900">
-                          ใบบัญชีรายชื่อผู้โดยสารส่งประกันภัยอุบัติเหตุทางทะเล
-                        </h3>
-                        <p className="text-xs text-slate-500 font-mono">
-                          Trip Sea Tour Phuket • ใบอนุญาตประกอบธุรกิจนำเที่ยว เลขที่ {settings.tatLicenseNo || '33/11100'}
-                        </p>
-                      </div>
-                    </div>
-                    <button
-                      onClick={() => setIsPrintManifestOpen(false)}
-                      className="w-8 h-8 bg-slate-100 hover:bg-slate-200 text-slate-600 rounded-full flex items-center justify-center transition"
-                    >
-                      <X className="w-5 h-5" />
-                    </button>
-                  </div>
-
-                  <div className="bg-slate-50 border border-slate-200 p-4 rounded-2xl text-xs space-y-1 font-mono">
-                    <div className="flex justify-between">
-                      <span className="font-bold">วันที่เดินทาง: {manifestDateFilter === 'all' ? 'ทั้งหมด' : manifestDateFilter}</span>
-                      <span>พิมพ์เมื่อ: {new Date().toLocaleString('th-TH')}</span>
-                    </div>
-                    <div>บริษัท ประกันภัยอุบัติเหตุทางทะเล: คุ้มครองผู้โดยสารและลูกเรือ 100% ตามกฎหมายกรมเจ้าท่า</div>
-                  </div>
-
-                  {/* Clean Printable Table */}
-                  <div className="border border-slate-300 rounded-2xl overflow-hidden text-xs">
-                    <table className="w-full text-left border-collapse">
-                      <thead>
-                        <tr className="bg-slate-100 font-bold border-b border-slate-300 text-slate-800">
-                          <th className="p-2.5">#</th>
-                          <th className="p-2.5">รหัสจอง</th>
-                          <th className="p-2.5">ชื่อ-นามสกุล ผู้โดยสารหลัก</th>
-                          <th className="p-2.5">เบอร์โทรศัพท์</th>
-                          <th className="p-2.5">จำนวน</th>
-                          <th className="p-2.5">โรงแรมรับ-ส่ง</th>
-                          <th className="p-2.5">โปรแกรมทัวร์</th>
-                          <th className="p-2.5">เรือ/กัปตัน</th>
-                        </tr>
-                      </thead>
-                      <tbody className="divide-y divide-slate-200">
-                        {bookings
-                          .filter((b) => manifestDateFilter === 'all' || b.travelDate === manifestDateFilter)
-                          .map((bk, idx) => {
-                            const tour = tours.find((t) => t.id === bk.tourId);
-                            return (
-                              <tr key={bk.id} className="hover:bg-slate-50">
-                                <td className="p-2.5 font-mono">{idx + 1}</td>
-                                <td className="p-2.5 font-mono font-bold text-teal-700">#{bk.bookingRef}</td>
-                                <td className="p-2.5 font-bold">{bk.customerName}</td>
-                                <td className="p-2.5 font-mono">{bk.customerPhone}</td>
-                                <td className="p-2.5 font-mono">
-                                  {bk.adultsCount || 1}A {bk.childrenCount ? `/ ${bk.childrenCount}C` : ''}
-                                </td>
-                                <td className="p-2.5">{bk.hotelName} (ห้อง {bk.roomNumber || '-'})</td>
-                                <td className="p-2.5 font-medium">{tour?.title.TH || 'ทัวร์ภูเก็ต'}</td>
-                                <td className="p-2.5 font-bold text-teal-800">
-                                  {boatAssignments[bk.id] || bk.boatName || 'Speedboat 01'}
-                                </td>
-                              </tr>
-                            );
-                          })}
-                      </tbody>
-                    </table>
-                  </div>
-
-                  <div className="flex justify-between items-center pt-2">
-                    <span className="text-xs text-slate-500">
-                      รวมทั้งหมด {bookings.filter((b) => manifestDateFilter === 'all' || b.travelDate === manifestDateFilter).length} คำสั่งซื้อ
-                    </span>
-                    <div className="flex items-center gap-3">
-                      <button
-                        onClick={() => window.print()}
-                        className="bg-slate-900 hover:bg-slate-800 text-white font-extrabold px-5 py-2.5 rounded-xl text-xs transition flex items-center gap-2"
-                      >
-                        <Printer className="w-4 h-4" />
-                        <span>กดสั่งพิมพ์เอกสาร (Print)</span>
-                      </button>
-                      <button
-                        onClick={() => setIsPrintManifestOpen(false)}
-                        className="bg-slate-200 hover:bg-slate-300 text-slate-800 font-bold px-4 py-2.5 rounded-xl text-xs transition"
-                      >
-                        ปิด
-                      </button>
-                    </div>
-                  </div>
-                </div>
-              </div>
-            )}
           </div>
+          )
         )}
       </div>
 
@@ -2485,6 +2819,103 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                 >
                   <Check className="w-4 h-4" />
                   <span>บันทึกรูปภาพ</span>
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Printable Insurance Manifest Lightbox Modal */}
+      {isPrintManifestOpen && (
+        <div className="print-manifest-modal fixed inset-0 z-50 bg-slate-950/90 backdrop-blur-md flex items-center justify-center p-3 sm:p-6 overflow-y-auto animate-in fade-in">
+          <div className="print-manifest-container bg-white text-slate-900 rounded-3xl max-w-4xl w-full p-6 sm:p-8 shadow-2xl border border-slate-300 relative space-y-6 my-auto">
+            <div className="flex items-center justify-between border-b border-slate-200 pb-4">
+              <div className="flex items-center gap-3">
+                <Ship className="w-7 h-7 text-teal-600" />
+                <div>
+                  <h3 className="text-lg sm:text-xl font-extrabold text-slate-900">
+                    ใบบัญชีรายชื่อผู้โดยสารส่งประกันภัยอุบัติเหตุทางทะเล
+                  </h3>
+                  <p className="text-xs text-slate-500 font-mono">
+                    Trip Sea Tour Phuket • ใบอนุญาตประกอบธุรกิจนำเที่ยว เลขที่ {settings.tatLicenseNo || '33/11100'}
+                  </p>
+                </div>
+              </div>
+              <button
+                onClick={() => setIsPrintManifestOpen(false)}
+                className="no-print w-8 h-8 bg-slate-100 hover:bg-slate-200 text-slate-600 rounded-full flex items-center justify-center transition"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <div className="bg-slate-50 border border-slate-200 p-4 rounded-2xl text-xs space-y-1 font-mono">
+              <div className="flex justify-between">
+                <span className="font-bold">วันที่เดินทาง: {manifestDateFilter === 'all' ? 'ทั้งหมด' : manifestDateFilter}</span>
+                <span>พิมพ์เมื่อ: {new Date().toLocaleString('th-TH')}</span>
+              </div>
+              <div>บริษัท ประกันภัยอุบัติเหตุทางทะเล: คุ้มครองผู้โดยสารและลูกเรือ 100% ตามกฎหมายกรมเจ้าท่า</div>
+            </div>
+
+            {/* Clean Printable Table */}
+            <div className="border border-slate-300 rounded-2xl overflow-hidden text-xs">
+              <table className="w-full text-left border-collapse">
+                <thead>
+                  <tr className="bg-slate-100 font-bold border-b border-slate-300 text-slate-800">
+                    <th className="p-2.5">#</th>
+                    <th className="p-2.5">รหัสจอง</th>
+                    <th className="p-2.5">ชื่อ-นามสกุล ผู้โดยสารหลัก</th>
+                    <th className="p-2.5">เบอร์โทรศัพท์</th>
+                    <th className="p-2.5">จำนวน</th>
+                    <th className="p-2.5">โรงแรมรับ-ส่ง</th>
+                    <th className="p-2.5">โปรแกรมทัวร์</th>
+                    <th className="p-2.5">เรือ/กัปตัน</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-200">
+                  {bookings
+                    .filter((b) => manifestDateFilter === 'all' || b.travelDate === manifestDateFilter)
+                    .map((bk, idx) => {
+                      const tour = tours.find((t) => t.id === bk.tourId);
+                      return (
+                        <tr key={bk.id} className="hover:bg-slate-50">
+                          <td className="p-2.5 font-mono">{idx + 1}</td>
+                          <td className="p-2.5 font-mono font-bold text-teal-700">#{bk.bookingRef}</td>
+                          <td className="p-2.5 font-bold">{bk.customerName}</td>
+                          <td className="p-2.5 font-mono">{bk.customerPhone}</td>
+                          <td className="p-2.5 font-mono">
+                            {bk.adultsCount || 1}A {bk.childrenCount ? `/ ${bk.childrenCount}C` : ''}
+                          </td>
+                          <td className="p-2.5">{bk.hotelName} (ห้อง {bk.roomNumber || '-'})</td>
+                          <td className="p-2.5 font-medium">{tour?.title.TH || 'ทัวร์ภูเก็ต'}</td>
+                          <td className="p-2.5 font-bold text-teal-800">
+                            {boatAssignments[bk.id] || bk.boatName || 'Speedboat 01'}
+                          </td>
+                        </tr>
+                      );
+                    })}
+                </tbody>
+              </table>
+            </div>
+
+            <div className="flex justify-between items-center pt-2">
+              <span className="text-xs text-slate-500">
+                รวมทั้งหมด {bookings.filter((b) => manifestDateFilter === 'all' || b.travelDate === manifestDateFilter).length} คำสั่งซื้อ
+              </span>
+              <div className="no-print flex items-center gap-3">
+                <button
+                  onClick={() => window.print()}
+                  className="bg-slate-900 hover:bg-slate-800 text-white font-extrabold px-5 py-2.5 rounded-xl text-xs transition flex items-center gap-2"
+                >
+                  <Printer className="w-4 h-4" />
+                  <span>กดสั่งพิมพ์เอกสาร (Print)</span>
+                </button>
+                <button
+                  onClick={() => setIsPrintManifestOpen(false)}
+                  className="bg-slate-200 hover:bg-slate-300 text-slate-800 font-bold px-4 py-2.5 rounded-xl text-xs transition"
+                >
+                  ปิด
                 </button>
               </div>
             </div>
