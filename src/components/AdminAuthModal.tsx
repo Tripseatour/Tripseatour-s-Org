@@ -270,7 +270,7 @@ export const AdminAuthModal: React.FC<AdminAuthModalProps> = ({
               <div className="bg-amber-50 border border-amber-200 p-3 rounded-xl text-xs text-amber-900">
                 <p className="font-bold mb-0.5">รหัสผ่านด่วนสำรอง (Master PIN)</p>
                 <p className="text-amber-800 text-[11px]">
-                  กรอกรหัส PIN 4 หลัก (รหัสเริ่มต้นของระบบคือ <strong>1234</strong> หรือรหัสที่ตั้งไว้ในระบบ)
+                  กรอกรหัส PIN 4 หลัก
                 </p>
               </div>
 
@@ -290,7 +290,7 @@ export const AdminAuthModal: React.FC<AdminAuthModalProps> = ({
                       setPinInput(e.target.value);
                       if (errorMsg) setErrorMsg(null);
                     }}
-                    placeholder="กรอกรหัส PIN (เช่น 1234)"
+                    placeholder="กรอกรหัส PIN "
                     className="w-full bg-slate-50 border border-slate-300 rounded-xl pl-10 pr-3 py-2.5 text-sm font-mono tracking-widest text-slate-900 focus:outline-none focus:ring-2 focus:ring-teal-600 focus:bg-white transition text-center"
                     autoFocus
                   />

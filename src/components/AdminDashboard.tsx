@@ -1443,7 +1443,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                       required
                       value={formSettings.promptPayId}
                       onChange={(e) => setFormSettings({ ...formSettings, promptPayId: e.target.value })}
-                      placeholder="เช่น 0626816494 หรือ 1234567890123"
+                      placeholder="เช่น 0612345674 หรือ 1234567890123"
                       className="w-full bg-slate-900 border border-slate-700 rounded-xl p-3 text-white text-xs font-mono font-bold focus:ring-2 focus:ring-teal-500"
                     />
                   </div>
@@ -1462,7 +1462,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                         maxLength={10}
                         value={formSettings.adminPin || '1234'}
                         onChange={(e) => setFormSettings({ ...formSettings, adminPin: e.target.value })}
-                        placeholder="รหัส PIN 4 หลัก เช่น 1234"
+                        placeholder="รหัส PIN 4 หลัก เช่น 0000"
                         className="w-full bg-slate-900 border border-slate-700 rounded-xl pl-10 pr-3 py-2.5 text-xs font-mono font-bold text-amber-300 focus:ring-2 focus:ring-teal-500"
                       />
                     </div>
