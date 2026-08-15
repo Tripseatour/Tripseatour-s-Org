@@ -90,7 +90,7 @@ async function loadStateFromSupabase() {
           contactEmail: s.contact_email || settings.contactEmail,
           address: s.address || settings.address,
           adminPin: s.admin_pin || settings.adminPin,
-          adminGoogleEmails: settings.adminGoogleEmails || ['asmr9941@gmail.com', 'admin@tripseatour.com']
+          adminGoogleEmails: s.admin_google_emails || (settings.adminGoogleEmails && settings.adminGoogleEmails.length > 0 ? settings.adminGoogleEmails : ['asmr9941@gmail.com', 'admin@tripseatour.com'])
         };
       }
     }
@@ -241,6 +241,8 @@ async function persistState(key: 'tours' | 'bookings' | 'settings' | 'reviews' |
           contact_phone: settings.contactPhone,
           contact_email: settings.contactEmail,
           address: settings.address,
+          admin_pin: settings.adminPin,
+          admin_google_emails: settings.adminGoogleEmails,
           updated_at: new Date().toISOString()
         }, { onConflict: 'id' });
         if (setErr) console.log('[Supabase settings upsert info]:', setErr.message);
@@ -944,8 +946,14 @@ app.post('/api/admin/verify-google-account', async (req, res) => {
   }
 });
 
+// Get authorized Google Admin emails
+app.get(['/api/admin/google-emails', '/api/admin/google-accounts'], (req, res) => {
+  const list = settings.adminGoogleEmails || ['asmr9941@gmail.com', 'admin@tripseatour.com'];
+  res.json({ success: true, adminGoogleEmails: list });
+});
+
 // Add new authorized Google Admin email
-app.post('/api/admin/google-emails', async (req, res) => {
+app.post(['/api/admin/google-emails', '/api/admin/google-accounts'], async (req, res) => {
   const { email } = req.body;
   if (!email || !email.includes('@')) {
     return res.status(400).json({ error: 'Invalid email address' });
@@ -956,17 +964,17 @@ app.post('/api/admin/google-emails', async (req, res) => {
     settings.adminGoogleEmails = ['asmr9941@gmail.com', 'admin@tripseatour.com'];
   }
 
-  if (!settings.adminGoogleEmails.includes(cleanEmail)) {
+  if (!settings.adminGoogleEmails.map(e => e.toLowerCase()).includes(cleanEmail)) {
     settings.adminGoogleEmails.push(cleanEmail);
-    await persistState('settings');
   }
+  await persistState('settings');
 
   res.json({ success: true, adminGoogleEmails: settings.adminGoogleEmails });
 });
 
 // Remove authorized Google Admin email
-app.delete('/api/admin/google-emails', async (req, res) => {
-  const { email } = req.body;
+app.delete(['/api/admin/google-emails', '/api/admin/google-accounts', '/api/admin/google-accounts/:email'], async (req, res) => {
+  const email = req.params.email || req.body.email || (req.query.email as string);
   if (!email) {
     return res.status(400).json({ error: 'Email is required' });
   }

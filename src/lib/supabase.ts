@@ -413,6 +413,7 @@ export const supabaseApi = {
         contact_email: settings.contactEmail,
         address: settings.address,
         admin_pin: settings.adminPin,
+        admin_google_emails: settings.adminGoogleEmails,
         updated_at: new Date().toISOString()
       }, { onConflict: 'id' });
 

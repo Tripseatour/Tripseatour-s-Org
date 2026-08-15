@@ -395,7 +395,9 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
     const matchesSearch =
       b.bookingRef.toLowerCase().includes(searchQuery.toLowerCase()) ||
       b.customerName.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      b.customerPhone.includes(searchQuery);
+      b.customerPhone.includes(searchQuery) ||
+      (b.customerLineId && b.customerLineId.toLowerCase().includes(searchQuery.toLowerCase())) ||
+      (b.pickupHotel && b.pickupHotel.toLowerCase().includes(searchQuery.toLowerCase()));
 
     return matchesFilter && matchesSearch;
   });
@@ -746,7 +748,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                     <tr>
                       <th className="p-3.5">รหัสการจอง & เวลา</th>
                       <th className="p-3.5">โปรแกรมทัวร์</th>
-                      <th className="p-3.5">ข้อมูลผู้จอง & โรงแรม</th>
+                      <th className="p-3.5">ผู้จอง & เบอร์ / LINE</th>
                       <th className="p-3.5">วันเดินทาง / จำนวน</th>
                       <th className="p-3.5">ยอดเงิน</th>
                       <th className="p-3.5">สลิปโอนเงิน</th>
@@ -772,10 +774,51 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                           <span className="text-[10px] text-teal-400 font-mono">PromptPay QR</span>
                         </td>
 
-                        <td className="p-3.5 space-y-0.5">
-                          <div className="font-bold text-white">{b.customerName}</div>
-                          <div className="text-slate-400">📞 {b.customerPhone}</div>
-                          <div className="text-slate-400 text-[11px]">🏨 {b.pickupHotel} ({b.pickupZone})</div>
+                        <td className="p-3.5 space-y-1.5 min-w-[200px]">
+                          <div className="font-bold text-white flex items-center gap-1.5">
+                            <span>{b.customerName}</span>
+                            {b.nationality && (
+                              <span className="text-[10px] bg-slate-900 text-slate-400 px-1.5 py-0.5 rounded border border-slate-800 font-normal">
+                                {b.nationality}
+                              </span>
+                            )}
+                          </div>
+
+                          <div className="text-slate-300 flex items-center gap-1.5 text-xs">
+                            <span className="text-slate-400">📞</span>
+                            <a href={`tel:${b.customerPhone}`} className="hover:text-teal-300 font-mono font-semibold transition">
+                              {b.customerPhone}
+                            </a>
+                          </div>
+
+                          {/* Customer LINE ID Display */}
+                          <div className="pt-0.5">
+                            {b.customerLineId ? (
+                              <div className="inline-flex items-center gap-1.5 bg-emerald-950/80 border border-emerald-700/80 text-emerald-300 px-2 py-0.5 rounded-lg text-[11px] font-bold shadow-sm">
+                                <MessageCircle className="w-3.5 h-3.5 text-[#06C755] shrink-0" />
+                                <span className="text-emerald-400/80 text-[10px]">LINE:</span>
+                                <span className="font-mono text-white font-extrabold">{b.customerLineId}</span>
+                                <a
+                                  href={`https://line.me/R/ti/p/~${b.customerLineId.replace(/^@/, '')}`}
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                  className="ml-1 text-[10px] bg-[#06C755] hover:bg-[#05b34c] text-white px-1.5 py-0.5 rounded font-bold transition shadow-sm"
+                                  title={`เปิดแชท LINE กับ ${b.customerName} (@${b.customerLineId})`}
+                                >
+                                  ทักไลน์
+                                </a>
+                              </div>
+                            ) : (
+                              <div className="inline-flex items-center gap-1 text-slate-400 text-[10px] bg-slate-900/80 border border-slate-700/60 px-2 py-0.5 rounded-lg">
+                                <MessageCircle className="w-3 h-3 text-slate-500" />
+                                <span>LINE: <span className="font-mono text-slate-300">{b.customerPhone}</span> (เบอร์โทร)</span>
+                              </div>
+                            )}
+                          </div>
+
+                          <div className="text-slate-400 text-[11px] truncate max-w-[240px]" title={`${b.pickupHotel} ${b.roomNumber ? `(ห้อง ${b.roomNumber})` : ''} (${b.pickupZone})`}>
+                            🏨 {b.pickupHotel} {b.roomNumber ? `(ห้อง ${b.roomNumber})` : ''} ({b.pickupZone})
+                          </div>
                         </td>
 
                         <td className="p-3.5 space-y-0.5">
@@ -965,9 +1008,27 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                     {customers.map((c) => (
                       <tr key={c.id} className="hover:bg-slate-700/30 transition">
                         <td className="p-3.5 font-bold text-white">{c.name}</td>
-                        <td className="p-3.5 text-slate-300">
-                          <div>📞 {c.phone}</div>
-                          {c.lineId && <div className="text-[11px] text-teal-400">LINE: {c.lineId}</div>}
+                        <td className="p-3.5 space-y-1">
+                          <div className="text-slate-300 flex items-center gap-1">
+                            <span className="text-slate-400">📞</span>
+                            <a href={`tel:${c.phone}`} className="hover:text-teal-300 font-mono font-medium">{c.phone}</a>
+                          </div>
+                          {c.lineId ? (
+                            <div className="inline-flex items-center gap-1 bg-emerald-950/70 border border-emerald-700/60 text-emerald-300 px-2 py-0.5 rounded text-[10px] font-bold">
+                              <MessageCircle className="w-3 h-3 text-[#06C755] shrink-0" />
+                              <span>LINE: {c.lineId}</span>
+                              <a
+                                href={`https://line.me/R/ti/p/~${c.lineId.replace(/^@/, '')}`}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="ml-1 text-[9px] bg-[#06C755] hover:bg-[#05b34c] text-white px-1 py-0.2 rounded font-bold"
+                              >
+                                ทักไลน์
+                              </a>
+                            </div>
+                          ) : (
+                            <div className="text-[10px] text-slate-500">LINE: ใช้เบอร์โทร</div>
+                          )}
                         </td>
                         <td className="p-3.5 text-slate-300">
                           <div>{c.email}</div>

@@ -72,11 +72,24 @@ export const Footer: React.FC<FooterProps> = ({ currentLang, settings, onNavigat
                 <MapPin className="w-4 h-4 text-blue-400 shrink-0 mt-0.5" />
                 <span>{settings.address}</span>
               </li>
-              <li className="flex items-center gap-2">
-                <Phone className="w-4 h-4 text-blue-400 shrink-0" />
-                <span>{settings.contactPhone}</span>
+              <li className="flex items-start gap-2">
+                <Phone className="w-4 h-4 text-blue-400 shrink-0 mt-0.5" />
+                <div className="space-y-1">
+                  <div className="text-slate-300">
+                    <span className="text-[10px] text-slate-400 block">เบอร์โทรหลัก:</span>
+                    <a href="tel:0626816494" className="font-bold text-white hover:text-blue-400 transition font-mono">
+                      062-681-6494
+                    </a>
+                  </div>
+                  <div className="text-slate-300">
+                    <span className="text-[10px] text-slate-400 block">เบอร์สำรอง:</span>
+                    <a href="tel:0979241399" className="font-bold text-white hover:text-blue-400 transition font-mono">
+                      097-924-1399
+                    </a>
+                  </div>
+                </div>
               </li>
-              <li className="flex items-center gap-2">
+              <li className="flex items-center gap-2 pt-1">
                 <Mail className="w-4 h-4 text-blue-400 shrink-0" />
                 <span>{settings.contactEmail}</span>
               </li>
@@ -103,13 +116,44 @@ export const Footer: React.FC<FooterProps> = ({ currentLang, settings, onNavigat
           </div>
         </div>
 
+        {/* Bottom Call Hotline Banner */}
+        <div className="my-6 p-4 rounded-2xl bg-slate-800/90 border border-slate-700/80 flex flex-col sm:flex-row items-center justify-between gap-4">
+          <div className="flex items-center gap-3 text-center sm:text-left">
+            <div className="w-10 h-10 rounded-xl bg-blue-600/20 text-blue-400 border border-blue-500/30 flex items-center justify-center shrink-0">
+              <Phone className="w-5 h-5 animate-pulse" />
+            </div>
+            <div>
+              <div className="text-xs font-bold text-white">โทรสอบถาม / จองทัวร์ด่วนทางโทรศัพท์</div>
+              <div className="text-[11px] text-slate-400">ติดต่อเจ้าหน้าที่ทริปซีทัวร์ได้ตลอด 24 ชั่วโมง</div>
+            </div>
+          </div>
+
+          <div className="flex flex-wrap items-center justify-center gap-2.5 w-full sm:w-auto">
+            <a
+              href="tel:0626816494"
+              className="flex-1 sm:flex-none inline-flex items-center justify-center gap-2 bg-blue-600 hover:bg-blue-500 text-white font-extrabold px-4 py-2.5 rounded-xl text-xs transition shadow-md shadow-blue-950 font-mono"
+            >
+              <Phone className="w-4 h-4 text-blue-200" />
+              <span>โทรเบอร์หลัก 062-681-6494</span>
+            </a>
+
+            <a
+              href="tel:0979241399"
+              className="flex-1 sm:flex-none inline-flex items-center justify-center gap-2 bg-slate-700 hover:bg-slate-600 text-white font-extrabold px-4 py-2.5 rounded-xl text-xs transition border border-slate-600 font-mono"
+            >
+              <Phone className="w-4 h-4 text-amber-400" />
+              <span>โทรเบอร์สำรอง 097-924-1399</span>
+            </a>
+          </div>
+        </div>
+
         {/* Bottom Bar */}
-        <div className="pt-8 border-t border-slate-800 flex flex-col sm:flex-row items-center justify-between gap-4 text-xs text-slate-500">
+        <div className="pt-6 border-t border-slate-800 flex flex-col sm:flex-row items-center justify-between gap-4 text-xs text-slate-500">
           <p>{t.copyright}</p>
           <div className="flex items-center gap-6">
             <span className="flex items-center gap-1 text-slate-400">
               <ShieldCheck className="w-4 h-4 text-emerald-400" />
-              TAT License Verified 31/01824
+              TAT License Verified 33/11100
             </span>
 
             {/* Hidden/Discrete Admin Button at Bottom Right */}
