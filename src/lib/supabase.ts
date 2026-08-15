@@ -253,14 +253,24 @@ export const supabaseApi = {
     if (!client) return null;
 
     try {
-      // Try from dedicated 'settings' table first
+      // 1. Try from app_store settings key first (it contains the complete full JSON of all settings)
+      const { data: kvData, error: kvError } = await client.from('app_store').select('value').eq('key', 'settings').maybeSingle();
+      if (!kvError && kvData && kvData.value) {
+        try {
+          const parsed = JSON.parse(kvData.value);
+          if (parsed && parsed.promptPayId) {
+            // Ensure adminGoogleEmails is present
+            if (!parsed.adminGoogleEmails || !Array.isArray(parsed.adminGoogleEmails)) {
+              parsed.adminGoogleEmails = ['asmr9941@gmail.com', 'admin@tripseatour.com'];
+            }
+            return parsed;
+          }
+        } catch (jsonErr) {}
+      }
+
+      // 2. Fallback to dedicated 'settings' table if app_store key is missing or corrupted
       const { data, error } = await client.from('settings').select('*').limit(1);
       if (error || !data || data.length === 0) {
-        // Fallback to app_store settings key
-        const { data: kvData } = await client.from('app_store').select('value').eq('key', 'settings').maybeSingle();
-        if (kvData && kvData.value) {
-          return JSON.parse(kvData.value);
-        }
         return null;
       }
       const s = data[0];

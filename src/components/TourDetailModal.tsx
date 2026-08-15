@@ -165,6 +165,24 @@ export const TourDetailModal: React.FC<TourDetailModalProps> = ({
             </div>
           )}
 
+          {/* Flexible Date Change & Weather Guarantee Banner */}
+          <div className="bg-gradient-to-r from-teal-900 via-slate-900 to-slate-900 text-white p-4 rounded-2xl border border-teal-700/60 shadow-md space-y-2">
+            <div className="flex items-center gap-2">
+              <ShieldCheck className="w-5 h-5 text-teal-400 shrink-0" />
+              <h4 className="font-extrabold text-xs sm:text-sm text-teal-200">
+                {currentLang === 'TH' ? 'การันตีจองสบายใจ: เลื่อนวันเดินทางฟรี & คืนเงินเต็มจำนวนกรณีมรสุม' :
+                 currentLang === 'EN' ? 'Flexible Booking Guarantee: Free Date Change & 100% Monsoon Refund' :
+                 currentLang === 'ZH' ? '灵活预订保障：免费改期 & 恶劣天气100%退款' : 'Гарантия гибкого бронирования: бесплатный перенос'}
+              </h4>
+            </div>
+            <p className="text-[11px] text-slate-300 leading-relaxed pl-7">
+              {currentLang === 'TH' ? '• หากเรือไม่สามารถออกได้เนื่องจากสภาพอากาศหรือคลื่นลมมรสุม ทางบริษัทคืนเงิน 100% หรือเลื่อนวันให้ทันที\n• แจ้งเปลี่ยนวันเดินทางล่วงหน้า 24 ชั่วโมง โดยไม่มีค่าธรรมเนียมเพิ่มเติม' :
+               currentLang === 'EN' ? '• 100% Full Refund or instant rescheduling if boats cannot depart due to severe weather/monsoon.\n• Free date changes up to 24 hours prior to trip date with zero penalty fees.' :
+               currentLang === 'ZH' ? '• 若因恶劣天气导致船只取消，全额100%退款或免费为您改期。\n• 出发前24小时内可免费申请改期，无任何附加费用。' :
+               '• 100% возврат средств при cancellation из-за погоды. Бесплатный перенос даты за 24 часа.'}
+            </p>
+          </div>
+
           {/* Pickup Zones */}
           <div className="bg-slate-50 border border-slate-200 p-4 rounded-2xl space-y-1.5">
             <h4 className="font-bold text-slate-900 text-xs">โซนโรงแรมที่มีบริการรถรับ-ส่งฟรี:</h4>

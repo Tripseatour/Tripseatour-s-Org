@@ -740,6 +740,26 @@ export default function App() {
     } catch (e) {}
   };
 
+  const handleUpdateReview = async (id: string, updatedFields: Partial<Review>) => {
+    lastMutationTimeRef.current = Date.now();
+    const nextReviews = reviews.map(r => r.id === id ? { ...r, ...updatedFields } : r);
+    setReviews(nextReviews);
+    localStorage.setItem('tst_reviews', JSON.stringify(nextReviews));
+    supabaseApi.saveReviews(nextReviews).catch(() => {});
+    showToast('✏️ แก้ไขข้อมูลรีวิวเรียบร้อยแล้ว');
+    try {
+      const res = await fetch(`/api/reviews/${id}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(updatedFields)
+      });
+      if (res.ok) {
+        const data = await res.json();
+        if (data.version) lastServerVersionRef.current = data.version;
+      }
+    } catch (e) {}
+  };
+
   const handleReplyReview = async (id: string, reply: string) => {
     lastMutationTimeRef.current = Date.now();
     const nextReviews = reviews.map(r => r.id === id ? { ...r, adminReply: reply } : r);
@@ -879,6 +899,7 @@ export default function App() {
           onUpdateCustomer={handleUpdateCustomer}
           onDeleteCustomer={handleDeleteCustomer}
           onApproveReview={handleApproveReview}
+          onUpdateReview={handleUpdateReview}
           onReplyReview={handleReplyReview}
           onDeleteReview={handleDeleteReview}
           onRefreshData={loadInitialData}

@@ -3,7 +3,7 @@ import {
   BarChart3, DollarSign, ShoppingBag, Clock, CheckCircle2, AlertTriangle, Users,
   Settings, MessageCircle, QrCode, Plus, Search, Eye, EyeOff, Copy, Check, X, RefreshCw, Send, Image as ImageIcon,
   ChevronRight, Filter, FileSpreadsheet, Sparkles, LogOut, Lock, Key, Ticket, Trash2, Edit3, Calendar, ListChecks,
-  Star, MessageSquare, Bot, UserPlus, UserMinus, ShieldCheck, Mail, Database
+  Star, MessageSquare, Bot, UserPlus, UserMinus, ShieldCheck, Mail, Database, Printer, Ship, FileText, ClipboardList, PhoneCall
 } from 'lucide-react';
 import {
   BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid, PieChart, Pie, Cell, Legend
@@ -36,6 +36,7 @@ interface AdminDashboardProps {
   onUpdateCustomer?: (id: string, customerData: Partial<Customer>) => void;
   onDeleteCustomer?: (id: string) => void;
   onApproveReview?: (id: string, isApproved: boolean) => void;
+  onUpdateReview?: (id: string, updatedFields: Partial<Review>) => void;
   onReplyReview?: (id: string, reply: string) => void;
   onDeleteReview?: (id: string) => void;
   onRefreshData?: () => void;
@@ -64,18 +65,27 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
   onUpdateCustomer,
   onDeleteCustomer,
   onApproveReview,
+  onUpdateReview,
   onReplyReview,
   onDeleteReview,
   onRefreshData,
   onForceSync
 }) => {
-  const [activeTab, setActiveTab] = useState<'overview' | 'orders' | 'tours' | 'customers' | 'reviews' | 'settings'>('overview');
+  const [activeTab, setActiveTab] = useState<'overview' | 'orders' | 'tours' | 'customers' | 'reviews' | 'settings' | 'manifest'>('overview');
   const [stats, setStats] = useState<SalesStats | null>(null);
 
   // Filters
   const [orderFilter, setOrderFilter] = useState<string>('all');
   const [searchQuery, setSearchQuery] = useState<string>('');
   const [reviewFilter, setReviewFilter] = useState<'all' | 'pending' | 'approved'>('all');
+
+  // Passenger Manifest & Back-office States
+  const [manifestDateFilter, setManifestDateFilter] = useState<string>('all');
+  const [manifestTourFilter, setManifestTourFilter] = useState<string>('all');
+  const [manifestSearch, setManifestSearch] = useState<string>('');
+  const [boatAssignments, setBoatAssignments] = useState<Record<string, string>>({});
+  const [isPrintManifestOpen, setIsPrintManifestOpen] = useState<boolean>(false);
+  const [lineSendSuccessMsg, setLineSendSuccessMsg] = useState<string | null>(null);
 
   // Modals & Forms
   const [selectedSlipUrl, setSelectedSlipUrl] = useState<string | null>(null);
@@ -95,6 +105,8 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
   const [replyTextMap, setReplyTextMap] = useState<Record<string, string>>({});
   const [aiGeneratingMap, setAiGeneratingMap] = useState<Record<string, boolean>>({});
   const [deleteReviewTarget, setDeleteReviewTarget] = useState<Review | null>(null);
+  const [editingReviewPhotos, setEditingReviewPhotos] = useState<Review | null>(null);
+  const [newPhotoUrl, setNewPhotoUrl] = useState<string>('');
 
   // Settings State & Admin Google Account Management
   const [formSettings, setFormSettings] = useState<AppSettings>({ ...settings });
@@ -520,6 +532,19 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
           >
             <Users className="w-4 h-4" />
             <span>ฐานข้อมูลลูกค้า CRM ({customers.length})</span>
+          </button>
+
+          <button
+            onClick={() => setActiveTab('manifest')}
+            className={`px-4 py-2 rounded-xl text-xs font-bold transition flex items-center gap-2 whitespace-nowrap relative ${
+              activeTab === 'manifest' ? 'bg-teal-600 text-white shadow-lg shadow-teal-600/30' : 'bg-slate-800/80 text-slate-400 hover:text-white'
+            }`}
+          >
+            <Ship className="w-4 h-4 text-cyan-400" />
+            <span>ใบบัญชีรายชื่อผู้โดยสาร & ประกันภัย</span>
+            <span className="bg-cyan-500/30 text-cyan-200 text-[10px] font-extrabold px-2 py-0.5 rounded-full border border-cyan-400/30">
+              Insurance List
+            </span>
           </button>
 
           <button
@@ -1170,6 +1195,19 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                             {isApproved ? '✓ อนุมัติแสดงผล' : '⏳ ซ่อนรีวิว'}
                           </button>
 
+                          {/* Edit Review Photo */}
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setEditingReviewPhotos(rev);
+                              setNewPhotoUrl(rev.photos && rev.photos.length > 0 ? rev.photos[0] : '');
+                            }}
+                            className="p-1.5 bg-slate-700 hover:bg-slate-600 text-slate-200 border border-slate-600 rounded-lg transition flex items-center justify-center"
+                            title="แก้ไขรูปภาพรีวิว"
+                          >
+                            <ImageIcon className="w-4 h-4" />
+                          </button>
+
                           {/* Delete Review */}
                           <button
                             type="button"
@@ -1691,6 +1729,331 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
             </div>
           </div>
         )}
+
+        {/* TAB 7: PASSENGER MANIFEST & MARINE INSURANCE */}
+        {activeTab === 'manifest' && (
+          <div className="space-y-6 animate-in fade-in">
+            {/* Top Operational Header */}
+            <div className="bg-slate-900 border border-slate-800 p-6 rounded-3xl shadow-xl flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
+              <div className="space-y-1">
+                <div className="inline-flex items-center gap-2 bg-cyan-500/10 text-cyan-300 px-3 py-1 rounded-full text-xs font-bold border border-cyan-500/20">
+                  <Ship className="w-4 h-4 text-cyan-400" />
+                  <span>ระบบบริหารรายชื่อผู้โดยสาร & ประกันภัยทางทะเล</span>
+                </div>
+                <h2 className="text-xl sm:text-2xl font-extrabold text-white">
+                  ใบบัญชีรายชื่อผู้โดยสารเรือท่องเที่ยว (Passenger Manifest)
+                </h2>
+                <p className="text-xs text-slate-400">
+                  รวบรวมข้อมูลผู้เดินทาง จัดเรือ/กัปตัน และพิมพ์ใบนำส่งประกันภัยอุบัติเหตุทางทะเล
+                </p>
+              </div>
+
+              {/* Action Buttons */}
+              <div className="flex flex-wrap items-center gap-2.5 w-full md:w-auto">
+                <button
+                  onClick={() => setIsPrintManifestOpen(true)}
+                  className="bg-cyan-600 hover:bg-cyan-500 text-white font-extrabold px-4 py-2.5 rounded-xl text-xs transition shadow-lg shadow-cyan-950/50 flex items-center gap-2"
+                >
+                  <Printer className="w-4 h-4" />
+                  <span>พิมพ์/ส่งใบบัญชีประกันภัย</span>
+                </button>
+              </div>
+            </div>
+
+            {lineSendSuccessMsg && (
+              <div className="bg-emerald-500/20 border border-emerald-500/40 text-emerald-300 p-3.5 rounded-2xl text-xs font-bold flex items-center gap-2 animate-in fade-in">
+                <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" />
+                <span>{lineSendSuccessMsg}</span>
+              </div>
+            )}
+
+            {/* Filter Toolbar */}
+            <div className="bg-slate-900/80 border border-slate-800 p-4 rounded-2xl grid grid-cols-1 sm:grid-cols-3 gap-3">
+              {/* Date Filter */}
+              <div>
+                <label className="text-[11px] font-bold text-slate-400 block mb-1">วันเดินทาง (Travel Date)</label>
+                <select
+                  value={manifestDateFilter}
+                  onChange={(e) => setManifestDateFilter(e.target.value)}
+                  className="w-full bg-slate-950 border border-slate-700 rounded-xl p-2.5 text-xs font-bold text-white focus:ring-2 focus:ring-teal-500"
+                >
+                  <option value="all">📅 แสดงวันเดินทางทั้งหมด ({bookings.length} รายการ)</option>
+                  {Array.from(new Set(bookings.map((b) => b.travelDate))).map((d) => (
+                    <option key={d} value={d}>
+                      📅 {d} ({bookings.filter((b) => b.travelDate === d).length} บุ๊คกิ้ง)
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              {/* Tour Filter */}
+              <div>
+                <label className="text-[11px] font-bold text-slate-400 block mb-1">โปรแกรมทัวร์ (Tour Program)</label>
+                <select
+                  value={manifestTourFilter}
+                  onChange={(e) => setManifestTourFilter(e.target.value)}
+                  className="w-full bg-slate-950 border border-slate-700 rounded-xl p-2.5 text-xs font-bold text-white focus:ring-2 focus:ring-teal-500"
+                >
+                  <option value="all">📍 แสดงโปรแกรมทัวร์ทั้งหมด</option>
+                  {tours.map((t) => (
+                    <option key={t.id} value={t.id}>
+                      📍 {t.title.TH}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              {/* Search Box */}
+              <div>
+                <label className="text-[11px] font-bold text-slate-400 block mb-1">ค้นหาผู้โดยสาร (Search)</label>
+                <div className="relative">
+                  <Search className="w-4 h-4 text-slate-500 absolute left-3 top-2.5" />
+                  <input
+                    type="text"
+                    placeholder="ชื่อลูกค้า, เบอร์โทร, โรงแรม..."
+                    value={manifestSearch}
+                    onChange={(e) => setManifestSearch(e.target.value)}
+                    className="w-full bg-slate-950 border border-slate-700 rounded-xl pl-9 pr-3 py-2 text-xs text-white focus:ring-2 focus:ring-teal-500"
+                  />
+                </div>
+              </div>
+            </div>
+
+            {/* Filtered Manifest Passenger Table */}
+            {(() => {
+              const filteredList = bookings.filter((b) => {
+                const matchDate = manifestDateFilter === 'all' || b.travelDate === manifestDateFilter;
+                const matchTour = manifestTourFilter === 'all' || b.tourId === manifestTourFilter;
+                const matchSearch =
+                  !manifestSearch ||
+                  b.customerName.toLowerCase().includes(manifestSearch.toLowerCase()) ||
+                  b.customerPhone.includes(manifestSearch) ||
+                  b.bookingRef.toLowerCase().includes(manifestSearch.toLowerCase()) ||
+                  b.hotelName.toLowerCase().includes(manifestSearch.toLowerCase());
+                return matchDate && matchTour && matchSearch;
+              });
+
+              const totalAdults = filteredList.reduce((sum, b) => sum + (b.adultsCount || 1), 0);
+              const totalChildren = filteredList.reduce((sum, b) => sum + (b.childrenCount || 0), 0);
+              const totalInfants = filteredList.reduce((sum, b) => sum + (b.infantsCount || 0), 0);
+              const totalPassengers = totalAdults + totalChildren + totalInfants;
+
+              return (
+                <div className="space-y-4">
+                  {/* Summary Metric Strip */}
+                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                    <div className="bg-slate-900 border border-slate-800 p-3.5 rounded-2xl">
+                      <span className="text-[10px] text-slate-400 block">ผู้โดยสารรวมทั้งหมด</span>
+                      <span className="text-xl font-extrabold text-cyan-400 font-mono">{totalPassengers} ท่าน</span>
+                    </div>
+
+                    <div className="bg-slate-900 border border-slate-800 p-3.5 rounded-2xl">
+                      <span className="text-[10px] text-slate-400 block">ผู้ใหญ่ / เด็ก / ทารก</span>
+                      <span className="text-sm font-bold text-white font-mono">
+                        {totalAdults} ผู้ใหญ่ / {totalChildren} เด็ก
+                      </span>
+                    </div>
+
+                    <div className="bg-slate-900 border border-slate-800 p-3.5 rounded-2xl">
+                      <span className="text-[10px] text-slate-400 block">จำนวนบุ๊คกิ้ง</span>
+                      <span className="text-xl font-extrabold text-teal-400 font-mono">{filteredList.length} รายการ</span>
+                    </div>
+
+                    <div className="bg-slate-900 border border-slate-800 p-3.5 rounded-2xl">
+                      <span className="text-[10px] text-slate-400 block">ประกันภัยทางทะเล</span>
+                      <span className="text-xs font-extrabold text-emerald-400 flex items-center gap-1 mt-1">
+                        <ShieldCheck className="w-4 h-4 text-emerald-400" />
+                        <span>คุ้มครอง 100%</span>
+                      </span>
+                    </div>
+                  </div>
+
+                  {/* Passenger Manifest Table */}
+                  <div className="bg-slate-900 border border-slate-800 rounded-3xl overflow-hidden shadow-xl">
+                    <div className="overflow-x-auto">
+                      <table className="w-full text-left border-collapse">
+                        <thead>
+                          <tr className="bg-slate-950 text-slate-400 text-[11px] font-bold border-b border-slate-800 uppercase tracking-wider">
+                            <th className="p-3.5 pl-4">#</th>
+                            <th className="p-3.5">รหัสจอง</th>
+                            <th className="p-3.5">ชื่อ-นามสกุล ผู้โดยสารหลัก</th>
+                            <th className="p-3.5">เบอร์ติดต่อ</th>
+                            <th className="p-3.5">จำนวน (คน)</th>
+                            <th className="p-3.5">โรงแรมรับ-ส่ง & เลขห้อง</th>
+                            <th className="p-3.5">โปรแกรมทัวร์</th>
+                            <th className="p-3.5">เรือ / กัปตัน</th>
+                            <th className="p-3.5 pr-4 text-center">ประกันภัย</th>
+                          </tr>
+                        </thead>
+                        <tbody className="divide-y divide-slate-800/60 text-xs">
+                          {filteredList.length === 0 ? (
+                            <tr>
+                              <td colSpan={9} className="p-8 text-center text-slate-500 italic">
+                                ไม่พบข้อมูลผู้โดยสารตามเงื่อนไขที่เลือก
+                              </td>
+                            </tr>
+                          ) : (
+                            filteredList.map((bk, idx) => {
+                              const tour = tours.find((t) => t.id === bk.tourId);
+                              return (
+                                <tr key={bk.id} className="hover:bg-slate-800/40 transition">
+                                  <td className="p-3.5 pl-4 font-mono font-bold text-slate-500">{idx + 1}</td>
+                                  <td className="p-3.5 font-mono font-bold text-teal-400">#{bk.bookingRef}</td>
+                                  <td className="p-3.5 font-extrabold text-white">
+                                    {bk.customerName}
+                                    {bk.customerEmail && (
+                                      <span className="block text-[10px] text-slate-500 font-normal">
+                                        {bk.customerEmail}
+                                      </span>
+                                    )}
+                                  </td>
+                                  <td className="p-3.5 font-mono text-slate-300">
+                                    <a href={`tel:${bk.customerPhone}`} className="hover:text-teal-400 flex items-center gap-1">
+                                      <PhoneCall className="w-3 h-3 text-slate-500" />
+                                      <span>{bk.customerPhone}</span>
+                                    </a>
+                                  </td>
+                                  <td className="p-3.5 font-mono text-slate-200 font-bold">
+                                    {bk.adultsCount || 1} ผู้ใหญ่
+                                    {bk.childrenCount ? `, ${bk.childrenCount} เด็ก` : ''}
+                                  </td>
+                                  <td className="p-3.5 text-slate-300 max-w-[180px]">
+                                    <div className="font-semibold truncate">📍 {bk.hotelName}</div>
+                                    <div className="text-[10px] text-slate-500">ห้อง: {bk.roomNumber || 'ไม่ระบุ'}</div>
+                                  </td>
+                                  <td className="p-3.5 text-slate-300 max-w-[160px]">
+                                    <span className="truncate block font-semibold text-cyan-300">
+                                      {tour?.title.TH || 'ทัวร์ภูเก็ต'}
+                                    </span>
+                                    <span className="text-[10px] text-slate-500 block">📅 {bk.travelDate}</span>
+                                  </td>
+                                  <td className="p-3.5">
+                                    <input
+                                      type="text"
+                                      placeholder="ระบุชื่อเรือ/กัปตัน..."
+                                      value={boatAssignments[bk.id] || bk.boatName || ''}
+                                      onChange={(e) =>
+                                        setBoatAssignments((prev) => ({ ...prev, [bk.id]: e.target.value }))
+                                      }
+                                      className="bg-slate-950 border border-slate-700 text-xs rounded-lg px-2.5 py-1 text-teal-300 font-medium focus:ring-1 focus:ring-teal-500 w-36"
+                                    />
+                                  </td>
+                                  <td className="p-3.5 pr-4 text-center">
+                                    <span className="bg-emerald-500/20 text-emerald-300 font-bold text-[10px] px-2.5 py-1 rounded-full border border-emerald-500/30 inline-flex items-center gap-1">
+                                      <ShieldCheck className="w-3 h-3 text-emerald-400" />
+                                      <span>คุ้มครองแล้ว</span>
+                                    </span>
+                                  </td>
+                                </tr>
+                              );
+                            })
+                          )}
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
+                </div>
+              );
+            })()}
+
+            {/* Printable Insurance Manifest Lightbox Modal */}
+            {isPrintManifestOpen && (
+              <div className="fixed inset-0 z-50 bg-slate-950/90 backdrop-blur-md flex items-center justify-center p-3 sm:p-6 overflow-y-auto animate-in fade-in">
+                <div className="bg-white text-slate-900 rounded-3xl max-w-4xl w-full p-6 sm:p-8 shadow-2xl border border-slate-300 relative space-y-6 my-auto">
+                  <div className="flex items-center justify-between border-b border-slate-200 pb-4">
+                    <div className="flex items-center gap-3">
+                      <Ship className="w-7 h-7 text-teal-600" />
+                      <div>
+                        <h3 className="text-lg sm:text-xl font-extrabold text-slate-900">
+                          ใบบัญชีรายชื่อผู้โดยสารส่งประกันภัยอุบัติเหตุทางทะเล
+                        </h3>
+                        <p className="text-xs text-slate-500 font-mono">
+                          Trip Sea Tour Phuket • ใบอนุญาตประกอบธุรกิจนำเที่ยว เลขที่ {settings.tatLicenseNo || '33/11100'}
+                        </p>
+                      </div>
+                    </div>
+                    <button
+                      onClick={() => setIsPrintManifestOpen(false)}
+                      className="w-8 h-8 bg-slate-100 hover:bg-slate-200 text-slate-600 rounded-full flex items-center justify-center transition"
+                    >
+                      <X className="w-5 h-5" />
+                    </button>
+                  </div>
+
+                  <div className="bg-slate-50 border border-slate-200 p-4 rounded-2xl text-xs space-y-1 font-mono">
+                    <div className="flex justify-between">
+                      <span className="font-bold">วันที่เดินทาง: {manifestDateFilter === 'all' ? 'ทั้งหมด' : manifestDateFilter}</span>
+                      <span>พิมพ์เมื่อ: {new Date().toLocaleString('th-TH')}</span>
+                    </div>
+                    <div>บริษัท ประกันภัยอุบัติเหตุทางทะเล: คุ้มครองผู้โดยสารและลูกเรือ 100% ตามกฎหมายกรมเจ้าท่า</div>
+                  </div>
+
+                  {/* Clean Printable Table */}
+                  <div className="border border-slate-300 rounded-2xl overflow-hidden text-xs">
+                    <table className="w-full text-left border-collapse">
+                      <thead>
+                        <tr className="bg-slate-100 font-bold border-b border-slate-300 text-slate-800">
+                          <th className="p-2.5">#</th>
+                          <th className="p-2.5">รหัสจอง</th>
+                          <th className="p-2.5">ชื่อ-นามสกุล ผู้โดยสารหลัก</th>
+                          <th className="p-2.5">เบอร์โทรศัพท์</th>
+                          <th className="p-2.5">จำนวน</th>
+                          <th className="p-2.5">โรงแรมรับ-ส่ง</th>
+                          <th className="p-2.5">โปรแกรมทัวร์</th>
+                          <th className="p-2.5">เรือ/กัปตัน</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-slate-200">
+                        {bookings
+                          .filter((b) => manifestDateFilter === 'all' || b.travelDate === manifestDateFilter)
+                          .map((bk, idx) => {
+                            const tour = tours.find((t) => t.id === bk.tourId);
+                            return (
+                              <tr key={bk.id} className="hover:bg-slate-50">
+                                <td className="p-2.5 font-mono">{idx + 1}</td>
+                                <td className="p-2.5 font-mono font-bold text-teal-700">#{bk.bookingRef}</td>
+                                <td className="p-2.5 font-bold">{bk.customerName}</td>
+                                <td className="p-2.5 font-mono">{bk.customerPhone}</td>
+                                <td className="p-2.5 font-mono">
+                                  {bk.adultsCount || 1}A {bk.childrenCount ? `/ ${bk.childrenCount}C` : ''}
+                                </td>
+                                <td className="p-2.5">{bk.hotelName} (ห้อง {bk.roomNumber || '-'})</td>
+                                <td className="p-2.5 font-medium">{tour?.title.TH || 'ทัวร์ภูเก็ต'}</td>
+                                <td className="p-2.5 font-bold text-teal-800">
+                                  {boatAssignments[bk.id] || bk.boatName || 'Speedboat 01'}
+                                </td>
+                              </tr>
+                            );
+                          })}
+                      </tbody>
+                    </table>
+                  </div>
+
+                  <div className="flex justify-between items-center pt-2">
+                    <span className="text-xs text-slate-500">
+                      รวมทั้งหมด {bookings.filter((b) => manifestDateFilter === 'all' || b.travelDate === manifestDateFilter).length} คำสั่งซื้อ
+                    </span>
+                    <div className="flex items-center gap-3">
+                      <button
+                        onClick={() => window.print()}
+                        className="bg-slate-900 hover:bg-slate-800 text-white font-extrabold px-5 py-2.5 rounded-xl text-xs transition flex items-center gap-2"
+                      >
+                        <Printer className="w-4 h-4" />
+                        <span>กดสั่งพิมพ์เอกสาร (Print)</span>
+                      </button>
+                      <button
+                        onClick={() => setIsPrintManifestOpen(false)}
+                        className="bg-slate-200 hover:bg-slate-300 text-slate-800 font-bold px-4 py-2.5 rounded-xl text-xs transition"
+                      >
+                        ปิด
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            )}
+          </div>
+        )}
       </div>
 
       {/* Slip Preview Modal */}
@@ -1999,6 +2362,132 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                 </button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {/* Edit Review Photo Modal */}
+      {editingReviewPhotos && (
+        <div className="fixed inset-0 z-50 bg-slate-950/85 backdrop-blur-md flex items-center justify-center p-4 animate-in fade-in">
+          <div className="bg-slate-900 border border-slate-700 max-w-lg w-full rounded-3xl p-6 shadow-2xl relative space-y-4">
+            <button
+              onClick={() => {
+                setEditingReviewPhotos(null);
+                setNewPhotoUrl('');
+              }}
+              className="absolute top-4 right-4 text-slate-400 hover:text-white transition"
+            >
+              <X className="w-5 h-5" />
+            </button>
+
+            <div className="flex items-center gap-2 text-teal-400 font-bold border-b border-slate-800 pb-3">
+              <ImageIcon className="w-5 h-5 text-teal-500" />
+              <h3 className="text-base text-slate-100 font-bold">จัดการรูปภาพรีวิว</h3>
+            </div>
+
+            <div className="space-y-4 text-xs">
+              {/* Info of Review */}
+              <div className="bg-slate-950/50 p-3 rounded-xl border border-slate-800 space-y-1">
+                <p className="text-slate-400">
+                  <span className="font-bold text-slate-300">ผู้รีวิว:</span> {editingReviewPhotos.userName}
+                </p>
+                <p className="text-slate-400 line-clamp-2">
+                  <span className="font-bold text-slate-300">ข้อความ:</span> "{editingReviewPhotos.comment}"
+                </p>
+              </div>
+
+              {/* Preview Current Image */}
+              <div className="space-y-1.5">
+                <span className="text-slate-300 font-bold block">รูปภาพตัวอย่างปัจจุบัน:</span>
+                {newPhotoUrl ? (
+                  <div className="relative inline-block">
+                    <img
+                      src={newPhotoUrl}
+                      alt="Review Preview"
+                      className="w-32 h-32 rounded-xl object-cover border border-slate-700"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setNewPhotoUrl('')}
+                      className="absolute -top-2 -right-2 bg-rose-600 hover:bg-rose-500 text-white rounded-full p-1 transition shadow-md shadow-rose-950"
+                      title="ลบรูปภาพนี้"
+                    >
+                      <X className="w-3.5 h-3.5" />
+                    </button>
+                  </div>
+                ) : (
+                  <div className="w-32 h-32 rounded-xl bg-slate-950/50 border border-slate-800 flex flex-col items-center justify-center text-slate-500 border-dashed">
+                    <ImageIcon className="w-8 h-8 mb-1" />
+                    <span>ไม่มีรูปภาพ</span>
+                  </div>
+                )}
+              </div>
+
+              {/* Upload Input */}
+              <div className="space-y-1.5">
+                <label className="text-slate-300 font-bold block">อัปโหลดรูปภาพใหม่จากคอมพิวเตอร์:</label>
+                <input
+                  type="file"
+                  accept="image/*"
+                  onChange={(e) => {
+                    if (e.target.files && e.target.files[0]) {
+                      const reader = new FileReader();
+                      reader.onload = (uploadEvent) => {
+                        setNewPhotoUrl(uploadEvent.target?.result as string);
+                      };
+                      reader.readAsDataURL(e.target.files[0]);
+                    }
+                  }}
+                  className="w-full text-slate-400 text-xs bg-slate-950 border border-slate-700 rounded-xl p-2.5 file:mr-4 file:py-1 file:px-2.5 file:rounded-lg file:border-0 file:text-xs file:font-semibold file:bg-teal-600 file:text-white hover:file:bg-teal-500 cursor-pointer"
+                />
+              </div>
+
+              {/* URL Input */}
+              <div className="space-y-1.5">
+                <label className="text-slate-300 font-bold block">หรือใส่ที่อยู่ลิงก์รูปภาพ (Image URL):</label>
+                <input
+                  type="text"
+                  placeholder="https://example.com/photo.jpg"
+                  value={newPhotoUrl.startsWith('data:image') ? '' : newPhotoUrl}
+                  onChange={(e) => setNewPhotoUrl(e.target.value)}
+                  className="w-full bg-slate-950 border border-slate-700 rounded-xl p-3 text-white text-xs font-bold focus:ring-2 focus:ring-teal-500"
+                />
+                {newPhotoUrl.startsWith('data:image') && (
+                  <p className="text-[10px] text-amber-400 font-semibold">
+                    * รูปภาพมาจากการอัปโหลดแบบไฟล์ภายใน (Base64) หากต้องการใช้ลิงก์แทน กรุณาพิมพ์ลิงก์รูปภาพ
+                  </p>
+                )}
+              </div>
+
+              <div className="grid grid-cols-2 gap-3 pt-4">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setEditingReviewPhotos(null);
+                    setNewPhotoUrl('');
+                  }}
+                  className="w-full bg-slate-800 hover:bg-slate-700 text-slate-300 font-bold py-2.5 rounded-xl text-xs transition border border-slate-700"
+                >
+                  ยกเลิก
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    if (onUpdateReview && editingReviewPhotos) {
+                      onUpdateReview(editingReviewPhotos.id, {
+                        photos: newPhotoUrl.trim() ? [newPhotoUrl.trim()] : []
+                      });
+                    }
+                    setEditingReviewPhotos(null);
+                    setNewPhotoUrl('');
+                  }}
+                  className="w-full bg-teal-600 hover:bg-teal-500 text-white font-bold py-2.5 rounded-xl text-xs transition shadow-lg shadow-teal-900/40 flex items-center justify-center gap-1.5"
+                >
+                  <Check className="w-4 h-4" />
+                  <span>บันทึกรูปภาพ</span>
+                </button>
+              </div>
+            </div>
           </div>
         </div>
       )}

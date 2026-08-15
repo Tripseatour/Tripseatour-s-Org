@@ -608,9 +608,9 @@ export const HowToBookSection: React.FC<HowToBookSectionProps> = ({
                   3
                 </div>
                 <h3 className="font-extrabold text-sm text-white mb-2">
-                  {currentLang === 'TH' ? 'รับ Voucher และ QR Code ขึ้นเรือ' :
-                   currentLang === 'EN' ? 'View Voucher & Boarding QR' :
-                   currentLang === 'ZH' ? '查看电子确认单与登船码' : 'Получите ваучер и QR-код'}
+                  {currentLang === 'TH' ? 'รับ Voucher ' :
+                   currentLang === 'EN' ? 'View Voucher' :
+                   currentLang === 'ZH' ? '查看电子确认单与登船码' : 'Получите ваучер'}
                 </h3>
                 <p className="text-xs text-slate-300 leading-relaxed">
                   {currentLang === 'TH' ? 'ระบบจะแสดงตั๋ว E-Ticket พร้อมเวลารถตู้รับที่ล็อบบี้โรงแรม, สถานะชำระเงิน และปุ่มดาวน์โหลดรูปภาพเก็บไว้ในมือถือ' :
@@ -662,6 +662,50 @@ export const HowToBookSection: React.FC<HowToBookSectionProps> = ({
                 <span>ถามแอดมินทาง LINE</span>
               </a>
             </div>
+          </div>
+        </div>
+      </div>
+
+      {/* Flexible Date Change & Weather Refund Guarantee Card */}
+      <div className="bg-gradient-to-br from-slate-900 via-teal-950 to-slate-900 text-white rounded-3xl p-6 sm:p-8 border border-teal-800/60 shadow-xl space-y-4">
+        <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 border-b border-teal-800/50 pb-4">
+          <div className="flex items-center gap-3">
+            <div className="w-12 h-12 rounded-2xl bg-teal-500/20 text-teal-400 border border-teal-500/30 flex items-center justify-center shrink-0">
+              <ShieldCheck className="w-6 h-6" />
+            </div>
+            <div>
+              <span className="text-[10px] font-extrabold text-teal-400 bg-teal-500/20 px-2.5 py-0.5 rounded-full border border-teal-500/30 uppercase tracking-wider">
+                Flexible Date Change & Weather Guarantee
+              </span>
+              <h3 className="text-lg sm:text-xl font-extrabold text-white mt-1">
+                ระบบการันตีเลื่อนวันเดินทางฟรี & คืนเงินมรสุม 100%
+              </h3>
+            </div>
+          </div>
+          <div className="bg-teal-500/10 border border-teal-500/30 text-teal-300 font-mono text-xs px-3 py-1.5 rounded-xl font-bold shrink-0">
+            ✓ การันตีจองปลอดภัย 100%
+          </div>
+        </div>
+
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-xs">
+          <div className="bg-slate-800/70 p-4 rounded-2xl border border-slate-700/70 space-y-2">
+            <h4 className="font-extrabold text-teal-300 flex items-center gap-1.5 text-sm">
+              <CheckCircle2 className="w-4 h-4 text-teal-400" />
+              <span>การันตีคืนเงินเต็มจำนวน 100% กรณีคลื่นลมมรสุม</span>
+            </h4>
+            <p className="text-slate-300 leading-relaxed text-[11px]">
+              หากกรมเจ้าท่าประกาศห้ามเรือออกจากฝั่ง หรือสภาพอากาศไม่ปลอดภัยต่อการเดินเรือ ทางบริษัท Trip Sea Tour ยินดีคืนเงินค่าทัวร์เต็มจำนวน 100% หรือปรับเลื่อนวันเดินทางให้ทันทีตามความสะดวกของคุณลูกค้า
+            </p>
+          </div>
+
+          <div className="bg-slate-800/70 p-4 rounded-2xl border border-slate-700/70 space-y-2">
+            <h4 className="font-extrabold text-amber-300 flex items-center gap-1.5 text-sm">
+              <Clock className="w-4 h-4 text-amber-400" />
+              <span>เลื่อนวันเดินทางฟรี ล่วงหน้า 24 ชั่วโมง</span>
+            </h4>
+            <p className="text-slate-300 leading-relaxed text-[11px]">
+              ติดภารกิจ หรือต้องการเปลี่ยนแผนเที่ยว? แจ้งทีมงานแอดมินล่วงหน้าอย่างน้อย 24 ชั่วโมงก่อนวันเดินทาง สามารถขอเลื่อนวันเดินทางได้ฟรี ไม่มีค่าธรรมเนียมใดๆ เพิ่มเติม
+            </p>
           </div>
         </div>
       </div>

@@ -777,6 +777,25 @@ app.put('/api/reviews/:id/status', async (req, res) => {
   }
 });
 
+app.put('/api/reviews/:id', async (req, res) => {
+  const { id } = req.params;
+  const { photos, comment, userName, rating } = req.body;
+  const rev = reviews.find(r => r.id === id);
+  if (rev) {
+    if (photos !== undefined) {
+      rev.photos = Array.isArray(photos) ? photos : (photos ? [photos] : []);
+    }
+    if (comment !== undefined) rev.comment = comment;
+    if (userName !== undefined) rev.userName = userName;
+    if (rating !== undefined) rev.rating = Number(rating) || rev.rating;
+    
+    await persistState('reviews');
+    res.json({ ...rev, version: syncMetadata.version });
+  } else {
+    res.status(404).json({ error: 'Review not found' });
+  }
+});
+
 app.delete('/api/reviews/:id', async (req, res) => {
   const { id } = req.params;
   const initialLen = reviews.length;
