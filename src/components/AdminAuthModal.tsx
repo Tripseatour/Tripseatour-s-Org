@@ -23,8 +23,6 @@ export const AdminAuthModal: React.FC<AdminAuthModalProps> = ({
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [successMsg, setSuccessMsg] = useState<string | null>(null);
 
-  if (!isOpen) return null;
-
   const activeAuthEmails = authorizedEmails && authorizedEmails.length > 0 
     ? authorizedEmails 
     : ['asmr9941@gmail.com', 'admin@tripseatour.com'];
@@ -156,6 +154,8 @@ export const AdminAuthModal: React.FC<AdminAuthModalProps> = ({
       }
     }
   };
+
+  if (!isOpen) return null;
 
   return (
     <div className="fixed inset-0 z-50 bg-slate-950/85 backdrop-blur-md flex items-center justify-center p-4 animate-in fade-in duration-200">

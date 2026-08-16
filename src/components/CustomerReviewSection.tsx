@@ -1,5 +1,5 @@
-import React, { useState } from 'react';
-import { Star, UserCheck, MessageSquare, Plus, ThumbsUp, Check, ShieldCheck, Camera, X, Image as ImageIcon } from 'lucide-react';
+import React, { useState, useRef } from 'react';
+import { Star, MessageSquare, Plus, ShieldCheck, Camera, X, Image as ImageIcon, UploadCloud, Trash2, CheckCircle2, Loader2 } from 'lucide-react';
 import { Review, Language, Tour } from '../types';
 import { translations } from '../data/translations';
 
@@ -7,7 +7,7 @@ interface CustomerReviewSectionProps {
   currentLang: Language;
   reviews: Review[];
   tours: Tour[];
-  onAddReview: (reviewData: { tourId: string; userName: string; rating: number; comment: string; photo?: string }) => void;
+  onAddReview: (reviewData: { tourId: string; userName: string; rating: number; comment: string; photo?: string; photos?: string[] }) => void;
 }
 
 export const CustomerReviewSection: React.FC<CustomerReviewSectionProps> = ({
@@ -18,7 +18,6 @@ export const CustomerReviewSection: React.FC<CustomerReviewSectionProps> = ({
 }) => {
   const t = translations[currentLang];
   const [isWriteModalOpen, setIsWriteModalOpen] = useState(false);
-  const [isGalleryModalOpen, setIsGalleryModalOpen] = useState(false);
   const [selectedPhoto, setSelectedPhoto] = useState<string | null>(null);
 
   const [tourId, setTourId] = useState(tours[0]?.id || 'tour-1');
@@ -26,31 +25,120 @@ export const CustomerReviewSection: React.FC<CustomerReviewSectionProps> = ({
   const [rating, setRating] = useState(5);
   const [hoverRating, setHoverRating] = useState<number | null>(null);
   const [comment, setComment] = useState('');
-  const [photoUrl, setPhotoUrl] = useState('');
+  const [uploadedPhotos, setUploadedPhotos] = useState<string[]>([]);
+  const [customPhotoUrl, setCustomPhotoUrl] = useState('');
+  const [isProcessingImage, setIsProcessingImage] = useState(false);
+  const [isDragging, setIsDragging] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
-  // Collect all photos from approved reviews
-  const allReviewPhotos = reviews
-    .filter((r) => r.isApproved !== false && r.photos && r.photos.length > 0)
-    .flatMap((r) => (r.photos || []).map((photo) => ({ photo, userName: r.userName, date: r.date, tourId: r.tourId })));
+  // Compress image before saving to state (resize to max 1200px and compress to JPEG)
+  const compressImage = (file: File): Promise<string> => {
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = (readerEvent) => {
+        const image = new Image();
+        image.onload = () => {
+          const maxDim = 1200;
+          let width = image.width;
+          let height = image.height;
+
+          if (width > maxDim || height > maxDim) {
+            if (width > height) {
+              height = Math.round((height * maxDim) / width);
+              width = maxDim;
+            } else {
+              width = Math.round((width * maxDim) / height);
+              height = maxDim;
+            }
+          }
+
+          const canvas = document.createElement('canvas');
+          canvas.width = width;
+          canvas.height = height;
+          const ctx = canvas.getContext('2d');
+          if (ctx) {
+            ctx.drawImage(image, 0, 0, width, height);
+            const dataUrl = canvas.toDataURL('image/jpeg', 0.82);
+            resolve(dataUrl);
+          } else {
+            resolve(readerEvent.target?.result as string);
+          }
+        };
+        image.onerror = reject;
+        image.src = readerEvent.target?.result as string;
+      };
+      reader.onerror = reject;
+      reader.readAsDataURL(file);
+    });
+  };
+
+  const handleFilesSelected = async (files: FileList | null) => {
+    if (!files || files.length === 0) return;
+    setIsProcessingImage(true);
+
+    try {
+      const maxAllowed = 4 - uploadedPhotos.length;
+      if (maxAllowed <= 0) {
+        alert('สามารถอัปโหลดรูปภาพได้สูงสุด 4 รูปต่อหนึ่งรีวิวครับ');
+        setIsProcessingImage(false);
+        return;
+      }
+
+      const filesToProcess = Array.from(files).slice(0, maxAllowed);
+      const newImages: string[] = [];
+
+      for (const file of filesToProcess) {
+        if (!file.type.startsWith('image/')) continue;
+        const compressed = await compressImage(file);
+        newImages.push(compressed);
+      }
+
+      setUploadedPhotos((prev) => [...prev, ...newImages]);
+    } catch (err) {
+      console.error('Error processing photos:', err);
+      alert('เกิดข้อผิดพลาดในการประมวลผลรูปภาพ กรุณาลองใหม่อีกครั้ง');
+    } finally {
+      setIsProcessingImage(false);
+      if (fileInputRef.current) fileInputRef.current.value = '';
+    }
+  };
+
+  const handleAddCustomUrl = () => {
+    if (!customPhotoUrl.trim()) return;
+    if (uploadedPhotos.length >= 4) {
+      alert('สามารถใส่รูปภาพได้สูงสุด 4 รูปต่อหนึ่งรีวิวครับ');
+      return;
+    }
+    setUploadedPhotos((prev) => [...prev, customPhotoUrl.trim()]);
+    setCustomPhotoUrl('');
+  };
+
+  const handleRemovePhoto = (indexToRemove: number) => {
+    setUploadedPhotos((prev) => prev.filter((_, idx) => idx !== indexToRemove));
+  };
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!userName || !comment) {
-      alert('กรุณากรอกชื่อและข้อความรีวิว');
+    if (!userName.trim() || !comment.trim()) {
+      alert('กรุณากรอกชื่อและข้อความรีวิวให้ครบถ้วนครับ');
       return;
     }
+
     onAddReview({
       tourId,
-      userName,
+      userName: userName.trim(),
       rating,
-      comment,
-      photo: photoUrl || undefined
+      comment: comment.trim(),
+      photos: uploadedPhotos.length > 0 ? uploadedPhotos : undefined,
+      photo: uploadedPhotos[0] || undefined
     });
+
     setIsWriteModalOpen(false);
     setUserName('');
     setComment('');
-    setPhotoUrl('');
-    alert('ส่งรีวิวเรียบร้อยแล้ว ขอบพระคุณมากครับ!');
+    setUploadedPhotos([]);
+    setCustomPhotoUrl('');
+    alert('ส่งรีวิวพร้อมรูปถ่ายเรียบร้อยแล้ว ขอบพระคุณมากครับ!');
   };
 
   const avgRating = (reviews.reduce((acc, r) => acc + r.rating, 0) / (reviews.length || 1)).toFixed(1);
@@ -59,7 +147,7 @@ export const CustomerReviewSection: React.FC<CustomerReviewSectionProps> = ({
     <section className="py-12 bg-slate-50 border-t border-slate-200">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         {/* Section Header */}
-        <div className="flex flex-col md:flex-row md:items-end justify-between gap-4 mb-8">
+        <div className="flex flex-col sm:flex-row sm:items-end justify-between gap-4 mb-8">
           <div>
             <div className="inline-flex items-center gap-1.5 bg-amber-500/10 text-amber-700 px-3 py-1 rounded-full text-xs font-bold mb-2 border border-amber-200/60">
               <Star className="w-4 h-4 fill-amber-400 text-amber-400 animate-pulse" />
@@ -73,18 +161,10 @@ export const CustomerReviewSection: React.FC<CustomerReviewSectionProps> = ({
             </p>
           </div>
 
-          <div className="flex flex-wrap items-center gap-2.5">
-            <button
-              onClick={() => setIsGalleryModalOpen(true)}
-              className="inline-flex items-center gap-2 bg-white hover:bg-slate-100 text-slate-800 font-bold px-4 py-2.5 rounded-xl text-xs transition border border-slate-300 shadow-sm shrink-0"
-            >
-              <Camera className="w-4 h-4 text-teal-600" />
-              <span>{currentLang === 'TH' ? 'แกลเลอรีรูปทริปจริง' : 'Real Trip Gallery'}</span>
-            </button>
-
+          <div className="flex items-center gap-2.5">
             <button
               onClick={() => setIsWriteModalOpen(true)}
-              className="inline-flex items-center gap-2 bg-blue-600 hover:bg-blue-700 text-white font-bold px-5 py-2.5 rounded-xl text-xs transition shadow-md shadow-blue-200 shrink-0"
+              className="inline-flex items-center gap-2 bg-gradient-to-r from-blue-600 to-teal-600 hover:from-blue-700 hover:to-teal-700 text-white font-bold px-5 py-2.5 rounded-xl text-xs transition shadow-md shadow-blue-200 shrink-0 transform active:scale-95"
             >
               <Plus className="w-4 h-4" />
               <span>{t.writeReview}</span>
@@ -154,11 +234,11 @@ export const CustomerReviewSection: React.FC<CustomerReviewSectionProps> = ({
                           key={idx}
                           type="button"
                           onClick={() => setSelectedPhoto(p)}
-                          className="w-16 h-16 rounded-xl overflow-hidden border border-slate-200 shrink-0 relative group/photo hover:ring-2 hover:ring-teal-500 transition"
+                          className="w-16 h-16 rounded-xl overflow-hidden border border-slate-200 shrink-0 relative group/photo hover:ring-2 hover:ring-teal-500 transition shadow-xs"
                         >
                           <img
                             src={p}
-                            alt="Review photo"
+                            alt="Customer review photo"
                             className="w-full h-full object-cover group-hover/photo:scale-110 transition duration-300"
                           />
                           <div className="absolute inset-0 bg-black/20 opacity-0 group-hover/photo:opacity-100 transition flex items-center justify-center text-white">
@@ -190,61 +270,16 @@ export const CustomerReviewSection: React.FC<CustomerReviewSectionProps> = ({
         </div>
       </div>
 
-      {/* Real Trip Photo Gallery Modal */}
-      {isGalleryModalOpen && (
-        <div className="fixed inset-0 z-50 bg-slate-950/90 backdrop-blur-md flex items-center justify-center p-4 animate-in fade-in">
-          <div className="bg-white rounded-3xl max-w-4xl w-full max-h-[88vh] flex flex-col shadow-2xl border border-slate-200 overflow-hidden my-auto">
-            <div className="p-4 sm:p-5 border-b border-slate-200 flex items-center justify-between bg-slate-50">
-              <div className="flex items-center gap-2">
-                <Camera className="w-5 h-5 text-teal-600" />
-                <h3 className="text-base sm:text-lg font-extrabold text-slate-900">
-                  {currentLang === 'TH' ? 'แกลเลอรีภาพถ่ายจริงจากผู้ใช้บริการ' : 'Real Customer Photo Gallery'}
-                </h3>
-              </div>
-              <button
-                onClick={() => setIsGalleryModalOpen(false)}
-                className="w-8 h-8 rounded-full bg-slate-200 hover:bg-slate-300 text-slate-600 flex items-center justify-center transition"
-              >
-                <X className="w-4 h-4" />
-              </button>
-            </div>
-
-            <div className="p-6 overflow-y-auto grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3">
-              {allReviewPhotos.map((item, idx) => {
-                const tour = tours.find(t => t.id === item.tourId);
-                return (
-                  <div
-                    key={idx}
-                    onClick={() => setSelectedPhoto(item.photo)}
-                    className="group relative cursor-pointer aspect-square rounded-2xl overflow-hidden bg-slate-100 border border-slate-200 hover:shadow-lg transition"
-                  >
-                    <img
-                      src={item.photo}
-                      alt="Customer trip photo"
-                      className="w-full h-full object-cover group-hover:scale-110 transition duration-500"
-                    />
-                    <div className="absolute inset-0 bg-gradient-to-t from-slate-950/80 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition p-2.5 flex flex-col justify-end text-white text-[10px]">
-                      <span className="font-bold truncate">{item.userName}</span>
-                      <span className="text-slate-300 text-[9px] truncate">📍 {tour?.title.TH || 'ทัวร์ภูเก็ต'}</span>
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
-          </div>
-        </div>
-      )}
-
       {/* Fullscreen Photo Lightbox Modal */}
       {selectedPhoto && (
         <div
           onClick={() => setSelectedPhoto(null)}
           className="fixed inset-0 z-50 bg-black/90 backdrop-blur-md flex items-center justify-center p-4 cursor-pointer animate-in fade-in"
         >
-          <div className="relative max-w-3xl w-full max-h-[90vh] flex flex-col items-center justify-center">
+          <div className="relative max-w-3xl w-full max-h-[90vh] flex flex-col items-center justify-center" onClick={(e) => e.stopPropagation()}>
             <button
               onClick={() => setSelectedPhoto(null)}
-              className="absolute -top-10 right-0 text-white hover:text-slate-300 text-sm font-bold flex items-center gap-1 bg-white/10 px-3 py-1 rounded-full"
+              className="absolute -top-10 right-0 text-white hover:text-slate-300 text-sm font-bold flex items-center gap-1 bg-white/10 px-3 py-1 rounded-full transition"
             >
               <X className="w-4 h-4" />
               <span>ปิด (Close)</span>
@@ -258,26 +293,35 @@ export const CustomerReviewSection: React.FC<CustomerReviewSectionProps> = ({
         </div>
       )}
 
-      {/* Write Review Modal */}
+      {/* Write Review & Upload Photos Modal */}
       {isWriteModalOpen && (
-        <div className="fixed inset-0 z-50 bg-slate-950/80 backdrop-blur-md flex items-center justify-center p-4 animate-in fade-in">
-          <div className="bg-white rounded-3xl max-w-md w-full p-6 shadow-2xl border border-slate-200 relative">
+        <div className="fixed inset-0 z-50 bg-slate-950/80 backdrop-blur-md flex items-center justify-center p-4 overflow-y-auto animate-in fade-in">
+          <div className="bg-white rounded-3xl max-w-lg w-full p-6 shadow-2xl border border-slate-200 relative my-auto max-h-[92vh] overflow-y-auto">
             <button
               onClick={() => setIsWriteModalOpen(false)}
-              className="absolute top-4 right-4 text-slate-400 hover:text-slate-600"
+              className="absolute top-5 right-5 w-8 h-8 rounded-full bg-slate-100 hover:bg-slate-200 text-slate-500 hover:text-slate-700 flex items-center justify-center transition"
             >
-              ✕
+              <X className="w-4 h-4" />
             </button>
 
-            <h3 className="text-lg font-extrabold text-slate-900 mb-4">{t.writeReview}</h3>
+            <div className="flex items-center gap-2 mb-4">
+              <div className="w-9 h-9 rounded-xl bg-teal-50 text-teal-700 flex items-center justify-center font-bold">
+                <MessageSquare className="w-5 h-5 text-teal-600" />
+              </div>
+              <div>
+                <h3 className="text-lg font-black text-slate-900">{t.writeReview}</h3>
+                <p className="text-[11px] text-slate-500">แบ่งปันความประทับใจและรูปภาพจากการเดินทางกับเรา</p>
+              </div>
+            </div>
 
             <form onSubmit={handleSubmit} className="space-y-4 text-xs">
+              {/* Tour Selection */}
               <div>
-                <label className="font-bold text-slate-700 block mb-1">เลือกโปรแกรมทัวร์</label>
+                <label className="font-bold text-slate-700 block mb-1">เลือกโปรแกรมทัวร์ที่ไปมา *</label>
                 <select
                   value={tourId}
                   onChange={(e) => setTourId(e.target.value)}
-                  className="w-full bg-slate-50 border border-slate-300 rounded-xl p-2.5 text-xs font-semibold"
+                  className="w-full bg-slate-50 border border-slate-300 rounded-xl p-2.5 text-xs font-semibold text-slate-800 focus:ring-2 focus:ring-teal-500 focus:outline-none"
                 >
                   {tours.map((tr) => (
                     <option key={tr.id} value={tr.id}>
@@ -287,22 +331,23 @@ export const CustomerReviewSection: React.FC<CustomerReviewSectionProps> = ({
                 </select>
               </div>
 
+              {/* Customer Name */}
               <div>
-                <label className="font-bold text-slate-700 block mb-1">ชื่อของคุณ</label>
+                <label className="font-bold text-slate-700 block mb-1">ชื่อหรือนามแฝงของคุณ *</label>
                 <input
                   type="text"
                   required
-                  placeholder="เช่น คุณสมชาย นามสมมติ"
+                  placeholder="เช่น คุณสมชาย, คุณแนน"
                   value={userName}
                   onChange={(e) => setUserName(e.target.value)}
-                  className="w-full bg-slate-50 border border-slate-300 rounded-xl p-2.5 text-xs"
+                  className="w-full bg-slate-50 border border-slate-300 rounded-xl p-2.5 text-xs focus:ring-2 focus:ring-teal-500 focus:outline-none"
                 />
               </div>
 
-              {/* Interactive Star Rating Selector with Micro Animations */}
+              {/* Star Rating */}
               <div>
                 <label className="font-bold text-slate-700 block mb-1">
-                  ให้คะแนนประสบการณ์ (1-5 ดาว)
+                  ให้คะแนนความพึงพอใจ (1-5 ดาว) *
                 </label>
                 <div className="flex items-center gap-2 bg-slate-50 p-3 rounded-2xl border border-slate-200 justify-center">
                   {[1, 2, 3, 4, 5].map((star) => {
@@ -314,7 +359,7 @@ export const CustomerReviewSection: React.FC<CustomerReviewSectionProps> = ({
                         onClick={() => setRating(star)}
                         onMouseEnter={() => setHoverRating(star)}
                         onMouseLeave={() => setHoverRating(null)}
-                        className={`p-1.5 rounded-xl transition-all duration-200 transform hover:scale-130 active:scale-95 focus:outline-none ${
+                        className={`p-1.5 rounded-xl transition-all duration-200 transform hover:scale-125 active:scale-95 focus:outline-none ${
                           isFilled
                             ? 'text-amber-400 drop-shadow-[0_2px_8px_rgba(251,191,36,0.5)]'
                             : 'text-slate-300 hover:text-amber-200'
@@ -335,35 +380,150 @@ export const CustomerReviewSection: React.FC<CustomerReviewSectionProps> = ({
                 </div>
               </div>
 
+              {/* Comment Field */}
               <div>
-                <label className="font-bold text-slate-700 block mb-1">ความเห็นและความประทับใจ</label>
+                <label className="font-bold text-slate-700 block mb-1">ความเห็นและความประทับใจ *</label>
                 <textarea
                   required
                   rows={3}
-                  placeholder="บรรยากาศเป็นอย่างไร การบริการเป็นอย่างไร..."
+                  placeholder="บรรยากาศเป็นอย่างไร เรือ ไกด์ การบริการ อาหาร หรือจุดท่องเที่ยวที่ชอบ..."
                   value={comment}
                   onChange={(e) => setComment(e.target.value)}
-                  className="w-full bg-slate-50 border border-slate-300 rounded-xl p-2.5 text-xs"
+                  className="w-full bg-slate-50 border border-slate-300 rounded-xl p-2.5 text-xs focus:ring-2 focus:ring-teal-500 focus:outline-none leading-relaxed"
                 />
               </div>
 
-              <div>
-                <label className="font-bold text-slate-700 block mb-1">ลิงก์รูปถ่ายประทับใจ (ถ้ามี)</label>
-                <input
-                  type="url"
-                  placeholder="https://..."
-                  value={photoUrl}
-                  onChange={(e) => setPhotoUrl(e.target.value)}
-                  className="w-full bg-slate-50 border border-slate-300 rounded-xl p-2.5 text-xs"
-                />
+              {/* Real Photo Upload Section */}
+              <div className="space-y-2 pt-1 border-t border-slate-200">
+                <div className="flex items-center justify-between">
+                  <label className="font-bold text-slate-800 flex items-center gap-1.5 text-xs">
+                    <Camera className="w-4 h-4 text-teal-600" />
+                    <span>อัปโหลดรูปถ่ายรีวิว (สูงสุด 4 รูป)</span>
+                  </label>
+                  <span className="text-[10px] text-slate-500 font-bold font-mono">
+                    {uploadedPhotos.length}/4 รูป
+                  </span>
+                </div>
+
+                {/* Upload Box / Dropzone */}
+                {uploadedPhotos.length < 4 && (
+                  <div
+                    onDragOver={(e) => {
+                      e.preventDefault();
+                      setIsDragging(true);
+                    }}
+                    onDragLeave={() => setIsDragging(false)}
+                    onDrop={(e) => {
+                      e.preventDefault();
+                      setIsDragging(false);
+                      handleFilesSelected(e.dataTransfer.files);
+                    }}
+                    onClick={() => fileInputRef.current?.click()}
+                    className={`border-2 border-dashed rounded-2xl p-4 text-center cursor-pointer transition flex flex-col items-center justify-center gap-2 ${
+                      isDragging
+                        ? 'border-teal-500 bg-teal-50/80 scale-[0.99]'
+                        : 'border-slate-300 bg-slate-50 hover:bg-teal-50/30 hover:border-teal-400'
+                    }`}
+                  >
+                    <input
+                      ref={fileInputRef}
+                      type="file"
+                      multiple
+                      accept="image/*"
+                      className="hidden"
+                      onChange={(e) => handleFilesSelected(e.target.files)}
+                    />
+
+                    {isProcessingImage ? (
+                      <div className="flex items-center gap-2 text-teal-700 py-2">
+                        <Loader2 className="w-5 h-5 animate-spin" />
+                        <span className="font-bold text-xs">กำลังประมวลผลรูปภาพ...</span>
+                      </div>
+                    ) : (
+                      <>
+                        <div className="w-10 h-10 rounded-full bg-white shadow-xs border border-slate-200 flex items-center justify-center text-teal-600">
+                          <UploadCloud className="w-5 h-5" />
+                        </div>
+                        <div>
+                          <p className="font-bold text-slate-800 text-xs">
+                            แตะเพื่อเลือกรูป หรือ ถ่ายภาพจากมือถือ
+                          </p>
+                          <p className="text-[10px] text-slate-500 mt-0.5">
+                            รองรับไฟล์ JPG, PNG, WebP (รูปจะถูกปรับความคมชัดอัตโนมัติ)
+                          </p>
+                        </div>
+                      </>
+                    )}
+                  </div>
+                )}
+
+                {/* Uploaded Photos Thumbnails Preview */}
+                {uploadedPhotos.length > 0 && (
+                  <div className="grid grid-cols-4 gap-2 pt-1">
+                    {uploadedPhotos.map((photoUrl, idx) => (
+                      <div
+                        key={idx}
+                        className="relative aspect-square rounded-xl overflow-hidden border-2 border-slate-200 group bg-slate-100 shadow-xs"
+                      >
+                        <img
+                          src={photoUrl}
+                          alt={`Uploaded review photo ${idx + 1}`}
+                          className="w-full h-full object-cover"
+                        />
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleRemovePhoto(idx);
+                          }}
+                          className="absolute top-1 right-1 w-5 h-5 rounded-full bg-red-600 text-white flex items-center justify-center opacity-90 hover:opacity-100 hover:scale-110 transition shadow-sm"
+                          title="ลบรูปนี้"
+                        >
+                          <X className="w-3 h-3" />
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                )}
+
+                {/* Optional: Add via Image Link */}
+                <div className="pt-2">
+                  <div className="flex gap-1.5">
+                    <input
+                      type="url"
+                      placeholder="หรือวางลิงก์รูปภาพ (URL)..."
+                      value={customPhotoUrl}
+                      onChange={(e) => setCustomPhotoUrl(e.target.value)}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter') {
+                          e.preventDefault();
+                          handleAddCustomUrl();
+                        }
+                      }}
+                      className="flex-1 bg-slate-50 border border-slate-300 rounded-xl px-3 py-1.5 text-[11px] focus:ring-1 focus:ring-teal-500 focus:outline-none"
+                    />
+                    <button
+                      type="button"
+                      onClick={handleAddCustomUrl}
+                      className="bg-slate-200 hover:bg-slate-300 text-slate-700 font-bold px-3 py-1.5 rounded-xl text-[11px] transition shrink-0"
+                    >
+                      เพิ่มรูป
+                    </button>
+                  </div>
+                </div>
               </div>
 
-              <button
-                type="submit"
-                className="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 rounded-xl transition text-xs shadow-md shadow-blue-200"
-              >
-                ส่งรีวิวของคุณ
-              </button>
+              {/* Submit Button */}
+              <div className="pt-3 border-t border-slate-200">
+                <button
+                  type="submit"
+                  disabled={isProcessingImage}
+                  className="w-full bg-gradient-to-r from-blue-600 to-teal-600 hover:from-blue-700 hover:to-teal-700 text-white font-extrabold py-3.5 rounded-xl transition text-xs shadow-md shadow-teal-100 flex items-center justify-center gap-2 active:scale-[0.98] disabled:opacity-50"
+                >
+                  <CheckCircle2 className="w-4 h-4" />
+                  <span>ส่งรีวิวและรูปภาพประสบการณ์ของคุณ</span>
+                </button>
+              </div>
             </form>
           </div>
         </div>
@@ -371,3 +531,4 @@ export const CustomerReviewSection: React.FC<CustomerReviewSectionProps> = ({
     </section>
   );
 };
+

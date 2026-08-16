@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { MessageCircle, X, Send, Sparkles, Bot, User, RefreshCw, ChevronRight, Compass, ShieldCheck, CreditCard, Clock, PhoneCall } from 'lucide-react';
+import { MessageCircle, X, Send, Sparkles, Bot, User, RefreshCw, ChevronRight, Compass, ShieldCheck, CreditCard, Clock, PhoneCall, Image as ImageIcon, Headphones, CheckCheck } from 'lucide-react';
 import { Language, Tour, AppSettings } from '../types';
 
 interface Message {
@@ -18,6 +18,7 @@ interface TripSeaAiChatbotProps {
   contactPhone?: string;
   lineOaId?: string;
   facebookUrl?: string;
+  facebookMessengerUrl?: string;
   currentCurrency?: any;
 }
 
@@ -29,15 +30,20 @@ export const TripSeaAiChatbot: React.FC<TripSeaAiChatbotProps> = ({
   onBookTourClick,
   contactPhone = '+66 (0) 62 681 6494',
   lineOaId = '@056hxinu',
-  facebookUrl = 'https://www.facebook.com/tripseatoursphuket/'
+  facebookUrl = 'https://www.facebook.com/tripseatoursphuket/',
+  facebookMessengerUrl = 'https://m.me/tripseatoursphuket'
 }) => {
   const activeLang: Language = currentLang || currentLanguage || 'TH';
   const phone = settings?.contactPhone || contactPhone || '062-681-6494 / 097-924-1399';
   const line = settings?.lineOaId || lineOaId || '@056hxinu';
   const fb = settings?.facebookUrl || facebookUrl;
+  const messenger = settings?.facebookMessengerUrl || facebookMessengerUrl;
   const tat = settings?.tatLicenseNo || '33/11100';
 
   const [isOpen, setIsOpen] = useState(false);
+  const [chatMode, setChatMode] = useState<'ai' | 'live'>('ai');
+
+  // AI Chat States
   const [inputMessage, setInputMessage] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [messages, setMessages] = useState<Message[]>([
@@ -49,11 +55,33 @@ export const TripSeaAiChatbot: React.FC<TripSeaAiChatbotProps> = ({
     }
   ]);
 
+  // Live Chat States
+  const [liveSessionId] = useState<string>(() => {
+    const saved = localStorage.getItem('tst_live_chat_session_id');
+    if (saved) return saved;
+    const newId = `session-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`;
+    localStorage.setItem('tst_live_chat_session_id', newId);
+    return newId;
+  });
+  const [liveCustomerName, setLiveCustomerName] = useState<string>(() => {
+    return localStorage.getItem('tst_live_chat_customer_name') || '';
+  });
+  const [liveMessages, setLiveMessages] = useState<any[]>([]);
+  const [liveInput, setLiveInput] = useState('');
+  const [liveImage, setLiveImage] = useState<string | null>(null);
+  const [isLiveLoading, setIsLiveLoading] = useState(false);
+
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  const liveMessagesEndRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   const scrollToBottom = () => {
-    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+    if (chatMode === 'ai') {
+      messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+    } else {
+      liveMessagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+    }
   };
 
   useEffect(() => {
@@ -61,7 +89,109 @@ export const TripSeaAiChatbot: React.FC<TripSeaAiChatbotProps> = ({
       scrollToBottom();
       setTimeout(() => inputRef.current?.focus(), 150);
     }
-  }, [isOpen, messages]);
+  }, [isOpen, messages, liveMessages, chatMode]);
+
+  // Init or fetch live session
+  const initLiveSession = async (name?: string) => {
+    try {
+      const custName = name || liveCustomerName || 'คุณลูกค้าบนหน้าเว็บ';
+      const res = await fetch('/api/livechat/sessions', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          sessionId: liveSessionId,
+          customerName: custName
+        })
+      });
+      if (res.ok) {
+        const data = await res.json();
+        if (data && data.messages) {
+          setLiveMessages(data.messages);
+        }
+      }
+    } catch (err) {
+      console.warn('Failed to init live chat session:', err);
+    }
+  };
+
+  // Poll for live chat updates every 3s when live mode is active
+  useEffect(() => {
+    if (!isOpen || chatMode !== 'live') return;
+
+    initLiveSession();
+
+    const interval = setInterval(async () => {
+      try {
+        const res = await fetch(`/api/livechat/sessions/${liveSessionId}`);
+        if (res.ok) {
+          const data = await res.json();
+          if (data && data.messages) {
+            setLiveMessages(data.messages);
+          }
+        }
+      } catch (err) {}
+    }, 3000);
+
+    return () => clearInterval(interval);
+  }, [isOpen, chatMode, liveSessionId]);
+
+  // Send message to Live Chat
+  const handleSendLiveMessage = async (e?: React.FormEvent) => {
+    if (e) e.preventDefault();
+    if (!liveInput.trim() && !liveImage) return;
+
+    const currentText = liveInput.trim();
+    const currentImg = liveImage;
+    setLiveInput('');
+    setLiveImage(null);
+    setIsLiveLoading(true);
+
+    const tempMsg = {
+      id: `msg-temp-${Date.now()}`,
+      sender: 'customer',
+      senderName: liveCustomerName || 'คุณลูกค้า',
+      text: currentText,
+      imageUrl: currentImg || undefined,
+      timestamp: new Date().toLocaleTimeString('th-TH', { hour: '2-digit', minute: '2-digit' })
+    };
+    setLiveMessages(prev => [...prev, tempMsg]);
+
+    try {
+      const res = await fetch('/api/livechat/send', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          sessionId: liveSessionId,
+          sender: 'customer',
+          senderName: liveCustomerName || 'คุณลูกค้า',
+          text: currentText,
+          imageUrl: currentImg || undefined
+        })
+      });
+
+      if (res.ok) {
+        const data = await res.json();
+        if (data && data.session && data.session.messages) {
+          setLiveMessages(data.session.messages);
+        }
+      }
+    } catch (err) {
+      console.error('Error sending live message:', err);
+    } finally {
+      setIsLiveLoading(false);
+    }
+  };
+
+  const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      const reader = new FileReader();
+      reader.onloadend = () => {
+        setLiveImage(reader.result as string);
+      };
+      reader.readAsDataURL(file);
+    }
+  };
 
   const quickQuestions = [
     { label: '🏝️ แนะนำทัวร์ยอดฮิต', query: 'ช่วยแนะนำทัวร์เกาะยอดฮิตของภูเก็ตที่คุ้มค่าที่สุดหน่อยครับ' },
@@ -289,7 +419,7 @@ export const TripSeaAiChatbot: React.FC<TripSeaAiChatbotProps> = ({
     <>
       {/* Floating Widget Trigger Button */}
       {!isOpen && (
-        <div className="fixed bottom-6 right-6 z-40 flex items-center gap-3">
+        <div className="fixed bottom-6 right-4 sm:right-6 z-40 flex items-center gap-3">
           <div className="hidden sm:flex items-center gap-1.5 bg-white/95 backdrop-blur-md px-3.5 py-2 rounded-full shadow-lg border border-teal-100 text-xs font-semibold text-slate-800 animate-bounce">
             <span className="relative flex h-2 w-2">
               <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-teal-400 opacity-75"></span>
@@ -359,109 +489,331 @@ export const TripSeaAiChatbot: React.FC<TripSeaAiChatbotProps> = ({
             </div>
           </div>
 
-          {/* Quick FAQ Chips */}
-          <div className="bg-teal-50/70 border-b border-teal-100/80 px-3 py-2 overflow-x-auto no-scrollbar flex items-center gap-1.5 shrink-0">
-            {quickQuestions.map((q, idx) => (
-              <button
-                key={idx}
-                type="button"
-                onClick={() => handleSendMessage(q.query)}
-                className="whitespace-nowrap bg-white hover:bg-teal-100/60 text-teal-900 border border-teal-200/80 text-[11px] font-semibold px-2.5 py-1 rounded-full transition shadow-xs shrink-0 active:scale-95"
-              >
-                {q.label}
-              </button>
-            ))}
-          </div>
-
-          {/* Messages Area */}
-          <div className="flex-1 overflow-y-auto p-4 space-y-3 bg-slate-50/50 text-xs">
-            {messages.map((msg) => {
-              const isAi = msg.sender === 'ai';
-              return (
-                <div
-                  key={msg.id}
-                  className={`flex gap-2.5 ${isAi ? 'justify-start' : 'justify-end'}`}
-                >
-                  {isAi && (
-                    <div className="w-7 h-7 rounded-xl bg-teal-600 text-white flex items-center justify-center shrink-0 mt-0.5 shadow-xs">
-                      <Sparkles className="w-3.5 h-3.5 text-amber-200" />
-                    </div>
-                  )}
-
-                  <div
-                    className={`max-w-[82%] rounded-2xl p-3 shadow-xs ${
-                      isAi
-                        ? 'bg-white text-slate-800 border border-slate-200/80 rounded-tl-xs'
-                        : 'bg-teal-600 text-white font-medium rounded-tr-xs shadow-teal-900/10'
-                    }`}
-                  >
-                    <div className="space-y-1">
-                      {renderMessageContent(msg.text)}
-                    </div>
-                    <div
-                      className={`text-[9px] mt-1 text-right ${
-                        isAi ? 'text-slate-400' : 'text-teal-200'
-                      }`}
-                    >
-                      {msg.timestamp}
-                    </div>
-                  </div>
-
-                  {!isAi && (
-                    <div className="w-7 h-7 rounded-xl bg-slate-700 text-white flex items-center justify-center shrink-0 mt-0.5 shadow-xs">
-                      <User className="w-3.5 h-3.5" />
-                    </div>
-                  )}
-                </div>
-              );
-            })}
-
-            {isLoading && (
-              <div className="flex gap-2.5 justify-start">
-                <div className="w-7 h-7 rounded-xl bg-teal-600 text-white flex items-center justify-center shrink-0 mt-0.5">
-                  <Bot className="w-3.5 h-3.5 animate-pulse" />
-                </div>
-                <div className="bg-white border border-slate-200 rounded-2xl rounded-tl-xs p-3 shadow-xs">
-                  <div className="flex items-center gap-1.5 text-teal-600">
-                    <span className="w-1.5 h-1.5 bg-teal-500 rounded-full animate-bounce [animation-delay:-0.3s]"></span>
-                    <span className="w-1.5 h-1.5 bg-teal-500 rounded-full animate-bounce [animation-delay:-0.15s]"></span>
-                    <span className="w-1.5 h-1.5 bg-teal-500 rounded-full animate-bounce"></span>
-                    <span className="text-[11px] text-slate-500 ml-1">กำลังคิดคำตอบ...</span>
-                  </div>
-                </div>
-              </div>
-            )}
-            <div ref={messagesEndRef} />
-          </div>
-
-          {/* Input Footer */}
-          <div className="p-3 bg-white border-t border-slate-200">
-            <form
-              onSubmit={(e) => {
-                e.preventDefault();
-                handleSendMessage();
-              }}
-              className="flex items-center gap-2"
+          {/* Mode Switcher Tabs */}
+          <div className="bg-slate-900 text-white p-1.5 flex items-center justify-center gap-1 border-b border-slate-800 text-xs font-bold shrink-0">
+            <button
+              type="button"
+              onClick={() => setChatMode('ai')}
+              className={`flex-1 py-1.5 px-2 rounded-xl transition flex items-center justify-center gap-1.5 ${
+                chatMode === 'ai'
+                  ? 'bg-teal-600 text-white shadow-md'
+                  : 'text-slate-400 hover:text-white hover:bg-slate-800'
+              }`}
             >
-              <input
-                ref={inputRef}
-                type="text"
-                value={inputMessage}
-                onChange={(e) => setInputMessage(e.target.value)}
-                placeholder="พิมพ์คำถามเกี่ยวกับทัวร์ภูเก็ต เช่น ราคา เกาะพีพี..."
-                className="flex-1 bg-slate-100/90 border border-slate-200 rounded-2xl px-3.5 py-2.5 text-xs text-slate-900 focus:bg-white focus:outline-none focus:ring-2 focus:ring-teal-500 transition"
-                disabled={isLoading}
-              />
-              <button
-                type="submit"
-                disabled={!inputMessage.trim() || isLoading}
-                className="w-10 h-10 bg-teal-600 hover:bg-teal-500 disabled:opacity-40 disabled:hover:bg-teal-600 text-white rounded-2xl flex items-center justify-center transition shrink-0 shadow-md shadow-teal-900/20 active:scale-95"
-                title="ส่งข้อความ"
-              >
-                <Send className="w-4 h-4" />
-              </button>
-            </form>
+              <Bot className="w-4 h-4 text-teal-300" />
+              <span>🤖 TripSea AI (24 ชม.)</span>
+            </button>
+
+            <button
+              type="button"
+              onClick={() => {
+                setChatMode('live');
+                initLiveSession();
+              }}
+              className={`flex-1 py-1.5 px-2 rounded-xl transition flex items-center justify-center gap-1.5 relative ${
+                chatMode === 'live'
+                  ? 'bg-blue-600 text-white shadow-md'
+                  : 'text-slate-400 hover:text-white hover:bg-slate-800'
+              }`}
+            >
+              <Headphones className="w-4 h-4 text-blue-300" />
+              <span>💬 แชทสดเจ้าหน้าที่</span>
+              <span className="w-2 h-2 rounded-full bg-emerald-400 animate-ping absolute top-1 right-2"></span>
+            </button>
           </div>
+
+          {/* Direct Human Channel Sub-header */}
+          <div className="bg-slate-950 text-slate-200 px-3 py-1.5 flex items-center justify-between text-[11px] font-bold border-b border-slate-800 shrink-0">
+            <span className="text-slate-400 text-[10px] hidden sm:inline">ลิงก์ติดต่อภายนอก:</span>
+            <div className="flex items-center gap-1.5 w-full sm:w-auto justify-between sm:justify-end">
+              <a
+                href={messenger}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="bg-gradient-to-r from-[#0084FF] to-[#00C6FF] hover:opacity-90 text-white px-2 py-0.5 rounded-lg flex items-center gap-1 transition text-[10px]"
+                title="เปิดในแอป Messenger"
+              >
+                <MessageCircle className="w-3 h-3 fill-current" />
+                <span>Messenger App</span>
+              </a>
+
+              <a
+                href={`https://line.me/R/ti/p/${line}`}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="bg-[#06C755] hover:bg-[#05b34c] text-white px-2 py-0.5 rounded-lg flex items-center gap-1 transition text-[10px]"
+                title="แอด LINE Official"
+              >
+                <MessageCircle className="w-3 h-3 fill-current" />
+                <span>LINE ({line})</span>
+              </a>
+
+              <a
+                href="tel:0626816494"
+                className="bg-slate-800 hover:bg-slate-700 text-teal-300 px-2 py-0.5 rounded-lg flex items-center gap-1 border border-slate-700 transition text-[10px]"
+                title="โทรสอบถามด่วน"
+              >
+                <PhoneCall className="w-3 h-3 text-teal-400" />
+                <span>062-681-6494</span>
+              </a>
+            </div>
+          </div>
+
+          {/* Content Views: Mode AI vs Mode Live */}
+          {chatMode === 'ai' ? (
+            <>
+              {/* Quick FAQ Chips */}
+              <div className="bg-teal-50/70 border-b border-teal-100/80 px-3 py-2 overflow-x-auto no-scrollbar flex items-center gap-1.5 shrink-0">
+                {quickQuestions.map((q, idx) => (
+                  <button
+                    key={idx}
+                    type="button"
+                    onClick={() => handleSendMessage(q.query)}
+                    className="whitespace-nowrap bg-white hover:bg-teal-100/60 text-teal-900 border border-teal-200/80 text-[11px] font-semibold px-2.5 py-1 rounded-full transition shadow-xs shrink-0 active:scale-95"
+                  >
+                    {q.label}
+                  </button>
+                ))}
+              </div>
+
+              {/* Messages Area AI */}
+              <div className="flex-1 overflow-y-auto p-4 space-y-3 bg-slate-50/50 text-xs">
+                {messages.map((msg) => {
+                  const isAi = msg.sender === 'ai';
+                  return (
+                    <div
+                      key={msg.id}
+                      className={`flex gap-2.5 ${isAi ? 'justify-start' : 'justify-end'}`}
+                    >
+                      {isAi && (
+                        <div className="w-7 h-7 rounded-xl bg-teal-600 text-white flex items-center justify-center shrink-0 mt-0.5 shadow-xs">
+                          <Sparkles className="w-3.5 h-3.5 text-amber-200" />
+                        </div>
+                      )}
+
+                      <div
+                        className={`max-w-[82%] rounded-2xl p-3 shadow-xs ${
+                          isAi
+                            ? 'bg-white text-slate-800 border border-slate-200/80 rounded-tl-xs'
+                            : 'bg-teal-600 text-white font-medium rounded-tr-xs shadow-teal-900/10'
+                        }`}
+                      >
+                        <div className="space-y-1">
+                          {renderMessageContent(msg.text)}
+                        </div>
+                        <div
+                          className={`text-[9px] mt-1 text-right ${
+                            isAi ? 'text-slate-400' : 'text-teal-200'
+                          }`}
+                        >
+                          {msg.timestamp}
+                        </div>
+                      </div>
+
+                      {!isAi && (
+                        <div className="w-7 h-7 rounded-xl bg-slate-700 text-white flex items-center justify-center shrink-0 mt-0.5 shadow-xs">
+                          <User className="w-3.5 h-3.5" />
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
+
+                {isLoading && (
+                  <div className="flex gap-2.5 justify-start">
+                    <div className="w-7 h-7 rounded-xl bg-teal-600 text-white flex items-center justify-center shrink-0 mt-0.5">
+                      <Bot className="w-3.5 h-3.5 animate-pulse" />
+                    </div>
+                    <div className="bg-white border border-slate-200 rounded-2xl rounded-tl-xs p-3 shadow-xs">
+                      <div className="flex items-center gap-1.5 text-teal-600">
+                        <span className="w-1.5 h-1.5 bg-teal-500 rounded-full animate-bounce [animation-delay:-0.3s]"></span>
+                        <span className="w-1.5 h-1.5 bg-teal-500 rounded-full animate-bounce [animation-delay:-0.15s]"></span>
+                        <span className="w-1.5 h-1.5 bg-teal-500 rounded-full animate-bounce"></span>
+                        <span className="text-[11px] text-slate-500 ml-1">กำลังคิดคำตอบ...</span>
+                      </div>
+                    </div>
+                  </div>
+                )}
+                <div ref={messagesEndRef} />
+              </div>
+
+              {/* Input Footer AI */}
+              <div className="p-3 bg-white border-t border-slate-200 shrink-0">
+                <form
+                  onSubmit={(e) => {
+                    e.preventDefault();
+                    handleSendMessage();
+                  }}
+                  className="flex items-center gap-2"
+                >
+                  <input
+                    ref={inputRef}
+                    type="text"
+                    value={inputMessage}
+                    onChange={(e) => setInputMessage(e.target.value)}
+                    placeholder="พิมพ์คำถามเกี่ยวกับทัวร์ภูเก็ต เช่น ราคา เกาะพีพี..."
+                    className="flex-1 bg-slate-100/90 border border-slate-200 rounded-2xl px-3.5 py-2.5 text-xs text-slate-900 focus:bg-white focus:outline-none focus:ring-2 focus:ring-teal-500 transition"
+                    disabled={isLoading}
+                  />
+                  <button
+                    type="submit"
+                    disabled={!inputMessage.trim() || isLoading}
+                    className="w-10 h-10 bg-teal-600 hover:bg-teal-500 disabled:opacity-40 disabled:hover:bg-teal-600 text-white rounded-2xl flex items-center justify-center transition shrink-0 shadow-md shadow-teal-900/20 active:scale-95"
+                    title="ส่งข้อความ"
+                  >
+                    <Send className="w-4 h-4" />
+                  </button>
+                </form>
+              </div>
+            </>
+          ) : (
+            <>
+              {/* Live Chat Status Banner */}
+              <div className="bg-blue-50 border-b border-blue-100 px-3.5 py-2 flex items-center justify-between shrink-0">
+                <div className="flex items-center gap-2">
+                  <span className="relative flex h-2.5 w-2.5">
+                    <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+                    <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-emerald-500"></span>
+                  </span>
+                  <span className="text-[11px] font-extrabold text-blue-900">
+                    🟢 แชทสดกับเจ้าหน้าที่ Trip Sea Tour
+                  </span>
+                </div>
+                <span className="text-[10px] text-blue-700 bg-blue-100 font-bold px-2 py-0.5 rounded-full">
+                  Real-time On-site
+                </span>
+              </div>
+
+              {/* Customer Name Input if not set */}
+              <div className="bg-slate-100/80 px-3 py-1.5 border-b border-slate-200 flex items-center gap-2 shrink-0 text-[11px]">
+                <span className="text-slate-500 shrink-0 font-medium">ชื่อของคุณ:</span>
+                <input
+                  type="text"
+                  value={liveCustomerName}
+                  onChange={(e) => {
+                    setLiveCustomerName(e.target.value);
+                    localStorage.setItem('tst_live_chat_customer_name', e.target.value);
+                  }}
+                  placeholder="ใส่ชื่อของคุณ (เช่น คุณนก)"
+                  className="bg-white border border-slate-300 rounded-lg px-2 py-1 text-xs text-slate-800 flex-1 focus:ring-1 focus:ring-blue-500 focus:outline-none"
+                />
+              </div>
+
+              {/* Messages Area Live */}
+              <div className="flex-1 overflow-y-auto p-4 space-y-3 bg-slate-100/60 text-xs">
+                {liveMessages.map((msg) => {
+                  const isAdmin = msg.sender === 'admin';
+                  return (
+                    <div
+                      key={msg.id}
+                      className={`flex gap-2.5 ${isAdmin ? 'justify-start' : 'justify-end'}`}
+                    >
+                      {isAdmin && (
+                        <div className="w-7 h-7 rounded-xl bg-blue-600 text-white flex items-center justify-center shrink-0 mt-0.5 shadow-xs">
+                          <Headphones className="w-3.5 h-3.5" />
+                        </div>
+                      )}
+
+                      <div
+                        className={`max-w-[82%] rounded-2xl p-3 shadow-xs ${
+                          isAdmin
+                            ? 'bg-white text-slate-800 border border-slate-200/80 rounded-tl-xs'
+                            : 'bg-gradient-to-r from-blue-600 to-blue-500 text-white font-medium rounded-tr-xs shadow-blue-900/10'
+                        }`}
+                      >
+                        <div className="text-[10px] font-bold mb-1 opacity-80 flex items-center justify-between gap-2">
+                          <span>{msg.senderName || (isAdmin ? 'แอดมิน TripSea' : 'คุณลูกค้า')}</span>
+                          {isAdmin && <CheckCheck className="w-3 h-3 text-blue-500 inline" />}
+                        </div>
+
+                        {msg.imageUrl && (
+                          <div className="mb-2 rounded-xl overflow-hidden border border-black/10">
+                            <img src={msg.imageUrl} alt="attached" className="max-h-48 w-full object-cover" />
+                          </div>
+                        )}
+
+                        <p className="whitespace-pre-line leading-relaxed">{msg.text}</p>
+
+                        <div
+                          className={`text-[9px] mt-1 text-right ${
+                            isAdmin ? 'text-slate-400' : 'text-blue-100'
+                          }`}
+                        >
+                          {msg.timestamp}
+                        </div>
+                      </div>
+
+                      {!isAdmin && (
+                        <div className="w-7 h-7 rounded-xl bg-slate-700 text-white flex items-center justify-center shrink-0 mt-0.5 shadow-xs">
+                          <User className="w-3.5 h-3.5" />
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
+                <div ref={liveMessagesEndRef} />
+              </div>
+
+              {/* Live Preview Image Attachment if selected */}
+              {liveImage && (
+                <div className="p-2 bg-blue-50 border-t border-blue-200 flex items-center justify-between shrink-0">
+                  <div className="flex items-center gap-2">
+                    <img src={liveImage} alt="preview" className="w-10 h-10 object-cover rounded-lg border border-blue-300" />
+                    <span className="text-[11px] font-bold text-blue-900">แนบรูปภาพพร้อมส่งแล้ว</span>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setLiveImage(null)}
+                    className="p-1 text-slate-400 hover:text-rose-600"
+                  >
+                    <X className="w-4 h-4" />
+                  </button>
+                </div>
+              )}
+
+              {/* Input Footer Live */}
+              <div className="p-3 bg-white border-t border-slate-200 shrink-0">
+                <form
+                  onSubmit={handleSendLiveMessage}
+                  className="flex items-center gap-2"
+                >
+                  <input
+                    type="file"
+                    ref={fileInputRef}
+                    onChange={handleImageUpload}
+                    accept="image/*"
+                    className="hidden"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => fileInputRef.current?.click()}
+                    className="w-10 h-10 bg-slate-100 hover:bg-slate-200 text-slate-600 rounded-2xl flex items-center justify-center transition shrink-0 border border-slate-300"
+                    title="แนบรูปภาพ / สลิป"
+                  >
+                    <ImageIcon className="w-4 h-4" />
+                  </button>
+
+                  <input
+                    type="text"
+                    value={liveInput}
+                    onChange={(e) => setLiveInput(e.target.value)}
+                    placeholder="พิมพ์ข้อความคุยสดกับแอดมินที่นี่..."
+                    className="flex-1 bg-slate-100/90 border border-slate-200 rounded-2xl px-3.5 py-2.5 text-xs text-slate-900 focus:bg-white focus:outline-none focus:ring-2 focus:ring-blue-500 transition"
+                    disabled={isLiveLoading}
+                  />
+
+                  <button
+                    type="submit"
+                    disabled={(!liveInput.trim() && !liveImage) || isLiveLoading}
+                    className="w-10 h-10 bg-blue-600 hover:bg-blue-500 disabled:opacity-40 disabled:hover:bg-blue-600 text-white rounded-2xl flex items-center justify-center transition shrink-0 shadow-md shadow-blue-900/20 active:scale-95"
+                    title="ส่งข้อความสด"
+                  >
+                    <Send className="w-4 h-4" />
+                  </button>
+                </form>
+              </div>
+            </>
+          )}
         </div>
       )}
     </>

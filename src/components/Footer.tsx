@@ -104,27 +104,37 @@ export const Footer: React.FC<FooterProps> = ({ currentLang, settings, onNavigat
             <p className="text-xs text-slate-400">
               ติดต่อสอบถามโปรแกรมทัวร์เพิ่มเติม หรือ ส่งสลิปโอนเงินผ่าน LINE OA ได้ตลอด 24 ชั่วโมง
             </p>
-            <a
-              href={`https://line.me/R/ti/p/${settings.lineOaId}`}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="inline-flex items-center justify-center gap-2 w-full bg-emerald-600 hover:bg-emerald-500 text-white font-bold px-4 py-2.5 rounded-xl text-xs transition shadow-md shadow-emerald-950"
-            >
-              <MessageCircle className="w-4 h-4" />
-              <span>แอด LINE Official ({settings.lineOaId})</span>
-            </a>
-
-            {settings.facebookUrl && (
               <a
-                href={settings.facebookUrl}
+                href={`https://line.me/R/ti/p/${settings.lineOaId}`}
                 target="_blank"
                 rel="noopener noreferrer"
-                className="inline-flex items-center justify-center gap-2 w-full bg-[#1877F2] hover:bg-[#166FE5] text-white font-bold px-4 py-2.5 rounded-xl text-xs transition shadow-md shadow-blue-950/40"
+                className="inline-flex items-center justify-center gap-2 w-full bg-[#06C755] hover:bg-[#05b34c] text-white font-bold px-4 py-2.5 rounded-xl text-xs transition shadow-md shadow-emerald-950"
               >
-                <Facebook className="w-4 h-4 text-blue-100 fill-current" />
-                <span>เยี่ยมชม Facebook Page</span>
+                <MessageCircle className="w-4 h-4" />
+                <span>แอด LINE Official ({settings.lineOaId})</span>
               </a>
-            )}
+
+              <a
+                href={settings.facebookMessengerUrl || 'https://m.me/tripseatoursphuket'}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="inline-flex items-center justify-center gap-2 w-full bg-gradient-to-r from-[#0084FF] to-[#00C6FF] hover:opacity-95 text-white font-bold px-4 py-2.5 rounded-xl text-xs transition shadow-md shadow-blue-950/40"
+              >
+                <MessageCircle className="w-4 h-4 fill-current" />
+                <span>💬 แชทผ่าน Facebook Messenger</span>
+              </a>
+
+              {settings.facebookUrl && (
+                <a
+                  href={settings.facebookUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="inline-flex items-center justify-center gap-2 w-full bg-[#1877F2] hover:bg-[#166FE5] text-white font-bold px-4 py-2.5 rounded-xl text-xs transition shadow-md shadow-blue-950/40"
+                >
+                  <Facebook className="w-4 h-4 text-blue-100 fill-current" />
+                  <span>เยี่ยมชม Facebook Page</span>
+                </a>
+              )}
           </div>
         </div>
 

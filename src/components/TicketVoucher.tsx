@@ -29,6 +29,10 @@ export const TicketVoucher: React.FC<TicketVoucherProps> = ({
         const dataUrl = await toPng(ticketRef.current, {
           quality: 0.98,
           pixelRatio: 2,
+          width: 920,
+          height: 650,
+          canvasWidth: 1840,
+          canvasHeight: 1300,
           backgroundColor: '#ffffff',
         });
 
@@ -65,6 +69,10 @@ export const TicketVoucher: React.FC<TicketVoucherProps> = ({
       const dataUrl = await toPng(ticketRef.current, {
         quality: 0.98,
         pixelRatio: 2,
+        width: 920,
+        height: 650,
+        canvasWidth: 1840,
+        canvasHeight: 1300,
         backgroundColor: '#ffffff',
       });
 
@@ -90,189 +98,238 @@ export const TicketVoucher: React.FC<TicketVoucherProps> = ({
 
   return (
     <div className="space-y-4">
-      {/* Printable / Downloadable Official E-Ticket Voucher (Paper Standard Layout) */}
-      <div
-        ref={ticketRef}
-        className="bg-white text-slate-900 border-2 border-slate-900 rounded-xl p-4 sm:p-6 shadow-2xl font-sans select-none max-w-4xl mx-auto overflow-hidden text-xs"
-        id={`ticket-voucher-${booking.bookingRef}`}
-      >
-        {/* Header Section */}
-        <div className="flex items-center justify-between pb-3 border-b-2 border-slate-900 mb-2">
-          <div className="flex items-center gap-3">
-            {/* Logo Image */}
-            <img
-              src={tripSeaLogo}
-              alt="TRIP SEA Tour Logo"
-              className="w-16 h-16 rounded-xl object-cover border-2 border-slate-900 shadow-sm shrink-0"
-              referrerPolicy="no-referrer"
-            />
+      {/* Scrollable Container Wrapper for Mobile Responsive View */}
+      <div className="w-full overflow-x-auto pb-4 -mx-4 px-4 sm:mx-0 sm:px-0 scrollbar-thin scrollbar-thumb-teal-200">
+        <div className="min-w-[920px] flex justify-center">
+          {/* Printable / Downloadable Official E-Ticket Voucher (A5 Landscape Proportions: 920px x 650px) */}
+          <div
+            ref={ticketRef}
+            style={{ width: '920px', height: '650px' }}
+            className="bg-white text-slate-900 border-4 border-double border-slate-900 p-6 shadow-2xl font-sans select-none relative flex flex-col justify-between shrink-0"
+            id={`ticket-voucher-${booking.bookingRef}`}
+          >
+            {/* Elegant Circular Ink Stamp overlay on the right side */}
+            <div className="absolute right-36 bottom-36 w-28 h-28 border-4 border-double border-emerald-600/25 rounded-full flex flex-col items-center justify-center rotate-12 pointer-events-none select-none">
+              <span className="text-[9px] font-black tracking-widest text-emerald-600/25 uppercase leading-none">TRIP SEA TOUR</span>
+              <span className="text-xs font-black text-emerald-600/25 my-0.5">CONFIRMED</span>
+              <span className="text-[8px] font-bold text-emerald-600/25">OFFICIAL VOUCHER</span>
+            </div>
 
-            <div>
-              <div className="flex items-center gap-2">
-                <h2 className="text-xl font-extrabold text-[#0d3b66] tracking-tight leading-none">
-                  {companyName}
-                </h2>
-                <span className="bg-teal-100 text-teal-900 text-[10px] font-extrabold px-2 py-0.5 rounded border border-teal-300">
-                  ททท. 33/11100
+            {/* Header Section */}
+            <div className="flex items-center justify-between pb-3 border-b-2 border-slate-900">
+              <div className="flex items-center gap-4">
+                {/* Logo Image */}
+                <img
+                  src={tripSeaLogo}
+                  alt="TRIP SEA Tour Logo"
+                  className="w-16 h-16 rounded-xl object-cover border-2 border-slate-900 shadow-sm shrink-0"
+                  referrerPolicy="no-referrer"
+                />
+
+                <div>
+                  <div className="flex items-center gap-2">
+                    <h2 className="text-xl font-extrabold text-[#0d3b66] tracking-tight leading-none">
+                      {companyName}
+                    </h2>
+                    <span className="bg-amber-100 text-amber-950 text-[10px] font-extrabold px-2 py-0.5 rounded border border-amber-300 flex items-center gap-1">
+                      <ShieldCheck className="w-3 h-3 text-amber-600" />
+                      ททท. {settings?.tatLicenseNo || '33/11100'}
+                    </span>
+                  </div>
+                  <p className="text-[10px] text-slate-700 font-medium mt-1">
+                    {companyAddress}
+                  </p>
+                  <div className="flex gap-x-3 text-[10px] text-slate-600 font-bold mt-0.5">
+                    <span>Tel. {companyPhone}</span>
+                    {companyEmail && <span>Email: {companyEmail}</span>}
+                  </div>
+                </div>
+              </div>
+
+              {/* Booking Reference Banner */}
+              <div className="text-right flex flex-col items-end">
+                <span className="bg-slate-900 text-white text-[10px] uppercase font-bold px-3 py-1 rounded-t-lg tracking-wider block">
+                  OFFICIAL BOOKING VOUCHER
+                </span>
+                <span className="border-2 border-t-0 border-slate-900 bg-teal-50 px-4 py-1.5 text-lg font-black font-mono text-teal-800 rounded-b-lg leading-none shadow-sm">
+                  {booking.bookingRef}
                 </span>
               </div>
-              <p className="text-[11px] text-slate-700 font-medium mt-1">
-                {companyAddress}
-              </p>
-              <div className="flex flex-wrap gap-x-3 text-[11px] text-slate-700 font-medium">
-                <span>Tel. {companyPhone}</span>
-                {companyEmail && <span>Email: {companyEmail}</span>}
+            </div>
+
+            {/* Main Content Layout (Left Details Table & Right QR/Verification panel) */}
+            <div className="grid grid-cols-12 gap-4 my-2 flex-1 items-stretch">
+              
+              {/* Left Panel - Tour Details Table (col-span-8) */}
+              <div className="col-span-8 border-2 border-slate-900 rounded-lg overflow-hidden flex flex-col justify-between">
+                
+                {/* Tour Program Row */}
+                <div className="bg-teal-900 text-white px-3 py-2 border-b-2 border-slate-900">
+                  <div className="text-[9px] uppercase font-bold text-teal-300 leading-none">Tour Program (โปรแกรมทัวร์)</div>
+                  <div className="text-sm font-extrabold mt-1 tracking-tight leading-snug">
+                    {booking.tourTitle}
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-12 divide-x divide-slate-900 border-b border-slate-900 flex-1">
+                  {/* Guest Name & Mobile */}
+                  <div className="col-span-6 p-2 space-y-1">
+                    <div className="text-[9px] text-slate-500 font-bold uppercase leading-none">Guest Name (ชื่อลูกค้า)</div>
+                    <div className="text-xs font-extrabold text-slate-900 truncate">{booking.customerName}</div>
+                  </div>
+                  <div className="col-span-6 p-2 space-y-1">
+                    <div className="text-[9px] text-slate-500 font-bold uppercase leading-none">Mobile No. (เบอร์โทร)</div>
+                    <div className="text-xs font-bold font-mono text-slate-900">{booking.customerPhone}</div>
+                  </div>
+                </div>
+
+                {/* Date Highlight Row */}
+                <div className="grid grid-cols-12 divide-x divide-slate-900 border-b border-slate-900 bg-amber-50/50 flex-1">
+                  {/* Tour Date */}
+                  <div className="col-span-6 p-2 bg-rose-50/70 space-y-1">
+                    <div className="text-[9px] text-rose-800 font-black uppercase leading-none flex items-center gap-1">
+                      <span className="w-1.5 h-1.5 bg-rose-600 rounded-full animate-ping"></span>
+                      TOUR DATE (วันที่เดินทาง)
+                    </div>
+                    <div className="text-sm font-black text-rose-600">{booking.travelDate}</div>
+                  </div>
+                  {/* Pick up Time */}
+                  <div className="col-span-6 p-2 bg-amber-50 space-y-1">
+                    <div className="text-[9px] text-amber-800 font-black uppercase leading-none">PICKUP TIME (เวลารับ)</div>
+                    <div className="text-sm font-black text-amber-600">{booking.pickupTime || '07:30 - 08:00 น.'}</div>
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-12 divide-x divide-slate-900 border-b border-slate-900 flex-1">
+                  {/* Booking Date & Nationality */}
+                  <div className="col-span-6 p-2 space-y-1">
+                    <div className="text-[9px] text-slate-500 font-bold uppercase leading-none">Booking Date (วันที่จอง)</div>
+                    <div className="text-xs font-semibold text-slate-800">
+                      {new Date(booking.createdAt).toLocaleDateString('th-TH')}
+                    </div>
+                  </div>
+                  <div className="col-span-6 p-2 space-y-1">
+                    <div className="text-[9px] text-slate-500 font-bold uppercase leading-none">Nationality (สัญชาติ)</div>
+                    <div className="text-xs font-semibold text-slate-800">{booking.nationality || 'Thai / -'}</div>
+                  </div>
+                </div>
+
+                {/* Hotel Details Row */}
+                <div className="border-b border-slate-900 p-2 space-y-1 flex-1">
+                  <div className="text-[9px] text-slate-500 font-bold uppercase leading-none">Pick up Hotel (รับโรงแรม)</div>
+                  <div className="text-xs font-extrabold text-slate-900">
+                    🏨 {booking.pickupHotel} {booking.roomNumber ? `(ห้อง ${booking.roomNumber})` : ''} {booking.pickupZone ? `[โซน ${booking.pickupZone}]` : ''}
+                  </div>
+                </div>
+
+                {/* Return Hotel Row */}
+                <div className="border-b border-slate-900 p-2 space-y-1 flex-1">
+                  <div className="text-[9px] text-slate-500 font-bold uppercase leading-none">Send back Hotel (ส่งกลับโรงแรม)</div>
+                  <div className="text-xs font-bold text-slate-800">
+                    🚐 {booking.sendBackHotel || booking.pickupHotel}
+                  </div>
+                </div>
+
+                {/* Remarks Row */}
+                <div className="p-2 space-y-1 flex-1 bg-slate-50">
+                  <div className="text-[9px] text-slate-500 font-bold uppercase leading-none">Remarks / Special Requests (หมายเหตุ)</div>
+                  <div className="text-xs text-slate-700 italic font-medium">
+                    {booking.specialRequests || booking.notes || '-'}
+                  </div>
+                </div>
+
+              </div>
+
+              {/* Right Panel - Status, Pax Summary, and Boarding Notice (col-span-4) */}
+              <div className="col-span-4 border-2 border-slate-900 rounded-lg p-3 bg-slate-50/60 flex flex-col justify-between items-center text-center space-y-2">
+                
+                {/* Official Status Banner */}
+                <div className="w-full bg-teal-900 text-white py-2 px-3 rounded-lg border border-slate-900 shadow-xs">
+                  <div className="flex items-center justify-center gap-1.5 text-teal-300 text-[10px] font-black tracking-widest uppercase">
+                    <ShieldCheck className="w-4 h-4 text-emerald-400" />
+                    <span>BOOKING STATUS</span>
+                  </div>
+                  <div className="text-sm font-black text-emerald-300 mt-0.5 tracking-wide">
+                    CONFIRMED (ยืนยันสิทธิ์แล้ว)
+                  </div>
+                </div>
+
+                {/* Passenger Counts (PAX Summary) */}
+                <div className="w-full bg-white border-2 border-slate-900 rounded-lg p-2.5 space-y-1.5 shadow-xs">
+                  <div className="text-[10px] text-slate-800 uppercase font-black tracking-wide border-b border-slate-200 pb-1">
+                    PAX SUMMARY (จำนวนผู้เดินทาง)
+                  </div>
+                  <div className="grid grid-cols-2 gap-1.5 text-xs text-slate-800 text-center">
+                    <div className="bg-slate-50 p-1.5 rounded border border-slate-200">
+                      <span className="text-[9px] text-slate-500 block font-bold">ผู้ใหญ่ (Adult)</span>
+                      <span className="text-base font-black text-teal-900 font-mono">{booking.adults} ท่าน</span>
+                    </div>
+                    <div className="bg-slate-50 p-1.5 rounded border border-slate-200">
+                      <span className="text-[9px] text-slate-500 block font-bold">เด็ก (Child)</span>
+                      <span className="text-base font-black text-teal-900 font-mono">{booking.children || 0} ท่าน</span>
+                    </div>
+                    {booking.infants > 0 && (
+                      <div className="col-span-2 bg-slate-50 p-1.5 rounded border border-slate-200">
+                        <span className="text-[9px] text-slate-500 block font-bold">ทารก (Infant)</span>
+                        <span className="text-sm font-black text-teal-900 font-mono">{booking.infants} ท่าน</span>
+                      </div>
+                    )}
+                  </div>
+                  <div className="bg-teal-50 p-1.5 rounded border border-teal-300 text-center">
+                    <span className="text-[10px] text-teal-900 font-bold">
+                      ผู้เดินทางรวม: <span className="text-sm font-black font-mono text-teal-800">{booking.adults + (booking.children || 0) + (booking.infants || 0)}</span> ท่าน
+                    </span>
+                  </div>
+                </div>
+
+                {/* Boarding Notice & Hotline */}
+                <div className="w-full bg-amber-50/90 border border-amber-300 rounded-lg p-2 text-center space-y-1">
+                  <div className="text-[9.5px] font-black text-amber-900 leading-tight">
+                    📌 แสดงตั๋วนี้แก่คนขับรถ / ไกด์ในวันเดินทาง
+                  </div>
+                  <div className="text-[8px] text-slate-600 font-medium leading-snug">
+                    Please present this official E-Ticket voucher to the driver or tour guide upon boarding.
+                  </div>
+                  <div className="text-[8.5px] font-bold text-slate-700 pt-1 border-t border-amber-200">
+                    📞 Hotline: {companyPhone}
+                  </div>
+                </div>
+
+              </div>
+
+            </div>
+
+            {/* Footer Section: Multi-Lingual Cautions */}
+            <div className="border-t border-slate-300 pt-1.5 grid grid-cols-3 gap-2.5 text-[7.5px] leading-[1.1] text-slate-800">
+              {/* THAI Cautions */}
+              <div className="text-rose-700 font-bold space-y-0.5 pr-2 border-r border-slate-200">
+                <p>1. โปรดรอที่ล็อบบี้ตรงเวลานัด คนขับรถตู้จะรอสูงสุดเพียง 5 นาที หากล่าช้าจะถือว่าสละสิทธิ์และไม่คืนเงินทุกกรณี</p>
+                <p>2. สตรีมีครรภ์ ผู้ป่วยโรคหัวใจ โรคกระดูกสันหลัง หรือความดันโลหิตสูง ห้ามเดินทางออกทะเลเพื่อความปลอดภัย</p>
+                <p>3. หากไม่พบรถรับภายใน 20 นาที หรือต้องการความช่วยเหลือด่วน กรุณาโทรติดต่อ {companyPhone}</p>
+              </div>
+
+              {/* CHINESE Cautions */}
+              <div className="text-slate-700 font-medium space-y-0.5 pr-2 border-r border-slate-200">
+                <p className="font-extrabold text-slate-900 leading-none">重要提醒 :</p>
+                <p>1. 请准时在酒店大堂等候。司机最多等5分钟，逾期视为自动放弃，恕不予退款。</p>
+                <p>2. 孕妇、患有心脏病、严重高血压及脊椎疾病患者禁止乘船出海，隐瞒行程风险自负。</p>
+                <p>3. 若超过预定时间20分钟未见司机，请立即拨打客服热线: {companyPhone}</p>
+              </div>
+
+              {/* ENGLISH Cautions */}
+              <div className="text-slate-700 font-medium space-y-0.5">
+                <p className="font-extrabold text-slate-900 leading-none">Cautions & Policy:</p>
+                <p>1. Please standby at lobby on time. Driver waits max 5 mins. No refund for late show.</p>
+                <p>2. Pregnant women and guests with heart, bone, or hypertension conditions are strictly prohibited on tours.</p>
+                <p>3. If driver is delayed over 20 mins, contact support immediately: {companyPhone}</p>
               </div>
             </div>
-          </div>
 
-          <div className="hidden sm:block text-right">
-            <span className="text-[10px] uppercase font-bold text-slate-500 block">OFFICIAL E-TICKET</span>
-            <span className="text-sm font-black font-mono text-teal-700">{booking.bookingRef}</span>
-          </div>
-        </div>
-
-        {/* Main Form Table */}
-        <div className="border border-slate-900 divide-y divide-slate-900 text-slate-900">
-          {/* ROW 1: Program & Booking Date */}
-          <div className="grid grid-cols-12 divide-x divide-slate-900">
-            <div className="col-span-3 p-2 bg-slate-50 font-bold text-slate-800 flex items-center">
-              Program (โปรแกรมทัวร์):
-            </div>
-            <div className="col-span-3 p-2 font-bold text-slate-900 flex items-center text-sm">
-              {booking.tourTitle}
-            </div>
-            <div className="col-span-3 p-2 bg-slate-50 font-bold text-slate-800 flex items-center">
-              Booking Date (วันที่จอง):
-            </div>
-            <div className="col-span-3 p-2 font-semibold text-slate-900 flex items-center">
-              {new Date(booking.createdAt).toLocaleDateString('th-TH')}
-            </div>
-          </div>
-
-          {/* ROW 2: Booking No & Pick up Time */}
-          <div className="grid grid-cols-12 divide-x divide-slate-900">
-            <div className="col-span-3 p-2 bg-slate-50 font-bold text-slate-800 flex items-center">
-              Booking No (เลขบุ๊คกิ้ง):
-            </div>
-            <div className="col-span-3 p-2 font-black text-rose-600 text-sm font-mono flex items-center">
-              {booking.bookingRef}
-            </div>
-            <div className="col-span-3 p-2 bg-slate-50 font-bold text-slate-800 flex items-center">
-              Pick up Time (เวลารับ):
-            </div>
-            <div className="col-span-3 p-2 font-black text-rose-600 text-sm flex items-center">
-              {booking.pickupTime || '07:30 - 08:00 น.'}
-            </div>
-          </div>
-
-          {/* ROW 3: Tour Date & Nationality */}
-          <div className="grid grid-cols-12 divide-x divide-slate-900">
-            <div className="col-span-3 p-2 bg-slate-50 font-bold text-slate-800 flex flex-col justify-center">
-              <span>Tour Date (วันที่ไป):</span>
-              <span className="text-[10px] text-slate-500 font-normal">出发日期:</span>
-            </div>
-            <div className="col-span-3 p-2 font-black text-rose-600 text-sm flex items-center">
-              {booking.travelDate}
-            </div>
-            <div className="col-span-3 p-2 bg-slate-50 font-bold text-slate-800 flex items-center">
-              Nation Ality (สัญชาติ):
-            </div>
-            <div className="col-span-3 p-2 font-semibold text-slate-900 flex items-center">
-              {booking.nationality || 'Thai / -'}
-            </div>
-          </div>
-
-          {/* ROW 4: Guest Name & Mobile No */}
-          <div className="grid grid-cols-12 divide-x divide-slate-900">
-            <div className="col-span-3 p-2 bg-slate-50 font-bold text-slate-800 flex items-center">
-              Guest Name (ชื่อลูกค้า):
-            </div>
-            <div className="col-span-3 p-2 font-bold text-slate-900 flex items-center">
-              {booking.customerName}
-            </div>
-            <div className="col-span-3 p-2 bg-slate-50 font-bold text-slate-800 flex items-center">
-              Mobile No (เบอร์โทร):
-            </div>
-            <div className="col-span-3 p-2 font-mono font-bold text-slate-900 flex items-center">
-              {booking.customerPhone}
-            </div>
-          </div>
-
-          {/* ROW 5: PAX Passengers */}
-          <div className="grid grid-cols-12 divide-x divide-slate-900">
-            <div className="col-span-3 p-2 bg-slate-50 font-bold text-slate-800 flex items-center">
-              PAX (จำนวนคน):
-            </div>
-            <div className="col-span-9 p-2 font-bold text-slate-900 flex items-center gap-6">
-              <span>Adult(ผู้ใหญ่): <strong className="text-slate-900 font-mono text-sm">{booking.adults}</strong></span>
-              <span>Child (เด็ก): <strong className="text-slate-900 font-mono text-sm">{booking.children || 0}</strong></span>
-              <span>Infant(ทารก): <strong className="text-slate-900 font-mono text-sm">{booking.infants || 0}</strong></span>
-              <span className="ml-auto font-black text-emerald-700">ยอดชำระสุทธิ: ฿{booking.totalAmount.toLocaleString()}</span>
-            </div>
-          </div>
-
-          {/* ROW 6: Pick up Hotel */}
-          <div className="grid grid-cols-12 divide-x divide-slate-900">
-            <div className="col-span-3 p-2 bg-slate-50 font-bold text-slate-800 flex items-center">
-              Pick up Hotel (รับโรงแรม):
-            </div>
-            <div className="col-span-9 p-2 font-semibold text-slate-900 flex items-center">
-              {booking.pickupHotel} {booking.roomNumber ? `(ห้อง ${booking.roomNumber})` : ''} {booking.pickupZone ? `[โซน ${booking.pickupZone}]` : ''}
-            </div>
-          </div>
-
-          {/* ROW 7: Send back Hotel */}
-          <div className="grid grid-cols-12 divide-x divide-slate-900">
-            <div className="col-span-3 p-2 bg-slate-50 font-bold text-slate-800 flex items-center">
-              Send back Hotel (ส่งกลับโรงแรม):
-            </div>
-            <div className="col-span-9 p-2 font-semibold text-slate-900 flex items-center">
-              {booking.sendBackHotel || booking.pickupHotel}
-            </div>
-          </div>
-
-          {/* ROW 8: Remark */}
-          <div className="grid grid-cols-12 divide-x divide-slate-900">
-            <div className="col-span-3 p-2 bg-slate-50 font-bold text-slate-800 flex items-center">
-              Remark (หมายเหตุ):
-            </div>
-            <div className="col-span-9 p-2 text-slate-800 flex items-center">
-              {booking.specialRequests || booking.notes || '-'}
-            </div>
-          </div>
-
-          {/* ROW 9: Multi-Lingual Terms & Conditions */}
-          <div className="p-3 space-y-2 text-[10px] leading-tight bg-slate-50/50">
-            {/* THAI WARNINGS */}
-            <div className="text-red-600 font-bold space-y-0.5">
-              <p>1. กรุณารอที่ล็อบบี้ของโรงแรมหรือสถานที่ที่กำหนดให้ตรงรถตามเวลานัดรับ คนขับรถจะรอเพียง 5 นาทีหลังจากมาถึงโรงแรม หากคุณไม่มาเนื่องจากคุณมาถึงล่าช้า พนักงานขับรถจะออกเดินทางทันทีและจะไม่มีการคืนเงินหรือกำหนดเวลาใหม่</p>
-              <p>2. โปรดคาดเข็มขัดนิรภัยตลอดเวลาที่อยู่ในรถ ไม่เช่นนั้นคุณอาจถูกปรับอย่างหนัก</p>
-              <p>3. เนื่องจากมีสถานการณ์ที่ไม่สามารถควบคุมได้บนท้องถนนหลายประการ โปรดอย่ากังวลหากคนขับมาสาย หากไม่พบคนขับภายใน 20 นาที โปรดติดต่อ {companyPhone}</p>
-              <p>4. ห้ามสตรีมีครรภ์ ผู้ป่วยโรคหัวใจ ความดันโลหิตสูงขั้นรุนแรง และโรคกระดูกสันหลังเข้าร่วมทริปที่น่าตื่นเต้น หากคุณปกปิดข้อเท็จจริงที่เกี่ยวข้อง คุณจะต้องรับผิดชอบต่อผลที่ตามมา</p>
+            {/* Bottom Bar Wish */}
+            <div className="mt-1.5 p-1 text-center bg-teal-900 text-teal-100 font-black text-[9px] tracking-widest uppercase rounded">
+              HAVE A NICE TRIP - ขอให้เป็นทริปที่สนุกและปลอดภัยนะครับ/ค่ะ - 祝您旅途愉快
             </div>
 
-            {/* CHINESE WARNINGS */}
-            <div className="text-slate-800 font-medium space-y-0.5 border-t border-slate-200 pt-1 text-[9.5px]">
-              <p className="font-bold text-slate-900">重要提醒 :</p>
-              <p>1. 请按人时间准时到酒店大堂或指定地点等待，司机到后将最多等待5分钟，如果由于您的迟到没有赶上行程，司机会自行离开，且无法退款和改期。</p>
-              <p>2. 在车上请务必系好安全带。</p>
-              <p>3. 因为路上有各种不可控的情况，如果超过20分钟没见到司机，请联系 {companyPhone}。</p>
-              <p>4. 禁止孕妇、患有心脏病、严重高血压患者参加出海等刺激行程，如隐瞒相关事实后果自负。</p>
-            </div>
-
-            {/* ENGLISH WARNINGS */}
-            <div className="text-slate-800 font-medium space-y-0.5 border-t border-slate-200 pt-1 text-[9.5px]">
-              <p className="font-bold text-slate-900">Cautions:</p>
-              <p>1. Please stand by at hotel lobby on time. Driver will leave if you late over 5 minutes and your order will not cancel and change.</p>
-              <p>2. Please fasten the seat belt during the journey on the vehicle.</p>
-              <p>3. If you don't meet the driver for more than 20 mins, please contact {companyPhone}.</p>
-            </div>
-          </div>
-
-          {/* VOUCHER FOOTER WISH */}
-          <div className="p-2 text-center bg-slate-100 font-bold text-slate-900 text-xs tracking-wider space-y-0.5">
-            <div>HAVE A NICE TRIP - ขอให้เป็นทริปที่สนุกนะครับ/ค่ะ - 祝您旅途愉快</div>
           </div>
         </div>
       </div>
@@ -291,7 +348,7 @@ export const TicketVoucher: React.FC<TicketVoucherProps> = ({
           ) : (
             <>
               <Download className="w-4 h-4" />
-              <span>บันทึกรูปตั๋วลงเครื่อง (PNG)</span>
+              <span>บันทึกรูปตั๋วลงเครื่อง (A5 แนวนอน PNG)</span>
             </>
           )}
         </button>
@@ -300,7 +357,7 @@ export const TicketVoucher: React.FC<TicketVoucherProps> = ({
       {/* Status Banner */}
       {downloadSuccess && (
         <div className="bg-emerald-50 border border-emerald-300 text-emerald-800 p-3 rounded-xl text-xs text-center font-bold animate-in fade-in">
-          ✅ บันทึกรูปตั๋วลงอุปกรณ์เรียบร้อยแล้ว! (E-Ticket-{booking.bookingRef}.png)
+          ✅ บันทึกรูปตั๋ว E-Ticket ขนาด A5 แนวนอนลงเครื่องเรียบร้อยแล้ว! (E-Ticket-{booking.bookingRef}.png)
         </div>
       )}
     </div>

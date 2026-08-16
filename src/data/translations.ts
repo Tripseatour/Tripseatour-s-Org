@@ -39,6 +39,21 @@ export const translations: Record<Language, Record<string, string>> = {
     verifiedBooking: 'ผู้ใช้บริการจริงผ่านระบบ',
     writeReview: 'เขียนรีวิวประสบการณ์',
     
+    // Cart & Multi-Tour
+    cart: 'ตะกร้าทัวร์',
+    myCart: 'ตะกร้าของฉัน',
+    addToCart: 'ใส่ตะกร้า',
+    addedToCart: 'เพิ่มลงตะกร้าแล้ว',
+    cartEmpty: 'ยังไม่มีโปรแกรมทัวร์ในตะกร้า',
+    cartEmptyDesc: 'เลือกโปรแกรมทัวร์เกาะสวยๆ แล้วกดใส่ตะกร้าเพื่อจองหลายทริปพร้อมกันได้เลย!',
+    checkoutAll: 'ดำเนินการชำระเงินรวม',
+    continueBrowsing: 'เลือกโปรแกรมทัวร์เพิ่ม',
+    clearCart: 'ล้างตะกร้า',
+    totalTours: 'จำนวนทัวร์',
+    totalPassengers: 'จำนวนผู้เดินทางรวม',
+    grandTotal: 'ยอดชำระรวมทั้งหมด',
+    applySameHotelToAll: 'ใช้โรงแรมและโซนรับส่งเดียวกันทุกทัวร์',
+    
     // Booking Form & Payment
     bookingDetails: 'รายละเอียดการจอง',
     selectTravelDate: 'เลือกวันที่เดินทาง',
@@ -133,6 +148,21 @@ export const translations: Record<Language, Record<string, string>> = {
     verifiedBooking: 'Verified Traveler',
     writeReview: 'Write a Review',
     
+    // Cart & Multi-Tour
+    cart: 'Tour Cart',
+    myCart: 'My Cart',
+    addToCart: 'Add to Cart',
+    addedToCart: 'Added to Cart',
+    cartEmpty: 'Your cart is empty',
+    cartEmptyDesc: 'Explore our island tours and click "Add to Cart" to book multiple trips together!',
+    checkoutAll: 'Proceed to Checkout All',
+    continueBrowsing: 'Add More Tours',
+    clearCart: 'Clear Cart',
+    totalTours: 'Total Tours',
+    totalPassengers: 'Total Guests',
+    grandTotal: 'Grand Total Amount',
+    applySameHotelToAll: 'Use same hotel & pickup zone for all tours',
+    
     bookingDetails: 'Booking Details',
     selectTravelDate: 'Select Travel Date',
     contactInfo: 'Contact Information',
@@ -224,6 +254,21 @@ export const translations: Record<Language, Record<string, string>> = {
     verifiedBooking: '已验证出行游客',
     writeReview: '撰写评价',
     
+    // Cart & Multi-Tour
+    cart: '行程购物车',
+    myCart: '我的购物车',
+    addToCart: '加入购物车',
+    addedToCart: '已加入购物车',
+    cartEmpty: '购物车为空',
+    cartEmptyDesc: '挑选心仪的海岛一日游并加入购物车，即可一并合并结算！',
+    checkoutAll: '合并结算全部行程',
+    continueBrowsing: '继续挑选行程',
+    clearCart: '清空购物车',
+    totalTours: '行程数量',
+    totalPassengers: '出行总人数',
+    grandTotal: '应付总金额',
+    applySameHotelToAll: '所有行程使用相同酒店及接送区域',
+    
     bookingDetails: '预订信息',
     selectTravelDate: '选择出行日期',
     contactInfo: '联系人信息',
@@ -314,6 +359,21 @@ export const translations: Record<Language, Record<string, string>> = {
     customerReviews: 'Отзывы туристов',
     verifiedBooking: 'Подтвержденный бронь',
     writeReview: 'Оставить отзыв',
+    
+    // Cart & Multi-Tour
+    cart: 'Корзина',
+    myCart: 'Моя корзина',
+    addToCart: 'В корзину',
+    addedToCart: 'Добавлено в корзину',
+    cartEmpty: 'Корзина пуста',
+    cartEmptyDesc: 'Выберите экскурсии и добавьте их в корзину для совместной оплаты!',
+    checkoutAll: 'Оформить все экскурсии',
+    continueBrowsing: 'Выбрать еще тур',
+    clearCart: 'Очистить корзину',
+    totalTours: 'Всего туров',
+    totalPassengers: 'Всего участников',
+    grandTotal: 'Общая сумма к оплате',
+    applySameHotelToAll: 'Один отель и трансфер для всех экскурсий',
     
     bookingDetails: 'Детали Бронирования',
     selectTravelDate: 'Выберите дату',

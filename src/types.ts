@@ -16,6 +16,8 @@ export interface Tour {
   highlights: Record<Language, string[]>;
   priceAdult: number;
   priceChild: number; // Age 4-11
+  costAdult?: number; // ราคาทุนเอเยนต์ผู้ใหญ่ (Net Cost)
+  costChild?: number; // ราคาทุนเอเยนต์เด็ก (Net Cost)
   originalPriceAdult?: number;
   originalPriceChild?: number;
   duration: Record<Language, string>;
@@ -30,6 +32,20 @@ export interface Tour {
   tags: string[];
   isFeatured?: boolean;
   isAvailable?: boolean;
+}
+
+export interface CartItem {
+  id: string;
+  tourId: string;
+  tour: Tour;
+  travelDate: string;
+  adults: number;
+  children: number;
+  infants: number;
+  pickupHotel?: string;
+  pickupZone?: string;
+  roomNumber?: string;
+  specialRequests?: string;
 }
 
 export type PaymentStatus = 'pending' | 'slip_uploaded' | 'verified' | 'cancelled' | 'refunded';
@@ -129,6 +145,7 @@ export interface AppSettings {
   tatLicenseNo?: string; // TAT License Number e.g. "33/11100"
   tatLicenseImgUrl?: string; // URL of TAT License Image
   facebookUrl?: string; // Facebook Page URL
+  facebookMessengerUrl?: string; // Facebook Messenger Chat URL e.g. "https://m.me/tripseatoursphuket"
 }
 
 export interface LineNotificationLog {

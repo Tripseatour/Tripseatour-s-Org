@@ -3,10 +3,12 @@ import {
   BarChart3, DollarSign, ShoppingBag, Clock, CheckCircle2, AlertTriangle, Users,
   Settings, MessageCircle, QrCode, Plus, Search, Eye, EyeOff, Copy, Check, X, RefreshCw, Send, Image as ImageIcon,
   ChevronRight, Filter, FileSpreadsheet, Sparkles, LogOut, Lock, Key, Ticket, Trash2, Edit3, Calendar, ListChecks,
-  Star, MessageSquare, Bot, UserPlus, UserMinus, ShieldCheck, Mail, Database, Printer, Ship, FileText, ClipboardList, PhoneCall, Award
+  Star, MessageSquare, Bot, UserPlus, UserMinus, ShieldCheck, Mail, Database, Printer, Ship, FileText, ClipboardList, PhoneCall, Award,
+  TrendingUp, Calculator, Percent, Coins, Building2, Headphones, CheckCheck
 } from 'lucide-react';
 import {
-  BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid, PieChart, Pie, Cell, Legend
+  BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid, PieChart, Pie, Cell, Legend,
+  LineChart, Line, AreaChart, Area, ComposedChart
 } from 'recharts';
 import { Booking, Tour, Customer, Review, AppSettings, LineNotificationLog, SalesStats, AdminUser } from '../types';
 import { TicketVoucher } from './TicketVoucher';
@@ -73,13 +75,77 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
   onRefreshData,
   onForceSync
 }) => {
-  const [activeTab, setActiveTab] = useState<'overview' | 'orders' | 'tours' | 'customers' | 'reviews' | 'settings' | 'manifest'>('overview');
+  const [activeTab, setActiveTab] = useState<'overview' | 'orders' | 'livechat' | 'tours' | 'customers' | 'reviews' | 'settings' | 'manifest'>('overview');
   const [stats, setStats] = useState<SalesStats | null>(null);
+
+  // Live Chat States
+  const [liveChatSessions, setLiveChatSessions] = useState<any[]>([]);
+  const [selectedLiveSessionId, setSelectedLiveSessionId] = useState<string | null>(null);
+  const [adminReplyText, setAdminReplyText] = useState<string>('');
+  const [isSendingAdminReply, setIsSendingAdminReply] = useState<boolean>(false);
+
+  const fetchLiveChatSessions = async () => {
+    try {
+      const res = await fetch('/api/livechat/sessions');
+      if (res.ok) {
+        const data = await res.json();
+        setLiveChatSessions(data || []);
+        if (!selectedLiveSessionId && data && data.length > 0) {
+          setSelectedLiveSessionId(data[0].id);
+        }
+      }
+    } catch (err) {}
+  };
+
+  useEffect(() => {
+    fetchLiveChatSessions();
+    const interval = setInterval(() => {
+      fetchLiveChatSessions();
+    }, 3000);
+    return () => clearInterval(interval);
+  }, [selectedLiveSessionId]);
+
+  const handleSendAdminReply = async (e?: React.FormEvent) => {
+    if (e) e.preventDefault();
+    if (!selectedLiveSessionId || !adminReplyText.trim()) return;
+
+    const textToSend = adminReplyText.trim();
+    setAdminReplyText('');
+    setIsSendingAdminReply(true);
+
+    try {
+      const res = await fetch('/api/livechat/send', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          sessionId: selectedLiveSessionId,
+          sender: 'admin',
+          senderName: 'แอดมิน TripSea Tour',
+          text: textToSend
+        })
+      });
+
+      if (res.ok) {
+        await fetchLiveChatSessions();
+      }
+    } catch (err) {
+      console.error('Error sending admin reply:', err);
+    } finally {
+      setIsSendingAdminReply(false);
+    }
+  };
 
   // Filters
   const [orderFilter, setOrderFilter] = useState<string>('all');
   const [searchQuery, setSearchQuery] = useState<string>('');
   const [reviewFilter, setReviewFilter] = useState<'all' | 'pending' | 'approved'>('all');
+
+  // Sales Analytics & Agency Cost States
+  const [analyticsTimeframe, setAnalyticsTimeframe] = useState<'weekly' | 'monthly' | 'daily'>('weekly');
+  const [analyticsStatusFilter, setAnalyticsStatusFilter] = useState<'all' | 'verified_only'>('all');
+  const [quickCostTour, setQuickCostTour] = useState<Tour | null>(null);
+  const [quickCostAdult, setQuickCostAdult] = useState<number>(0);
+  const [quickCostChild, setQuickCostChild] = useState<number>(0);
 
   // Passenger Manifest & Back-office States
   const [manifestDateFilter, setManifestDateFilter] = useState<string>('all');
@@ -112,9 +178,9 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
 
   const isSuperAdmin = adminUser?.role === 'superadmin' || adminUser?.email?.trim().toLowerCase() === 'asmr9941@gmail.com';
 
-  const hasAccess = (tab: 'overview' | 'orders' | 'tours' | 'customers' | 'reviews' | 'settings' | 'manifest') => {
+  const hasAccess = (tab: 'overview' | 'orders' | 'livechat' | 'tours' | 'customers' | 'reviews' | 'settings' | 'manifest') => {
     if (isSuperAdmin) return true;
-    const allowed = settings.adminPermissions || ['overview', 'orders', 'tours', 'reviews', 'manifest'];
+    const allowed = settings.adminPermissions || ['overview', 'orders', 'livechat', 'tours', 'reviews', 'manifest'];
     return allowed.includes(tab);
   };
 
@@ -547,6 +613,197 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
     return matchesFilter && matchesSearch;
   });
 
+  // Helper to calculate agency cost of a single booking
+  const getBookingAgencyCost = (b: Booking) => {
+    const tour = tours.find(t => t.id === b.tourId);
+    const costAdult = tour?.costAdult !== undefined ? tour.costAdult : Math.round((tour?.priceAdult || 0) * 0.65);
+    const costChild = tour?.costChild !== undefined ? tour.costChild : Math.round((tour?.priceChild || 0) * 0.65);
+    return (b.adults * costAdult) + (b.children * costChild);
+  };
+
+  // Compute sales & profit metrics dynamically based on bookings, tours, timeframe & filter
+  const analytics = React.useMemo(() => {
+    const eligibleBookings = bookings.filter(b => {
+      if (analyticsStatusFilter === 'verified_only') {
+        return b.paymentStatus === 'verified';
+      }
+      return b.paymentStatus !== 'cancelled' && b.orderStatus !== 'cancelled';
+    });
+
+    let totalRevenue = 0;
+    let totalCost = 0;
+    let totalPax = 0;
+
+    eligibleBookings.forEach(b => {
+      totalRevenue += b.totalAmount;
+      totalCost += getBookingAgencyCost(b);
+      totalPax += (b.adults + b.children + b.infants);
+    });
+
+    const totalProfit = totalRevenue - totalCost;
+    const profitMarginPercent = totalRevenue > 0 ? (totalProfit / totalRevenue) * 100 : 0;
+
+    // Build Time Series Data
+    const chartMap: Record<string, { label: string; revenue: number; cost: number; profit: number; bookingsCount: number; paxCount: number }> = {};
+
+    if (analyticsTimeframe === 'weekly') {
+      const now = new Date();
+      const weekBuckets: { label: string; start: Date; end: Date }[] = [];
+      for (let i = 7; i >= 0; i--) {
+        const dEnd = new Date(now.getTime() - i * 7 * 24 * 60 * 60 * 1000);
+        const dStart = new Date(dEnd.getTime() - 6 * 24 * 60 * 60 * 1000);
+        const startStr = `${dStart.getDate()}/${dStart.getMonth() + 1}`;
+        const endStr = `${dEnd.getDate()}/${dEnd.getMonth() + 1}`;
+        const label = `สัปดาห์ที่ ${8 - i} (${startStr}-${endStr})`;
+        weekBuckets.push({ label, start: dStart, end: dEnd });
+        chartMap[label] = { label, revenue: 0, cost: 0, profit: 0, bookingsCount: 0, paxCount: 0 };
+      }
+
+      eligibleBookings.forEach(b => {
+        const bDate = new Date(b.createdAt || b.travelDate);
+        const cost = getBookingAgencyCost(b);
+        const pax = b.adults + b.children + b.infants;
+        const bucket = weekBuckets.find(w => bDate >= w.start && bDate <= new Date(w.end.getTime() + 86400000));
+        const targetLabel = bucket ? bucket.label : weekBuckets[weekBuckets.length - 1].label;
+
+        if (chartMap[targetLabel]) {
+          chartMap[targetLabel].revenue += b.totalAmount;
+          chartMap[targetLabel].cost += cost;
+          chartMap[targetLabel].profit += (b.totalAmount - cost);
+          chartMap[targetLabel].bookingsCount += 1;
+          chartMap[targetLabel].paxCount += pax;
+        }
+      });
+    } else if (analyticsTimeframe === 'monthly') {
+      const monthNamesTH = ['ม.ค.', 'ก.พ.', 'มี.ค.', 'เม.ย.', 'พ.ค.', 'มิ.ย.', 'ก.ค.', 'ส.ค.', 'ก.ย.', 'ต.ค.', 'พ.ย.', 'ธ.ค.'];
+      const now = new Date();
+      for (let i = 5; i >= 0; i--) {
+        const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
+        const monthLabel = `${monthNamesTH[d.getMonth()]} ${String(d.getFullYear() + 543).slice(-2)}`;
+        chartMap[monthLabel] = { label: monthLabel, revenue: 0, cost: 0, profit: 0, bookingsCount: 0, paxCount: 0 };
+      }
+
+      eligibleBookings.forEach(b => {
+        const bDate = new Date(b.createdAt || b.travelDate);
+        const monthLabel = `${monthNamesTH[bDate.getMonth()]} ${String(bDate.getFullYear() + 543).slice(-2)}`;
+        const cost = getBookingAgencyCost(b);
+        const pax = b.adults + b.children + b.infants;
+
+        if (!chartMap[monthLabel]) {
+          chartMap[monthLabel] = { label: monthLabel, revenue: 0, cost: 0, profit: 0, bookingsCount: 0, paxCount: 0 };
+        }
+        chartMap[monthLabel].revenue += b.totalAmount;
+        chartMap[monthLabel].cost += cost;
+        chartMap[monthLabel].profit += (b.totalAmount - cost);
+        chartMap[monthLabel].bookingsCount += 1;
+        chartMap[monthLabel].paxCount += pax;
+      });
+    } else {
+      // Daily (Last 10 days)
+      const now = new Date();
+      const monthNamesTH = ['ม.ค.', 'ก.พ.', 'มี.ค.', 'เม.ย.', 'พ.ค.', 'มิ.ย.', 'ก.ค.', 'ส.ค.', 'ก.ย.', 'ต.ค.', 'พ.ย.', 'ธ.ค.'];
+      for (let i = 9; i >= 0; i--) {
+        const d = new Date(now.getTime() - i * 24 * 60 * 60 * 1000);
+        const dayLabel = `${d.getDate()} ${monthNamesTH[d.getMonth()]}`;
+        chartMap[dayLabel] = { label: dayLabel, revenue: 0, cost: 0, profit: 0, bookingsCount: 0, paxCount: 0 };
+      }
+
+      eligibleBookings.forEach(b => {
+        const bDate = new Date(b.createdAt || b.travelDate);
+        const dayLabel = `${bDate.getDate()} ${monthNamesTH[bDate.getMonth()]}`;
+        const cost = getBookingAgencyCost(b);
+        const pax = b.adults + b.children + b.infants;
+
+        if (!chartMap[dayLabel]) {
+          chartMap[dayLabel] = { label: dayLabel, revenue: 0, cost: 0, profit: 0, bookingsCount: 0, paxCount: 0 };
+        }
+        chartMap[dayLabel].revenue += b.totalAmount;
+        chartMap[dayLabel].cost += cost;
+        chartMap[dayLabel].profit += (b.totalAmount - cost);
+        chartMap[dayLabel].bookingsCount += 1;
+        chartMap[dayLabel].paxCount += pax;
+      });
+    }
+
+    const timeSeriesData = Object.values(chartMap);
+
+    // Tour Program Breakdown
+    const tourProfitMap: Record<string, {
+      tour: Tour;
+      bookingsCount: number;
+      adultsCount: number;
+      childrenCount: number;
+      totalPax: number;
+      totalRevenue: number;
+      totalCost: number;
+      totalProfit: number;
+      profitMargin: number;
+    }> = {};
+
+    tours.forEach(t => {
+      const costAdult = t.costAdult !== undefined ? t.costAdult : Math.round(t.priceAdult * 0.65);
+      const costChild = t.costChild !== undefined ? t.costChild : Math.round(t.priceChild * 0.65);
+      tourProfitMap[t.id] = {
+        tour: t,
+        bookingsCount: 0,
+        adultsCount: 0,
+        childrenCount: 0,
+        totalPax: 0,
+        totalRevenue: 0,
+        totalCost: 0,
+        totalProfit: 0,
+        profitMargin: 0
+      };
+    });
+
+    eligibleBookings.forEach(b => {
+      const tour = tours.find(t => t.id === b.tourId);
+      if (!tour) return;
+      if (!tourProfitMap[tour.id]) {
+        tourProfitMap[tour.id] = {
+          tour,
+          bookingsCount: 0,
+          adultsCount: 0,
+          childrenCount: 0,
+          totalPax: 0,
+          totalRevenue: 0,
+          totalCost: 0,
+          totalProfit: 0,
+          profitMargin: 0
+        };
+      }
+      const costAdult = tour.costAdult !== undefined ? tour.costAdult : Math.round(tour.priceAdult * 0.65);
+      const costChild = tour.costChild !== undefined ? tour.costChild : Math.round(tour.priceChild * 0.65);
+      const bCost = (b.adults * costAdult) + (b.children * costChild);
+
+      const item = tourProfitMap[tour.id];
+      item.bookingsCount += 1;
+      item.adultsCount += b.adults;
+      item.childrenCount += b.children;
+      item.totalPax += (b.adults + b.children + b.infants);
+      item.totalRevenue += b.totalAmount;
+      item.totalCost += bCost;
+      item.totalProfit += (b.totalAmount - bCost);
+    });
+
+    Object.values(tourProfitMap).forEach(item => {
+      item.profitMargin = item.totalRevenue > 0 ? (item.totalProfit / item.totalRevenue) * 100 : 0;
+    });
+
+    const tourBreakdownList = Object.values(tourProfitMap).sort((a, b) => b.totalRevenue - a.totalRevenue);
+
+    return {
+      totalRevenue,
+      totalCost,
+      totalProfit,
+      profitMarginPercent,
+      totalBookings: eligibleBookings.length,
+      totalPax,
+      timeSeriesData,
+      tourBreakdownList
+    };
+  }, [bookings, tours, analyticsTimeframe, analyticsStatusFilter]);
+
   const COLORS = ['#0d9488', '#06b6d4', '#3b82f6', '#f59e0b', '#8b5cf6'];
 
   return (
@@ -660,6 +917,27 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
           </button>
 
           <button
+            onClick={() => setActiveTab('livechat')}
+            className={`px-4 py-2 rounded-xl text-xs font-bold transition flex items-center gap-2 whitespace-nowrap relative ${
+              activeTab === 'livechat' ? 'bg-blue-600 text-white shadow-lg shadow-blue-600/30' : 'bg-slate-800/80 text-slate-400 hover:text-white'
+            }`}
+          >
+            <Headphones className="w-4 h-4 text-blue-400" />
+            <span>💬 แชทสดลูกค้า ({liveChatSessions.length})</span>
+            {liveChatSessions.reduce((sum, s) => sum + (s.unreadCount || 0), 0) > 0 && (
+              <span className="bg-rose-500 text-white text-[10px] font-extrabold px-1.5 py-0.5 rounded-full animate-bounce">
+                {liveChatSessions.reduce((sum, s) => sum + (s.unreadCount || 0), 0)}
+              </span>
+            )}
+            {!hasAccess('livechat') && (
+              <span className="bg-rose-500/20 text-rose-300 text-[9px] font-extrabold px-1.5 py-0.5 rounded-full flex items-center gap-1 border border-rose-500/30">
+                <Lock className="w-2.5 h-2.5" />
+                <span>จำกัดสิทธิ์</span>
+              </span>
+            )}
+          </button>
+
+          <button
             onClick={() => setActiveTab('tours')}
             className={`px-4 py-2 rounded-xl text-xs font-bold transition flex items-center gap-2 whitespace-nowrap ${
               activeTab === 'tours' ? 'bg-teal-600 text-white shadow-lg shadow-teal-600/30' : 'bg-slate-800/80 text-slate-400 hover:text-white'
@@ -752,141 +1030,658 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
             renderRestrictedArea('แดชบอร์ดสถิติ')
           ) : (
             <div className="space-y-8 animate-in fade-in">
-            {/* Top Metric Cards */}
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-              <div className="bg-slate-800/80 border border-slate-700/80 p-5 rounded-2xl shadow-lg relative overflow-hidden">
-                <div className="flex items-center justify-between">
-                  <div>
-                    <span className="text-xs text-slate-400 block font-medium">รายได้รวมทั้งหมด</span>
-                    <span className="text-2xl font-extrabold text-teal-400 mt-1 block">
-                      ฿{(stats?.totalRevenue || 0).toLocaleString()}
+              {/* Controls Bar & Date Filter */}
+              <div className="bg-slate-800/90 border border-slate-700/80 p-4 rounded-2xl flex flex-col md:flex-row md:items-center justify-between gap-4 shadow-xl">
+                <div>
+                  <div className="flex items-center gap-2">
+                    <span className="bg-teal-500/20 text-teal-400 font-bold text-xs px-2.5 py-0.5 rounded-full border border-teal-500/30">
+                      Data Visualization & Financial Analytics
                     </span>
+                    <span className="text-xs text-slate-400">วิเคราะห์ยอดขาย ราคาทุนเอเยนต์ และกำไรสุทธิ</span>
                   </div>
-                  <div className="w-12 h-12 bg-teal-500/10 text-teal-400 rounded-2xl flex items-center justify-center">
-                    <DollarSign className="w-6 h-6" />
-                  </div>
+                  <h2 className="text-lg font-extrabold text-white mt-1 flex items-center gap-2">
+                    <BarChart3 className="w-5 h-5 text-teal-400" />
+                    <span>สรุปผลการดำเนินงานและสถิติต้นทุนเอเยนต์ (Executive Analytics)</span>
+                  </h2>
                 </div>
-                <div className="mt-3 text-[11px] text-emerald-400 flex items-center gap-1 font-semibold">
-                  <span>✓ ข้อมูลอัปเดตอัตโนมัติแบบเรียลไทม์</span>
+
+                <div className="flex flex-wrap items-center gap-3">
+                  {/* Status Filter */}
+                  <div className="flex items-center bg-slate-900 border border-slate-700 rounded-xl p-1 text-xs">
+                    <button
+                      onClick={() => setAnalyticsStatusFilter('all')}
+                      className={`px-3 py-1.5 rounded-lg font-bold transition ${
+                        analyticsStatusFilter === 'all'
+                          ? 'bg-teal-600 text-white shadow-md'
+                          : 'text-slate-400 hover:text-white'
+                      }`}
+                    >
+                      ออเดอร์ทั้งหมด ({bookings.length})
+                    </button>
+                    <button
+                      onClick={() => setAnalyticsStatusFilter('verified_only')}
+                      className={`px-3 py-1.5 rounded-lg font-bold transition ${
+                        analyticsStatusFilter === 'verified_only'
+                          ? 'bg-emerald-600 text-white shadow-md'
+                          : 'text-slate-400 hover:text-white'
+                      }`}
+                    >
+                      ✓ ชำระสำเร็จเท่านั้น ({bookings.filter(b => b.paymentStatus === 'verified').length})
+                    </button>
+                  </div>
+
+                  {/* Timeframe Selector */}
+                  <div className="flex items-center bg-slate-900 border border-slate-700 rounded-xl p-1 text-xs">
+                    <button
+                      onClick={() => setAnalyticsTimeframe('daily')}
+                      className={`px-3 py-1.5 rounded-lg font-bold transition flex items-center gap-1 ${
+                        analyticsTimeframe === 'daily'
+                          ? 'bg-teal-500 text-slate-950 shadow-md'
+                          : 'text-slate-400 hover:text-white'
+                      }`}
+                    >
+                      <span>รายวัน</span>
+                    </button>
+                    <button
+                      onClick={() => setAnalyticsTimeframe('weekly')}
+                      className={`px-3 py-1.5 rounded-lg font-bold transition flex items-center gap-1 ${
+                        analyticsTimeframe === 'weekly'
+                          ? 'bg-teal-500 text-slate-950 shadow-md'
+                          : 'text-slate-400 hover:text-white'
+                      }`}
+                    >
+                      <span>รายสัปดาห์</span>
+                    </button>
+                    <button
+                      onClick={() => setAnalyticsTimeframe('monthly')}
+                      className={`px-3 py-1.5 rounded-lg font-bold transition flex items-center gap-1 ${
+                        analyticsTimeframe === 'monthly'
+                          ? 'bg-teal-500 text-slate-950 shadow-md'
+                          : 'text-slate-400 hover:text-white'
+                      }`}
+                    >
+                      <span>รายเดือน</span>
+                    </button>
+                  </div>
                 </div>
               </div>
 
-              <div className="bg-slate-800/80 border border-slate-700/80 p-5 rounded-2xl shadow-lg">
-                <div className="flex items-center justify-between">
-                  <div>
-                    <span className="text-xs text-slate-400 block font-medium">จำนวนออเดอร์ทั้งหมด</span>
-                    <span className="text-2xl font-extrabold text-white mt-1 block">
-                      {bookings.length}
-                    </span>
+              {/* Top 4 Financial Metric Cards */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+                {/* 1. Total Revenue */}
+                <div className="bg-slate-800/80 border border-slate-700/80 p-5 rounded-2xl shadow-lg relative overflow-hidden group hover:border-teal-500/50 transition">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <span className="text-xs text-slate-400 block font-medium">ยอดขายรวม (Total Revenue)</span>
+                      <span className="text-2xl font-extrabold text-teal-400 mt-1 block">
+                        ฿{analytics.totalRevenue.toLocaleString()}
+                      </span>
+                    </div>
+                    <div className="w-12 h-12 bg-teal-500/10 text-teal-400 rounded-2xl flex items-center justify-center">
+                      <DollarSign className="w-6 h-6" />
+                    </div>
                   </div>
-                  <div className="w-12 h-12 bg-blue-500/10 text-blue-400 rounded-2xl flex items-center justify-center">
-                    <ShoppingBag className="w-6 h-6" />
+                  <div className="mt-3 text-[11px] text-teal-300/80 flex items-center justify-between font-medium pt-2 border-t border-slate-700/50">
+                    <span>จำนวนการจองรวม:</span>
+                    <span className="font-bold text-white">{analytics.totalBookings} ออเดอร์</span>
                   </div>
                 </div>
-                <div className="mt-3 text-[11px] text-slate-400">
-                  ออเดอร์สะสมผ่าน PromptPay QR
+
+                {/* 2. Total Agency Cost */}
+                <div className="bg-slate-800/80 border border-slate-700/80 p-5 rounded-2xl shadow-lg relative overflow-hidden group hover:border-amber-500/50 transition">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <span className="text-xs text-slate-400 block font-medium">ต้นทุนเอเยนต์รวม (Agency Net Cost)</span>
+                      <span className="text-2xl font-extrabold text-amber-400 mt-1 block">
+                        ฿{analytics.totalCost.toLocaleString()}
+                      </span>
+                    </div>
+                    <div className="w-12 h-12 bg-amber-500/10 text-amber-400 rounded-2xl flex items-center justify-center">
+                      <Building2 className="w-6 h-6" />
+                    </div>
+                  </div>
+                  <div className="mt-3 text-[11px] text-amber-300/80 flex items-center justify-between font-medium pt-2 border-t border-slate-700/50">
+                    <span>สัดส่วนต้นทุนจากยอดขาย:</span>
+                    <span className="font-bold text-amber-300">
+                      {analytics.totalRevenue > 0 ? ((analytics.totalCost / analytics.totalRevenue) * 100).toFixed(1) : 0}%
+                    </span>
+                  </div>
+                </div>
+
+                {/* 3. Total Net Profit */}
+                <div className="bg-slate-800/80 border border-slate-700/80 p-5 rounded-2xl shadow-lg relative overflow-hidden group hover:border-emerald-500/50 transition">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <span className="text-xs text-slate-400 block font-medium">กำไรสุทธิรวม (Total Net Profit)</span>
+                      <span className="text-2xl font-extrabold text-emerald-400 mt-1 block">
+                        ฿{analytics.totalProfit.toLocaleString()}
+                      </span>
+                    </div>
+                    <div className="w-12 h-12 bg-emerald-500/10 text-emerald-400 rounded-2xl flex items-center justify-center">
+                      <TrendingUp className="w-6 h-6" />
+                    </div>
+                  </div>
+                  <div className="mt-3 text-[11px] text-emerald-300/80 flex items-center justify-between font-medium pt-2 border-t border-slate-700/50">
+                    <span>รายได้สุทธิหลังหักทุนเอเยนต์</span>
+                    <span className="font-bold text-emerald-400">✓ สด</span>
+                  </div>
+                </div>
+
+                {/* 4. Profit Margin & Pax */}
+                <div className="bg-slate-800/80 border border-slate-700/80 p-5 rounded-2xl shadow-lg relative overflow-hidden group hover:border-cyan-500/50 transition">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <span className="text-xs text-slate-400 block font-medium">อัตรากำไร (Net Profit Margin)</span>
+                      <span className="text-2xl font-extrabold text-cyan-400 mt-1 block">
+                        {analytics.profitMarginPercent.toFixed(1)}%
+                      </span>
+                    </div>
+                    <div className="w-12 h-12 bg-cyan-500/10 text-cyan-400 rounded-2xl flex items-center justify-center">
+                      <Percent className="w-6 h-6" />
+                    </div>
+                  </div>
+                  <div className="mt-3 text-[11px] text-cyan-300/80 flex items-center justify-between font-medium pt-2 border-t border-slate-700/50">
+                    <span>จำนวนนักท่องเที่ยวรวม:</span>
+                    <span className="font-bold text-white">{analytics.totalPax} ท่าน</span>
+                  </div>
                 </div>
               </div>
 
-              <div className="bg-slate-800/80 border border-slate-700/80 p-5 rounded-2xl shadow-lg">
-                <div className="flex items-center justify-between">
+              {/* Main Financial Visualization Chart */}
+              <div className="bg-slate-800/80 border border-slate-700/80 p-6 rounded-2xl shadow-xl space-y-4">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-slate-700/60 pb-4">
                   <div>
-                    <span className="text-xs text-slate-400 block font-medium">สลิปรอการตรวจสอบ</span>
-                    <span className="text-2xl font-extrabold text-amber-400 mt-1 block">
-                      {bookings.filter(b => b.paymentStatus === 'slip_uploaded').length}
-                    </span>
+                    <h3 className="text-base font-bold text-white flex items-center gap-2">
+                      <BarChart3 className="w-5 h-5 text-teal-400" />
+                      <span>
+                        กราฟเปรียบเทียบ ยอดขาย vs ราคาทุนเอเยนต์ vs กำไรสุทธิ ({analyticsTimeframe === 'weekly' ? 'รายสัปดาห์' : analyticsTimeframe === 'monthly' ? 'รายเดือน' : 'รายวัน'})
+                      </span>
+                    </h3>
+                    <p className="text-xs text-slate-400 mt-0.5">
+                      แสดงข้อมูลการเติบโตทางเงินสด ต้นทุนเอเยนต์คู่ค้า และกำไรขั้นต้นอย่างชัดเจน
+                    </p>
                   </div>
-                  <div className="w-12 h-12 bg-amber-500/10 text-amber-400 rounded-2xl flex items-center justify-center">
-                    <Clock className="w-6 h-6" />
-                  </div>
-                </div>
-                <div className="mt-3 text-[11px] text-amber-400 font-semibold">
-                  {bookings.filter(b => b.paymentStatus === 'slip_uploaded').length > 0 ? '⚠️ มีสลิปรอให้แอดมินคอนเฟิร์ม' : '✓ ตรวจสอบครบหมดแล้ว'}
-                </div>
-              </div>
 
-              <div className="bg-slate-800/80 border border-slate-700/80 p-5 rounded-2xl shadow-lg">
-                <div className="flex items-center justify-between">
-                  <div>
-                    <span className="text-xs text-slate-400 block font-medium">ออเดอร์ยืนยันสำเร็จ</span>
-                    <span className="text-2xl font-extrabold text-emerald-400 mt-1 block">
-                      {bookings.filter(b => b.paymentStatus === 'verified').length}
-                    </span>
-                  </div>
-                  <div className="w-12 h-12 bg-emerald-500/10 text-emerald-400 rounded-2xl flex items-center justify-center">
-                    <CheckCircle2 className="w-6 h-6" />
+                  {/* Legend Indicator */}
+                  <div className="flex flex-wrap items-center gap-4 text-xs font-semibold">
+                    <div className="flex items-center gap-1.5">
+                      <span className="w-3 h-3 rounded-sm bg-teal-500"></span>
+                      <span className="text-slate-300">ยอดขาย (Revenue)</span>
+                    </div>
+                    <div className="flex items-center gap-1.5">
+                      <span className="w-3 h-3 rounded-sm bg-amber-500"></span>
+                      <span className="text-slate-300">ทุนเอเยนต์ (Agency Cost)</span>
+                    </div>
+                    <div className="flex items-center gap-1.5">
+                      <span className="w-3 h-3 rounded-sm bg-emerald-500"></span>
+                      <span className="text-slate-300">กำไรสุทธิ (Net Profit)</span>
+                    </div>
                   </div>
                 </div>
-                <div className="mt-3 text-[11px] text-emerald-400">
-                  ออกตั๋ว E-Ticket เรียบร้อย
-                </div>
-              </div>
-            </div>
 
-            {/* Sales Charts Row */}
-            <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-              {/* Monthly Sales Revenue Chart */}
-              <div className="lg:col-span-2 bg-slate-800/80 border border-slate-700/80 p-5 rounded-2xl shadow-xl">
-                <h3 className="text-base font-bold text-white mb-4 flex items-center gap-2">
-                  <BarChart3 className="w-5 h-5 text-teal-400" />
-                  <span>สถิติยอดขายรายเดือน (Monthly Revenue)</span>
-                </h3>
-                <div className="h-64 w-full">
+                <div className="h-80 w-full pt-2">
                   <ResponsiveContainer width="100%" height="100%">
-                    <BarChart data={stats?.monthlyRevenue || []}>
-                      <CartesianGrid strokeDasharray="3 3" stroke="#334155" />
-                      <XAxis dataKey="month" stroke="#94a3b8" fontSize={12} />
-                      <YAxis stroke="#94a3b8" fontSize={12} tickFormatter={(val) => `฿${val/1000}k`} />
+                    <BarChart data={analytics.timeSeriesData} margin={{ top: 10, right: 10, left: 10, bottom: 25 }}>
+                      <CartesianGrid strokeDasharray="3 3" stroke="#334155" opacity={0.5} />
+                      <XAxis dataKey="label" stroke="#94a3b8" fontSize={11} interval={0} angle={-15} textAnchor="end" />
+                      <YAxis stroke="#94a3b8" fontSize={11} tickFormatter={(val) => `฿${val >= 1000 ? (val/1000).toFixed(0) + 'k' : val}`} />
                       <Tooltip
-                        contentStyle={{ backgroundColor: '#0f172a', borderColor: '#334155', borderRadius: '12px', color: '#fff' }}
-                        formatter={(val) => [`฿${Number(val).toLocaleString()}`, 'ยอดขาย']}
+                        contentStyle={{ backgroundColor: '#0f172a', borderColor: '#334155', borderRadius: '16px', color: '#fff', boxShadow: '0 20px 25px -5px rgb(0 0 0 / 0.5)' }}
+                        formatter={(value: any, name: string) => {
+                          const valNum = Number(value);
+                          if (name === 'ยอดขาย (Revenue)') return [`฿${valNum.toLocaleString()}`, '💰 ยอดขาย'];
+                          if (name === 'ทุนเอเยนต์ (Agency Cost)') return [`฿${valNum.toLocaleString()}`, '🏭 ทุนเอเยนต์'];
+                          if (name === 'กำไรสุทธิ (Net Profit)') return [`฿${valNum.toLocaleString()}`, '📈 กำไรสุทธิ'];
+                          return [`฿${valNum.toLocaleString()}`, name];
+                        }}
                       />
-                      <Bar dataKey="revenue" fill="#0d9488" radius={[6, 6, 0, 0]} />
+                      <Bar dataKey="revenue" name="ยอดขาย (Revenue)" fill="#0d9488" radius={[6, 6, 0, 0]} barSize={20} />
+                      <Bar dataKey="cost" name="ทุนเอเยนต์ (Agency Cost)" fill="#f59e0b" radius={[6, 6, 0, 0]} barSize={20} />
+                      <Bar dataKey="profit" name="กำไรสุทธิ (Net Profit)" fill="#10b981" radius={[6, 6, 0, 0]} barSize={20} />
                     </BarChart>
                   </ResponsiveContainer>
                 </div>
               </div>
 
-              {/* Category Breakdown Pie Chart */}
-              <div className="bg-slate-800/80 border border-slate-700/80 p-5 rounded-2xl shadow-xl flex flex-col justify-between">
-                <h3 className="text-base font-bold text-white mb-2 flex items-center gap-2">
-                  <PieChart className="w-5 h-5 text-cyan-400" />
-                  <span>สัดส่วนตามประเภททัวร์</span>
-                </h3>
-                <div className="h-56 w-full">
-                  <ResponsiveContainer width="100%" height="100%">
-                    <PieChart>
-                      <Pie
-                        data={stats?.categoryBreakdown || []}
-                        dataKey="count"
-                        nameKey="category"
-                        cx="50%"
-                        cy="50%"
-                        outerRadius={70}
-                        innerRadius={40}
-                        paddingAngle={5}
-                      >
-                        {(stats?.categoryBreakdown || []).map((entry, index) => (
-                          <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
-                        ))}
-                      </Pie>
-                      <Tooltip
-                        contentStyle={{ backgroundColor: '#0f172a', borderColor: '#334155', borderRadius: '12px', color: '#fff' }}
-                      />
-                    </PieChart>
-                  </ResponsiveContainer>
+              {/* Secondary Visualizations Grid */}
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                {/* Bookings & Passenger Volume Chart */}
+                <div className="bg-slate-800/80 border border-slate-700/80 p-5 rounded-2xl shadow-xl flex flex-col justify-between">
+                  <div className="border-b border-slate-700/60 pb-3 mb-3 flex items-center justify-between">
+                    <div>
+                      <h3 className="text-base font-bold text-white flex items-center gap-2">
+                        <ShoppingBag className="w-5 h-5 text-blue-400" />
+                        <span>ปริมาณการจองและจำนวนผู้เดินทาง (Bookings & Pax Volume)</span>
+                      </h3>
+                      <p className="text-xs text-slate-400 mt-0.5">จำแนกตาม {analyticsTimeframe === 'weekly' ? 'รายสัปดาห์' : analyticsTimeframe === 'monthly' ? 'รายเดือน' : 'รายวัน'}</p>
+                    </div>
+                  </div>
+
+                  <div className="h-64 w-full">
+                    <ResponsiveContainer width="100%" height="100%">
+                      <ComposedChart data={analytics.timeSeriesData}>
+                        <CartesianGrid strokeDasharray="3 3" stroke="#334155" opacity={0.4} />
+                        <XAxis dataKey="label" stroke="#94a3b8" fontSize={11} interval={0} angle={-15} textAnchor="end" />
+                        <YAxis yAxisId="left" stroke="#3b82f6" fontSize={11} label={{ value: 'ออเดอร์', angle: -90, position: 'insideLeft', fill: '#3b82f6', fontSize: 10 }} />
+                        <YAxis yAxisId="right" orientation="right" stroke="#06b6d4" fontSize={11} label={{ value: 'นักท่องเที่ยว (คน)', angle: 90, position: 'insideRight', fill: '#06b6d4', fontSize: 10 }} />
+                        <Tooltip contentStyle={{ backgroundColor: '#0f172a', borderColor: '#334155', borderRadius: '12px', color: '#fff' }} />
+                        <Bar yAxisId="left" dataKey="bookingsCount" name="จำนวนออเดอร์" fill="#3b82f6" radius={[4, 4, 0, 0]} barSize={18} />
+                        <Line yAxisId="right" type="monotone" dataKey="paxCount" name="นักท่องเที่ยวรวม (คน)" stroke="#06b6d4" strokeWidth={3} dot={{ r: 4 }} />
+                      </ComposedChart>
+                    </ResponsiveContainer>
+                  </div>
                 </div>
-                <div className="flex flex-wrap justify-center gap-2 text-[11px] text-slate-400 pb-2">
-                  {(stats?.categoryBreakdown || []).map((cat, idx) => (
-                    <span key={idx} className="flex items-center gap-1">
-                      <span className="w-2.5 h-2.5 rounded-full" style={{ backgroundColor: COLORS[idx % COLORS.length] }}></span>
-                      <span>{cat.category}: {cat.count}</span>
-                    </span>
-                  ))}
+
+                {/* Category Breakdown Donut Chart */}
+                <div className="bg-slate-800/80 border border-slate-700/80 p-5 rounded-2xl shadow-xl flex flex-col justify-between">
+                  <div className="border-b border-slate-700/60 pb-3 mb-3">
+                    <h3 className="text-base font-bold text-white flex items-center gap-2">
+                      <PieChart className="w-5 h-5 text-cyan-400" />
+                      <span>สัดส่วนยอดขายตามประเภททัวร์ (Category Share)</span>
+                    </h3>
+                    <p className="text-xs text-slate-400 mt-0.5">แบ่งตามหมวดหมู่เกาะ พรีเมียม และซิตี้ทัวร์</p>
+                  </div>
+
+                  <div className="h-56 w-full flex items-center justify-center">
+                    <ResponsiveContainer width="100%" height="100%">
+                      <PieChart>
+                        <Pie
+                          data={stats?.categoryBreakdown || []}
+                          dataKey="count"
+                          nameKey="category"
+                          cx="50%"
+                          cy="50%"
+                          outerRadius={75}
+                          innerRadius={45}
+                          paddingAngle={5}
+                        >
+                          {(stats?.categoryBreakdown || []).map((_, index) => (
+                            <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
+                          ))}
+                        </Pie>
+                        <Tooltip contentStyle={{ backgroundColor: '#0f172a', borderColor: '#334155', borderRadius: '12px', color: '#fff' }} />
+                      </PieChart>
+                    </ResponsiveContainer>
+                  </div>
+
+                  <div className="flex flex-wrap justify-center gap-3 text-xs text-slate-300 pt-2 border-t border-slate-700/50">
+                    {(stats?.categoryBreakdown || []).map((cat, idx) => (
+                      <span key={idx} className="flex items-center gap-1.5 font-medium">
+                        <span className="w-3 h-3 rounded-full" style={{ backgroundColor: COLORS[idx % COLORS.length] }}></span>
+                        <span>{cat.category}: <strong className="text-white">{cat.count} รายการ</strong></span>
+                      </span>
+                    ))}
+                  </div>
+                </div>
+              </div>
+
+              {/* Tour Agency Cost & Profitability Table */}
+              <div className="bg-slate-800/80 border border-slate-700/80 rounded-2xl shadow-xl overflow-hidden">
+                <div className="p-5 border-b border-slate-700/80 flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-slate-800">
+                  <div>
+                    <h3 className="text-base font-bold text-white flex items-center gap-2">
+                      <Building2 className="w-5 h-5 text-amber-400" />
+                      <span>ตารางคิดราคาทุนเอเยนต์และกำไรรายโปรแกรมทัวร์ (Tour Costing & Profit Margin)</span>
+                    </h3>
+                    <p className="text-xs text-slate-400 mt-0.5">
+                      แสดงราคาขาย ราคาทุนเอเยนต์ supplier และยอดกำไรสะสมเพื่อการวางแผนการขาย
+                    </p>
+                  </div>
+                </div>
+
+                <div className="overflow-x-auto">
+                  <table className="w-full text-left text-xs">
+                    <thead className="bg-slate-900/90 text-slate-400 uppercase tracking-wider font-bold border-b border-slate-700/80">
+                      <tr>
+                        <th className="p-3.5">โปรแกรมทัวร์</th>
+                        <th className="p-3.5">ราคาขาย (ผู้ใหญ่/เด็ก)</th>
+                        <th className="p-3.5">ทุนเอเยนต์ (ผู้ใหญ่/เด็ก)</th>
+                        <th className="p-3.5">กำไร/ตั๋ว (Margin)</th>
+                        <th className="p-3.5 text-center">ออเดอร์/ผู้เดินทาง</th>
+                        <th className="p-3.5 text-right">ยอดขายรวม</th>
+                        <th className="p-3.5 text-right text-amber-400">ทุนรวมเอเยนต์</th>
+                        <th className="p-3.5 text-right text-emerald-400">กำไรสุทธิ</th>
+                        <th className="p-3.5 text-center">จัดการทุน</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-700/50 font-medium text-slate-200">
+                      {analytics.tourBreakdownList.map((item) => {
+                        const t = item.tour;
+                        const costAdult = t.costAdult !== undefined ? t.costAdult : Math.round(t.priceAdult * 0.65);
+                        const costChild = t.costChild !== undefined ? t.costChild : Math.round(t.priceChild * 0.65);
+                        const profitAdult = t.priceAdult - costAdult;
+                        const profitChild = t.priceChild - costChild;
+
+                        return (
+                          <tr key={t.id} className="hover:bg-slate-700/30 transition">
+                            <td className="p-3.5">
+                              <div className="flex items-center gap-3">
+                                {t.images && t.images[0] ? (
+                                  <img src={t.images[0]} alt="" className="w-10 h-10 rounded-lg object-cover shrink-0 border border-slate-700" />
+                                ) : (
+                                  <div className="w-10 h-10 rounded-lg bg-slate-700 shrink-0" />
+                                )}
+                                <div>
+                                  <span className="font-bold text-white block">{t.title.TH}</span>
+                                  <span className="text-[10px] text-teal-400 bg-teal-950/60 border border-teal-800/60 px-1.5 py-0.5 rounded mt-0.5 inline-block">
+                                    {t.category}
+                                  </span>
+                                </div>
+                              </div>
+                            </td>
+
+                            <td className="p-3.5">
+                              <div className="space-y-0.5">
+                                <div>ผู้ใหญ่: <span className="font-bold text-emerald-400">฿{t.priceAdult.toLocaleString()}</span></div>
+                                <div>เด็ก: <span className="font-bold text-cyan-400">฿{t.priceChild.toLocaleString()}</span></div>
+                              </div>
+                            </td>
+
+                            <td className="p-3.5">
+                              <div className="space-y-0.5">
+                                <div>ผู้ใหญ่: <span className="font-bold text-amber-400">฿{costAdult.toLocaleString()}</span></div>
+                                <div>เด็ก: <span className="font-bold text-amber-400">฿{costChild.toLocaleString()}</span></div>
+                              </div>
+                            </td>
+
+                            <td className="p-3.5">
+                              <div className="space-y-0.5">
+                                <div className="text-emerald-400 font-bold">฿{profitAdult.toLocaleString()} <span className="text-[10px] text-slate-400">({((profitAdult/t.priceAdult)*100).toFixed(0)}%)</span></div>
+                                <div className="text-cyan-400 font-bold">฿{profitChild.toLocaleString()} <span className="text-[10px] text-slate-400">({((profitChild/t.priceChild)*100).toFixed(0)}%)</span></div>
+                              </div>
+                            </td>
+
+                            <td className="p-3.5 text-center">
+                              <div className="font-bold text-white">{item.bookingsCount} ออเดอร์</div>
+                              <div className="text-[10px] text-slate-400">{item.totalPax} นักท่องเที่ยว</div>
+                            </td>
+
+                            <td className="p-3.5 text-right font-extrabold text-white">
+                              ฿{item.totalRevenue.toLocaleString()}
+                            </td>
+
+                            <td className="p-3.5 text-right font-extrabold text-amber-400">
+                              ฿{item.totalCost.toLocaleString()}
+                            </td>
+
+                            <td className="p-3.5 text-right font-extrabold text-emerald-400">
+                              ฿{item.totalProfit.toLocaleString()}
+                            </td>
+
+                            <td className="p-3.5 text-center">
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  setQuickCostTour(t);
+                                  setQuickCostAdult(costAdult);
+                                  setQuickCostChild(costChild);
+                                }}
+                                className="bg-amber-950/60 hover:bg-amber-900/80 text-amber-300 border border-amber-800/80 px-2.5 py-1.5 rounded-xl font-bold text-[11px] transition flex items-center gap-1 mx-auto"
+                                title="แก้ไขราคาทุนเอเยนต์ supplier ด่วน"
+                              >
+                                <Calculator className="w-3.5 h-3.5" />
+                                <span>ปรับราคาทุน</span>
+                              </button>
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
                 </div>
               </div>
             </div>
-          </div>
+          )
+        )}
+
+        {/* TAB: LIVE CHAT CUSTOMER INBOX */}
+        {activeTab === 'livechat' && (
+          !hasAccess('livechat') ? (
+            renderRestrictedArea('ระบบแชทสดลูกค้า (Live Chat Inbox)')
+          ) : (
+            <div className="space-y-6 animate-in fade-in">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-slate-800/80 border border-slate-700/80 p-5 rounded-2xl shadow-xl">
+                <div>
+                  <div className="flex items-center gap-2">
+                    <span className="bg-blue-500/20 text-blue-400 font-bold text-xs px-2.5 py-0.5 rounded-full border border-blue-500/30 flex items-center gap-1">
+                      <span className="w-2 h-2 rounded-full bg-emerald-400 animate-ping"></span>
+                      Real-time On-site Messenger
+                    </span>
+                    <span className="text-xs text-slate-400">ระบบสนทนาสดตรงจากหน้าเว็บไซต์</span>
+                  </div>
+                  <h2 className="text-xl font-black text-white mt-1 flex items-center gap-2">
+                    <Headphones className="w-6 h-6 text-blue-400" />
+                    <span>กล่องข้อความแชทสดลูกค้า (Live Chat Customer Service)</span>
+                  </h2>
+                </div>
+
+                <div className="flex items-center gap-3">
+                  <button
+                    onClick={fetchLiveChatSessions}
+                    className="bg-slate-700 hover:bg-slate-600 text-white font-bold px-3 py-2 rounded-xl text-xs transition flex items-center gap-1.5 shadow-md"
+                    title="ดึงข้อมูลแชทล่าสุด"
+                  >
+                    <RefreshCw className="w-4 h-4 text-blue-300" />
+                    <span>รีเฟรชข้อความ</span>
+                  </button>
+                  <span className="bg-blue-950 text-blue-300 border border-blue-800 font-extrabold text-xs px-3.5 py-2 rounded-xl">
+                    {liveChatSessions.length} ห้องสนทนา
+                  </span>
+                </div>
+              </div>
+
+              {/* Chat Inbox Interface */}
+              <div className="bg-slate-900 border border-slate-800 rounded-2xl shadow-2xl overflow-hidden flex flex-col md:flex-row min-h-[600px] max-h-[750px]">
+                {/* Left Column: Sessions List */}
+                <div className="w-full md:w-80 lg:w-96 border-b md:border-b-0 md:border-r border-slate-800 flex flex-col bg-slate-950/60 shrink-0">
+                  <div className="p-3.5 border-b border-slate-800 bg-slate-900/90 font-bold text-xs text-slate-300 flex items-center justify-between">
+                    <span>รายการผู้สนทนาสดล่าสุด</span>
+                    <span className="text-[10px] text-emerald-400 bg-emerald-950 px-2 py-0.5 rounded-full border border-emerald-800">
+                      Auto Polling 3s
+                    </span>
+                  </div>
+
+                  <div className="flex-1 overflow-y-auto divide-y divide-slate-800/60">
+                    {liveChatSessions.length === 0 ? (
+                      <div className="p-8 text-center text-slate-500 text-xs">
+                        <MessageSquare className="w-8 h-8 mx-auto mb-2 opacity-40 text-blue-400" />
+                        <p className="font-bold text-slate-400">ยังไม่มีผู้กดแชทสดจากหน้าเว็บ</p>
+                        <p className="text-[11px] mt-1 text-slate-500">เมื่อลูกค้ากด "แชทสดเจ้าหน้าที่" บนหน้าเว็บ ข้อความจะมาปรากฏที่นี่ทันที</p>
+                      </div>
+                    ) : (
+                      liveChatSessions.map((session) => {
+                        const isSelected = selectedLiveSessionId === session.id;
+                        const lastMsg = session.messages?.[session.messages.length - 1];
+                        return (
+                          <button
+                            key={session.id}
+                            onClick={() => setSelectedLiveSessionId(session.id)}
+                            className={`w-full p-3.5 text-left transition flex items-start justify-between gap-3 ${
+                              isSelected
+                                ? 'bg-blue-900/40 border-l-4 border-blue-500'
+                                : 'hover:bg-slate-900/60 border-l-4 border-transparent'
+                            }`}
+                          >
+                            <div className="flex-1 min-w-0">
+                              <div className="flex items-center gap-2 mb-1">
+                                <div className="w-7 h-7 rounded-full bg-blue-600/30 text-blue-300 border border-blue-500/40 flex items-center justify-center font-bold text-xs shrink-0">
+                                  {session.customerName ? session.customerName.charAt(0) : 'ค'}
+                                </div>
+                                <span className="font-bold text-slate-200 text-xs truncate">
+                                  {session.customerName || 'ลูกค้าทั่วไป'}
+                                </span>
+                                {session.unreadCount > 0 && (
+                                  <span className="bg-rose-500 text-white text-[9px] font-black px-1.5 py-0.2 rounded-full animate-pulse ml-auto">
+                                    NEW {session.unreadCount}
+                                  </span>
+                                )}
+                              </div>
+
+                              <p className="text-[11px] text-slate-400 truncate pl-9">
+                                {lastMsg ? lastMsg.text : 'เริ่มเปิดห้องสนทนา...'}
+                              </p>
+                            </div>
+
+                            <div className="text-[9px] text-slate-500 shrink-0 font-mono">
+                              {session.updatedAt ? new Date(session.updatedAt).toLocaleTimeString('th-TH', { hour: '2-digit', minute: '2-digit' }) : ''}
+                            </div>
+                          </button>
+                        );
+                      })
+                    )}
+                  </div>
+                </div>
+
+                {/* Right Column: Active Conversation */}
+                <div className="flex-1 flex flex-col bg-slate-900/90">
+                  {(() => {
+                    const activeSession = liveChatSessions.find(s => s.id === selectedLiveSessionId);
+                    if (!activeSession) {
+                      return (
+                        <div className="flex-1 flex flex-col items-center justify-center p-8 text-slate-500 text-xs text-center">
+                          <Headphones className="w-12 h-12 text-slate-700 mb-3" />
+                          <p className="text-sm font-bold text-slate-300">เลือกห้องสนทนาฝั่งซ้ายเพื่อเริ่มคุยตอบกลับ</p>
+                          <p className="text-xs text-slate-500 mt-1">แอดมินสามารถส่งข้อความตอบกลับลูกค้าที่คุยผ่านหน้าเว็บได้แบบ Real-time</p>
+                        </div>
+                      );
+                    }
+
+                    return (
+                      <>
+                        {/* Conversation Header */}
+                        <div className="p-4 border-b border-slate-800 bg-slate-950 flex items-center justify-between shrink-0">
+                          <div className="flex items-center gap-3">
+                            <div className="w-10 h-10 rounded-2xl bg-blue-600 text-white flex items-center justify-center font-extrabold shadow-md">
+                              {activeSession.customerName ? activeSession.customerName.charAt(0) : 'ค'}
+                            </div>
+                            <div>
+                              <div className="flex items-center gap-2">
+                                <h3 className="font-extrabold text-sm text-white">{activeSession.customerName || 'ลูกค้าทั่วไป'}</h3>
+                                <span className="text-[10px] bg-emerald-950 text-emerald-400 font-bold px-2 py-0.5 rounded-full border border-emerald-800/80 flex items-center gap-1">
+                                  <span className="w-1.5 h-1.5 rounded-full bg-emerald-400"></span>
+                                  Online On-site
+                                </span>
+                              </div>
+                              <p className="text-[10px] text-slate-400 font-mono">
+                                Session ID: {activeSession.id}
+                              </p>
+                            </div>
+                          </div>
+
+                          <div className="flex items-center gap-2">
+                            <a
+                              href="tel:0626816494"
+                              className="bg-slate-800 hover:bg-slate-700 text-teal-300 text-xs font-bold px-3 py-1.5 rounded-xl border border-slate-700 flex items-center gap-1 transition"
+                            >
+                              <PhoneCall className="w-3.5 h-3.5" />
+                              <span>โทรหาลูกค้า</span>
+                            </a>
+                          </div>
+                        </div>
+
+                        {/* Quick Response Buttons */}
+                        <div className="p-2.5 bg-slate-950/80 border-b border-slate-800/80 flex items-center gap-1.5 overflow-x-auto no-scrollbar shrink-0 text-[11px]">
+                          <span className="text-slate-500 font-medium shrink-0 text-[10px]">ข้อความตอบด่วน:</span>
+                          {[
+                            'สวัสดีค่ะ มีอะไรให้แอดมินช่วยดูแลไหมคะ? 🙏',
+                            'ยินดีให้บริการค่ะ สามารถสอบถามรอบเรือได้เลยค่ะ',
+                            'ท่านสามารถโอนชำระเงินและแนบสลิปผ่านหน้าเว็บได้เลยค่ะ',
+                            'แอดมินยืนยันรายการจองและตั๋วเรียบร้อยแล้วค่ะ 😊'
+                          ].map((quickText, qIdx) => (
+                            <button
+                              key={qIdx}
+                              type="button"
+                              onClick={() => setAdminReplyText(quickText)}
+                              className="whitespace-nowrap bg-slate-800 hover:bg-blue-900/60 text-slate-300 hover:text-white border border-slate-700 text-[10px] px-2.5 py-1 rounded-lg transition shrink-0"
+                            >
+                              {quickText}
+                            </button>
+                          ))}
+                        </div>
+
+                        {/* Messages Stream */}
+                        <div className="flex-1 p-4 overflow-y-auto space-y-3 text-xs bg-slate-900/50">
+                          {activeSession.messages.map((m: any) => {
+                            const isAdmin = m.sender === 'admin';
+                            return (
+                              <div
+                                key={m.id}
+                                className={`flex gap-2.5 ${isAdmin ? 'justify-end' : 'justify-start'}`}
+                              >
+                                {!isAdmin && (
+                                  <div className="w-7 h-7 rounded-xl bg-slate-800 border border-slate-700 text-slate-200 flex items-center justify-center shrink-0 mt-0.5 font-bold text-[10px]">
+                                    {activeSession.customerName ? activeSession.customerName.charAt(0) : 'ค'}
+                                  </div>
+                                )}
+
+                                <div
+                                  className={`max-w-[75%] rounded-2xl p-3 shadow-md ${
+                                    isAdmin
+                                      ? 'bg-blue-600 text-white rounded-tr-xs'
+                                      : 'bg-slate-800 text-slate-100 border border-slate-700 rounded-tl-xs'
+                                  }`}
+                                >
+                                  <div className="text-[9px] font-extrabold mb-1 opacity-80 flex items-center justify-between gap-2">
+                                    <span>{m.senderName || (isAdmin ? 'แอดมิน TripSea' : activeSession.customerName || 'ลูกค้า')}</span>
+                                    {isAdmin && <CheckCheck className="w-3 h-3 text-blue-200" />}
+                                  </div>
+
+                                  {m.imageUrl && (
+                                    <div className="mb-2 rounded-xl overflow-hidden border border-black/20">
+                                      <a href={m.imageUrl} target="_blank" rel="noopener noreferrer">
+                                        <img src={m.imageUrl} alt="attached" className="max-h-60 w-full object-cover hover:opacity-90 transition" />
+                                      </a>
+                                    </div>
+                                  )}
+
+                                  <p className="whitespace-pre-line leading-relaxed text-xs">{m.text}</p>
+
+                                  <div
+                                    className={`text-[9px] mt-1 text-right ${
+                                      isAdmin ? 'text-blue-200' : 'text-slate-400'
+                                    }`}
+                                  >
+                                    {m.timestamp}
+                                  </div>
+                                </div>
+
+                                {isAdmin && (
+                                  <div className="w-7 h-7 rounded-xl bg-blue-700 text-white flex items-center justify-center shrink-0 mt-0.5 shadow-sm">
+                                    <Headphones className="w-3.5 h-3.5" />
+                                  </div>
+                                )}
+                              </div>
+                            );
+                          })}
+                        </div>
+
+                        {/* Reply Form Footer */}
+                        <div className="p-3.5 bg-slate-950 border-t border-slate-800 shrink-0">
+                          <form onSubmit={handleSendAdminReply} className="flex items-center gap-2">
+                            <input
+                              type="text"
+                              value={adminReplyText}
+                              onChange={(e) => setAdminReplyText(e.target.value)}
+                              placeholder="พิมพ์ข้อความตอบกลับลูกค้าที่นี่..."
+                              className="flex-1 bg-slate-900 border border-slate-700 text-white placeholder-slate-500 rounded-xl px-4 py-2.5 text-xs focus:outline-none focus:ring-2 focus:ring-blue-500 transition"
+                              disabled={isSendingAdminReply}
+                            />
+                            <button
+                              type="submit"
+                              disabled={!adminReplyText.trim() || isSendingAdminReply}
+                              className="bg-blue-600 hover:bg-blue-500 disabled:opacity-40 text-white font-extrabold px-4 py-2.5 rounded-xl text-xs transition flex items-center gap-1.5 shadow-lg shadow-blue-900/30 active:scale-95 shrink-0"
+                            >
+                              <Send className="w-4 h-4" />
+                              <span>ส่งตอบกลับ</span>
+                            </button>
+                          </form>
+                        </div>
+                      </>
+                    );
+                  })()}
+                </div>
+              </div>
+            </div>
           )
         )}
 
@@ -1115,6 +1910,257 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
               </div>
             </div>
           </div>
+          )
+        )}
+
+        {/* TAB: LIVE CHAT CUSTOMER INBOX */}
+        {activeTab === 'livechat' && (
+          !hasAccess('livechat') ? (
+            renderRestrictedArea('ระบบแชทสดลูกค้า (Live Chat Inbox)')
+          ) : (
+            <div className="space-y-6 animate-in fade-in">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-slate-800/80 border border-slate-700/80 p-5 rounded-2xl shadow-xl">
+                <div>
+                  <div className="flex items-center gap-2">
+                    <span className="bg-blue-500/20 text-blue-400 font-bold text-xs px-2.5 py-0.5 rounded-full border border-blue-500/30 flex items-center gap-1">
+                      <span className="w-2 h-2 rounded-full bg-emerald-400 animate-ping"></span>
+                      Real-time On-site Messenger
+                    </span>
+                    <span className="text-xs text-slate-400">ระบบสนทนาสดตรงจากหน้าเว็บไซต์</span>
+                  </div>
+                  <h2 className="text-xl font-black text-white mt-1 flex items-center gap-2">
+                    <Headphones className="w-6 h-6 text-blue-400" />
+                    <span>กล่องข้อความแชทสดลูกค้า (Live Chat Customer Service)</span>
+                  </h2>
+                </div>
+
+                <div className="flex items-center gap-3">
+                  <button
+                    onClick={fetchLiveChatSessions}
+                    className="bg-slate-700 hover:bg-slate-600 text-white font-bold px-3 py-2 rounded-xl text-xs transition flex items-center gap-1.5 shadow-md"
+                    title="ดึงข้อมูลแชทล่าสุด"
+                  >
+                    <RefreshCw className="w-4 h-4 text-blue-300" />
+                    <span>รีเฟรชข้อความ</span>
+                  </button>
+                  <span className="bg-blue-950 text-blue-300 border border-blue-800 font-extrabold text-xs px-3.5 py-2 rounded-xl">
+                    {liveChatSessions.length} ห้องสนทนา
+                  </span>
+                </div>
+              </div>
+
+              {/* Chat Inbox Interface */}
+              <div className="bg-slate-900 border border-slate-800 rounded-2xl shadow-2xl overflow-hidden flex flex-col md:flex-row min-h-[600px] max-h-[750px]">
+                {/* Left Column: Sessions List */}
+                <div className="w-full md:w-80 lg:w-96 border-b md:border-b-0 md:border-r border-slate-800 flex flex-col bg-slate-950/60 shrink-0">
+                  <div className="p-3.5 border-b border-slate-800 bg-slate-900/90 font-bold text-xs text-slate-300 flex items-center justify-between">
+                    <span>รายการผู้สนทนาสดล่าสุด</span>
+                    <span className="text-[10px] text-emerald-400 bg-emerald-950 px-2 py-0.5 rounded-full border border-emerald-800">
+                      Auto Polling 3s
+                    </span>
+                  </div>
+
+                  <div className="flex-1 overflow-y-auto divide-y divide-slate-800/60">
+                    {liveChatSessions.length === 0 ? (
+                      <div className="p-8 text-center text-slate-500 text-xs">
+                        <MessageSquare className="w-8 h-8 mx-auto mb-2 opacity-40 text-blue-400" />
+                        <p className="font-bold text-slate-400">ยังไม่มีผู้กดแชทสดจากหน้าเว็บ</p>
+                        <p className="text-[11px] mt-1 text-slate-500">เมื่อลูกค้ากด "แชทสดเจ้าหน้าที่" บนหน้าเว็บ ข้อความจะมาปรากฏที่นี่ทันที</p>
+                      </div>
+                    ) : (
+                      liveChatSessions.map((session) => {
+                        const isSelected = selectedLiveSessionId === session.id;
+                        const lastMsg = session.messages?.[session.messages.length - 1];
+                        return (
+                          <button
+                            key={session.id}
+                            onClick={() => setSelectedLiveSessionId(session.id)}
+                            className={`w-full p-3.5 text-left transition flex items-start justify-between gap-3 ${
+                              isSelected
+                                ? 'bg-blue-900/40 border-l-4 border-blue-500'
+                                : 'hover:bg-slate-900/60 border-l-4 border-transparent'
+                            }`}
+                          >
+                            <div className="flex-1 min-w-0">
+                              <div className="flex items-center gap-2 mb-1">
+                                <div className="w-7 h-7 rounded-full bg-blue-600/30 text-blue-300 border border-blue-500/40 flex items-center justify-center font-bold text-xs shrink-0">
+                                  {session.customerName ? session.customerName.charAt(0) : 'ค'}
+                                </div>
+                                <span className="font-bold text-slate-200 text-xs truncate">
+                                  {session.customerName || 'ลูกค้าทั่วไป'}
+                                </span>
+                                {session.unreadCount > 0 && (
+                                  <span className="bg-rose-500 text-white text-[9px] font-black px-1.5 py-0.2 rounded-full animate-pulse ml-auto">
+                                    NEW {session.unreadCount}
+                                  </span>
+                                )}
+                              </div>
+
+                              <p className="text-[11px] text-slate-400 truncate pl-9">
+                                {lastMsg ? lastMsg.text : 'เริ่มเปิดห้องสนทนา...'}
+                              </p>
+                            </div>
+
+                            <div className="text-[9px] text-slate-500 shrink-0 font-mono">
+                              {session.updatedAt ? new Date(session.updatedAt).toLocaleTimeString('th-TH', { hour: '2-digit', minute: '2-digit' }) : ''}
+                            </div>
+                          </button>
+                        );
+                      })
+                    )}
+                  </div>
+                </div>
+
+                {/* Right Column: Active Conversation */}
+                <div className="flex-1 flex flex-col bg-slate-900/90">
+                  {(() => {
+                    const activeSession = liveChatSessions.find(s => s.id === selectedLiveSessionId);
+                    if (!activeSession) {
+                      return (
+                        <div className="flex-1 flex flex-col items-center justify-center p-8 text-slate-500 text-xs text-center">
+                          <Headphones className="w-12 h-12 text-slate-700 mb-3" />
+                          <p className="text-sm font-bold text-slate-300">เลือกห้องสนทนาฝั่งซ้ายเพื่อเริ่มคุยตอบกลับ</p>
+                          <p className="text-xs text-slate-500 mt-1">แอดมินสามารถส่งข้อความตอบกลับลูกค้าที่คุยผ่านหน้าเว็บได้แบบ Real-time</p>
+                        </div>
+                      );
+                    }
+
+                    return (
+                      <>
+                        {/* Conversation Header */}
+                        <div className="p-4 border-b border-slate-800 bg-slate-950 flex items-center justify-between shrink-0">
+                          <div className="flex items-center gap-3">
+                            <div className="w-10 h-10 rounded-2xl bg-blue-600 text-white flex items-center justify-center font-extrabold shadow-md">
+                              {activeSession.customerName ? activeSession.customerName.charAt(0) : 'ค'}
+                            </div>
+                            <div>
+                              <div className="flex items-center gap-2">
+                                <h3 className="font-extrabold text-sm text-white">{activeSession.customerName || 'ลูกค้าทั่วไป'}</h3>
+                                <span className="text-[10px] bg-emerald-950 text-emerald-400 font-bold px-2 py-0.5 rounded-full border border-emerald-800/80 flex items-center gap-1">
+                                  <span className="w-1.5 h-1.5 rounded-full bg-emerald-400"></span>
+                                  Online On-site
+                                </span>
+                              </div>
+                              <p className="text-[10px] text-slate-400 font-mono">
+                                Session ID: {activeSession.id}
+                              </p>
+                            </div>
+                          </div>
+
+                          <div className="flex items-center gap-2">
+                            <a
+                              href="tel:0626816494"
+                              className="bg-slate-800 hover:bg-slate-700 text-teal-300 text-xs font-bold px-3 py-1.5 rounded-xl border border-slate-700 flex items-center gap-1 transition"
+                            >
+                              <PhoneCall className="w-3.5 h-3.5" />
+                              <span>โทรหาลูกค้า</span>
+                            </a>
+                          </div>
+                        </div>
+
+                        {/* Quick Response Buttons */}
+                        <div className="p-2.5 bg-slate-950/80 border-b border-slate-800/80 flex items-center gap-1.5 overflow-x-auto no-scrollbar shrink-0 text-[11px]">
+                          <span className="text-slate-500 font-medium shrink-0 text-[10px]">ข้อความตอบด่วน:</span>
+                          {[
+                            'สวัสดีค่ะ มีอะไรให้แอดมินช่วยดูแลไหมคะ? 🙏',
+                            'ยินดีให้บริการค่ะ สามารถสอบถามรอบเรือได้เลยค่ะ',
+                            'ท่านสามารถโอนชำระเงินและแนบสลิปผ่านหน้าเว็บได้เลยค่ะ',
+                            'แอดมินยืนยันรายการจองและตั๋วเรียบร้อยแล้วค่ะ 😊'
+                          ].map((quickText, qIdx) => (
+                            <button
+                              key={qIdx}
+                              type="button"
+                              onClick={() => setAdminReplyText(quickText)}
+                              className="whitespace-nowrap bg-slate-800 hover:bg-blue-900/60 text-slate-300 hover:text-white border border-slate-700 text-[10px] px-2.5 py-1 rounded-lg transition shrink-0"
+                            >
+                              {quickText}
+                            </button>
+                          ))}
+                        </div>
+
+                        {/* Messages Stream */}
+                        <div className="flex-1 p-4 overflow-y-auto space-y-3 text-xs bg-slate-900/50">
+                          {activeSession.messages.map((m: any) => {
+                            const isAdmin = m.sender === 'admin';
+                            return (
+                              <div
+                                key={m.id}
+                                className={`flex gap-2.5 ${isAdmin ? 'justify-end' : 'justify-start'}`}
+                              >
+                                {!isAdmin && (
+                                  <div className="w-7 h-7 rounded-xl bg-slate-800 border border-slate-700 text-slate-200 flex items-center justify-center shrink-0 mt-0.5 font-bold text-[10px]">
+                                    {activeSession.customerName ? activeSession.customerName.charAt(0) : 'ค'}
+                                  </div>
+                                )}
+
+                                <div
+                                  className={`max-w-[75%] rounded-2xl p-3 shadow-md ${
+                                    isAdmin
+                                      ? 'bg-blue-600 text-white rounded-tr-xs'
+                                      : 'bg-slate-800 text-slate-100 border border-slate-700 rounded-tl-xs'
+                                  }`}
+                                >
+                                  <div className="text-[9px] font-extrabold mb-1 opacity-80 flex items-center justify-between gap-2">
+                                    <span>{m.senderName || (isAdmin ? 'แอดมิน TripSea' : activeSession.customerName || 'ลูกค้า')}</span>
+                                    {isAdmin && <CheckCheck className="w-3 h-3 text-blue-200" />}
+                                  </div>
+
+                                  {m.imageUrl && (
+                                    <div className="mb-2 rounded-xl overflow-hidden border border-black/20">
+                                      <a href={m.imageUrl} target="_blank" rel="noopener noreferrer">
+                                        <img src={m.imageUrl} alt="attached" className="max-h-60 w-full object-cover hover:opacity-90 transition" />
+                                      </a>
+                                    </div>
+                                  )}
+
+                                  <p className="whitespace-pre-line leading-relaxed text-xs">{m.text}</p>
+
+                                  <div
+                                    className={`text-[9px] mt-1 text-right ${
+                                      isAdmin ? 'text-blue-200' : 'text-slate-400'
+                                    }`}
+                                  >
+                                    {m.timestamp}
+                                  </div>
+                                </div>
+
+                                {isAdmin && (
+                                  <div className="w-7 h-7 rounded-xl bg-blue-700 text-white flex items-center justify-center shrink-0 mt-0.5 shadow-sm">
+                                    <Headphones className="w-3.5 h-3.5" />
+                                  </div>
+                                )}
+                              </div>
+                            );
+                          })}
+                        </div>
+
+                        {/* Reply Form Footer */}
+                        <div className="p-3.5 bg-slate-950 border-t border-slate-800 shrink-0">
+                          <form onSubmit={handleSendAdminReply} className="flex items-center gap-2">
+                            <input
+                              type="text"
+                              value={adminReplyText}
+                              onChange={(e) => setAdminReplyText(e.target.value)}
+                              placeholder="พิมพ์ข้อความตอบกลับลูกค้าที่นี่..."
+                              className="flex-1 bg-slate-900 border border-slate-700 text-white placeholder-slate-500 rounded-xl px-4 py-2.5 text-xs focus:outline-none focus:ring-2 focus:ring-blue-500 transition"
+                              disabled={isSendingAdminReply}
+                            />
+                            <button
+                              type="submit"
+                              disabled={!adminReplyText.trim() || isSendingAdminReply}
+                              className="bg-blue-600 hover:bg-blue-500 disabled:opacity-40 text-white font-extrabold px-4 py-2.5 rounded-xl text-xs transition flex items-center gap-1.5 shadow-lg shadow-blue-900/30 active:scale-95 shrink-0"
+                            >
+                              <Send className="w-4 h-4" />
+                              <span>ส่งตอบกลับ</span>
+                            </button>
+                          </form>
+                        </div>
+                      </>
+                    );
+                  })()}
+                </div>
+              </div>
+            </div>
           )
         )}
 
@@ -1854,7 +2900,22 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                       placeholder="เช่น https://www.facebook.com/tripseatoursphuket/"
                       className="w-full bg-slate-900 border border-slate-700 rounded-xl p-3 text-white text-xs font-mono focus:ring-2 focus:ring-teal-500"
                     />
-                    <p className="text-[10px] text-slate-500 mt-1">ลิงก์เพจเฟซบุ๊กจะใช้แสดงในส่วน Footer ล่างสุดเพื่อให้ผู้ใช้สามารถกดเชื่อมโยงไปเยี่ยมชมหรือทักแชทได้ทันที</p>
+                    <p className="text-[10px] text-slate-500 mt-1">ลิงก์เพจเฟซบุ๊กจะใช้แสดงในส่วน Footer ล่างสุดเพื่อให้ผู้ใช้สามารถกดเชื่อมโยงไปเยี่ยมชมได้ทันที</p>
+                  </div>
+
+                  <div>
+                    <label className="text-slate-300 font-bold block mb-1 text-blue-400 flex items-center gap-1.5">
+                      <MessageCircle className="w-4 h-4 text-[#0084FF]" />
+                      <span>ลิงก์แชท Facebook Messenger (m.me)</span>
+                    </label>
+                    <input
+                      type="url"
+                      value={formSettings.facebookMessengerUrl || ''}
+                      onChange={(e) => setFormSettings({ ...formSettings, facebookMessengerUrl: e.target.value })}
+                      placeholder="เช่น https://m.me/tripseatoursphuket"
+                      className="w-full bg-slate-900 border border-slate-700 rounded-xl p-3 text-white text-xs font-mono focus:ring-2 focus:ring-blue-500"
+                    />
+                    <p className="text-[10px] text-slate-500 mt-1">ลิงก์ m.me สรุปสำหรับให้ลูกค้านับแชทตรงเข้ากล่องข้อความ Facebook Messenger ทันที</p>
                   </div>
 
                   {/* ใบอนุญาตประกอบธุรกิจนำเที่ยว ททท. */}
@@ -2918,6 +3979,97 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                   ปิด
                 </button>
               </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Quick Edit Agency Cost Modal */}
+      {quickCostTour && (
+        <div className="fixed inset-0 z-50 bg-slate-950/80 backdrop-blur-md flex items-center justify-center p-4 animate-in fade-in">
+          <div className="bg-slate-900 border border-slate-700 max-w-md w-full rounded-3xl p-6 shadow-2xl relative space-y-4">
+            <button
+              onClick={() => setQuickCostTour(null)}
+              className="absolute top-4 right-4 text-slate-400 hover:text-white transition"
+            >
+              <X className="w-5 h-5" />
+            </button>
+
+            <div className="flex items-center gap-2 text-amber-400 font-bold border-b border-slate-800 pb-3">
+              <Calculator className="w-5 h-5 text-amber-400" />
+              <h3 className="text-base text-slate-100 font-bold">ปรับราคาทุนเอเยนต์ (Supplier Net Cost)</h3>
+            </div>
+
+            <div className="space-y-3">
+              <div className="bg-slate-950 p-3 rounded-xl border border-slate-800">
+                <span className="text-xs text-slate-400 block">โปรแกรมทัวร์:</span>
+                <span className="text-sm font-bold text-teal-400">{quickCostTour.title.TH}</span>
+                <div className="flex items-center gap-4 text-xs text-slate-300 mt-2">
+                  <span>ราคาขายผู้ใหญ่: <strong className="text-emerald-400">฿{quickCostTour.priceAdult.toLocaleString()}</strong></span>
+                  <span>ราคาขายเด็ก: <strong className="text-cyan-400">฿{quickCostTour.priceChild.toLocaleString()}</strong></span>
+                </div>
+              </div>
+
+              <form
+                onSubmit={(e) => {
+                  e.preventDefault();
+                  if (onUpdateTour && quickCostTour) {
+                    onUpdateTour(quickCostTour.id, {
+                      costAdult: Number(quickCostAdult),
+                      costChild: Number(quickCostChild)
+                    });
+                  }
+                  setQuickCostTour(null);
+                }}
+                className="space-y-4 pt-2"
+              >
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className="text-xs font-bold text-amber-400 block mb-1">🏭 ทุนผู้ใหญ่ (Adult Net)</label>
+                    <input
+                      type="number"
+                      required
+                      value={quickCostAdult}
+                      onChange={(e) => setQuickCostAdult(Number(e.target.value))}
+                      className="w-full bg-slate-950 border border-amber-500/50 rounded-xl p-2.5 text-amber-300 font-bold text-sm"
+                    />
+                  </div>
+                  <div>
+                    <label className="text-xs font-bold text-amber-400 block mb-1">🏭 ทุนเด็ก (Child Net)</label>
+                    <input
+                      type="number"
+                      required
+                      value={quickCostChild}
+                      onChange={(e) => setQuickCostChild(Number(e.target.value))}
+                      className="w-full bg-slate-950 border border-amber-500/50 rounded-xl p-2.5 text-amber-300 font-bold text-sm"
+                    />
+                  </div>
+                </div>
+
+                <div className="bg-emerald-950/40 border border-emerald-500/30 p-3 rounded-xl flex items-center justify-between text-xs">
+                  <span className="text-slate-300">กำไรสุทธิต่อตั๋วใหม่:</span>
+                  <span className="font-extrabold text-emerald-400">
+                    ผู้ใหญ่ ฿{(quickCostTour.priceAdult - quickCostAdult).toLocaleString()} / เด็ก ฿{(quickCostTour.priceChild - quickCostChild).toLocaleString()}
+                  </span>
+                </div>
+
+                <div className="grid grid-cols-2 gap-3 pt-2">
+                  <button
+                    type="button"
+                    onClick={() => setQuickCostTour(null)}
+                    className="w-full bg-slate-800 hover:bg-slate-700 text-slate-300 font-bold py-2.5 rounded-xl text-xs transition border border-slate-700"
+                  >
+                    ยกเลิก
+                  </button>
+                  <button
+                    type="submit"
+                    className="w-full bg-amber-600 hover:bg-amber-500 text-slate-950 font-extrabold py-2.5 rounded-xl text-xs transition shadow-lg shadow-amber-950/40 flex items-center justify-center gap-1.5"
+                  >
+                    <Check className="w-4 h-4" />
+                    <span>บันทึกราคาทุน</span>
+                  </button>
+                </div>
+              </form>
             </div>
           </div>
         </div>

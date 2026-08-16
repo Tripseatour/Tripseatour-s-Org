@@ -278,7 +278,7 @@ export const supabaseApi = {
         siteName: s.site_name || initialSettings.siteName,
         companyName: s.company_name || initialSettings.companyName,
         promptPayId: s.promptpay_id || initialSettings.promptPayId,
-        promptPayName: s.promptpay_name || initialSettings.promptPayName,
+        promptPayName: (s.promptpay_name && !s.promptpay_name.includes('บริษัท')) ? s.promptpay_name : 'พรทิพย์ แดงทัด',
         lineMessagingChannelAccessToken: s.line_messaging_channel_access_token || s.line_notify_token || initialSettings.lineMessagingChannelAccessToken,
         lineMessagingUserId: s.line_messaging_user_id || initialSettings.lineMessagingUserId,
         lineNotifyToken: s.line_notify_token || initialSettings.lineNotifyToken,

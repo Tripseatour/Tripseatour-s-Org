@@ -1,21 +1,25 @@
 import React, { useState } from 'react';
-import { X, Star, Clock, MapPin, CheckCircle, XCircle, Calendar, ShieldCheck, QrCode, ArrowRight, UserCheck } from 'lucide-react';
+import { X, Star, Clock, MapPin, CheckCircle, XCircle, Calendar, ShieldCheck, QrCode, ArrowRight, UserCheck, ShoppingCart, Check } from 'lucide-react';
 import { Tour, Language, Review } from '../types';
 import { translations } from '../data/translations';
 
 interface TourDetailModalProps {
   tour: Tour | null;
   currentLang: Language;
+  isInCart?: boolean;
   onClose: () => void;
   onBookNow: (tour: Tour) => void;
+  onAddToCart?: (tour: Tour) => void;
   reviews: Review[];
 }
 
 export const TourDetailModal: React.FC<TourDetailModalProps> = ({
   tour,
   currentLang,
+  isInCart = false,
   onClose,
   onBookNow,
+  onAddToCart,
   reviews,
 }) => {
   const [activeImageIndex, setActiveImageIndex] = useState(0);
@@ -232,7 +236,7 @@ export const TourDetailModal: React.FC<TourDetailModalProps> = ({
         </div>
 
         {/* Bottom Booking Sticky Bar */}
-        <div className="p-4 bg-slate-900 text-white border-t border-slate-800 flex items-center justify-between shrink-0">
+        <div className="p-4 bg-slate-900 text-white border-t border-slate-800 flex flex-wrap items-center justify-between gap-3 shrink-0">
           <div>
             <span className="text-[11px] text-slate-400 block">{t.priceSummary} ({t.adult})</span>
             <div className="flex items-baseline gap-2">
@@ -244,16 +248,30 @@ export const TourDetailModal: React.FC<TourDetailModalProps> = ({
             </div>
           </div>
 
-          <button
-            onClick={() => {
-              onClose();
-              onBookNow(tour);
-            }}
-            className="bg-gradient-to-r from-cyan-500 via-teal-500 to-emerald-500 hover:from-cyan-400 hover:to-emerald-400 text-slate-950 font-extrabold px-6 py-3 rounded-2xl text-sm transition shadow-lg shadow-cyan-500/20 flex items-center gap-2"
-          >
-            <span>{t.bookNow}</span>
-            <ArrowRight className="w-4 h-4" />
-          </button>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={() => onAddToCart && onAddToCart(tour)}
+              className={`px-4 py-2.5 rounded-2xl text-xs sm:text-sm font-bold transition flex items-center gap-1.5 border active:scale-95 ${
+                isInCart
+                  ? 'bg-teal-900/80 border-teal-500 text-teal-300'
+                  : 'bg-slate-800 hover:bg-slate-700 border-slate-700 text-white'
+              }`}
+            >
+              {isInCart ? <Check className="w-4 h-4 text-teal-400" /> : <ShoppingCart className="w-4 h-4 text-teal-400" />}
+              <span>{isInCart ? t.addedToCart : t.addToCart}</span>
+            </button>
+
+            <button
+              onClick={() => {
+                onClose();
+                onBookNow(tour);
+              }}
+              className="bg-gradient-to-r from-cyan-500 via-teal-500 to-emerald-500 hover:from-cyan-400 hover:to-emerald-400 text-slate-950 font-extrabold px-5 sm:px-6 py-2.5 rounded-2xl text-xs sm:text-sm transition shadow-lg shadow-cyan-500/20 flex items-center gap-2 active:scale-95"
+            >
+              <span>{t.bookNow}</span>
+              <ArrowRight className="w-4 h-4" />
+            </button>
+          </div>
         </div>
       </div>
     </div>

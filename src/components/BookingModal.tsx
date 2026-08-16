@@ -88,8 +88,8 @@ export const BookingModal: React.FC<BookingModalProps> = ({
 
   // Submit Booking & Payment
   const handleSubmitBooking = async () => {
-    if (!customerName || !customerPhone || !pickupHotel) {
-      alert('กรุณากรอกข้อมูล ชื่อ-นามสกุล, เบอร์โทรศัพท์ และ โรงแรมที่พัก ให้ครบถ้วน');
+    if (!customerName.trim() || !customerPhone.trim() || !pickupHotel.trim()) {
+      alert('โรงแรมที่พักห้ามเป็นค่าว่าง: กรุณากรอกข้อมูล ชื่อ-นามสกุล, เบอร์โทรศัพท์ และ โรงแรมที่พัก ให้ครบถ้วน');
       return;
     }
 
@@ -376,15 +376,18 @@ export const BookingModal: React.FC<BookingModalProps> = ({
                 <div>
                   <label className="font-bold text-slate-800 text-xs block mb-1 flex items-center gap-1.5">
                     <MapPin className="w-4 h-4 text-cyan-600" />
-                    <span>{t.pickupHotel} *</span>
+                    <span>{t.pickupHotel}</span>
+                    <span className="text-rose-600 font-extrabold">* (จำเป็นต้องระบุ)</span>
                   </label>
                   <input
                     type="text"
                     required
-                    placeholder="เช่น โรงแรม Hilton Phuket Arcadia, Patong Beach"
+                    placeholder="เช่น โรงแรม Hilton Phuket Arcadia, Patong Beach (จำเป็นต้องระบุ)"
                     value={pickupHotel}
                     onChange={(e) => setPickupHotel(e.target.value)}
-                    className="w-full bg-slate-50 border border-slate-300 text-slate-900 rounded-xl px-3.5 py-2.5 text-sm focus:ring-2 focus:ring-cyan-500 focus:outline-none"
+                    className={`w-full bg-slate-50 border rounded-xl px-3.5 py-2.5 text-sm focus:ring-2 focus:ring-cyan-500 focus:outline-none ${
+                      !pickupHotel.trim() ? 'border-amber-400 bg-amber-50/30' : 'border-slate-300'
+                    }`}
                   />
                 </div>
 
@@ -437,7 +440,7 @@ export const BookingModal: React.FC<BookingModalProps> = ({
                 <input
                   type="text"
                   required
-                  placeholder="เช่น คุณณัฐพล วงศ์สว่าง"
+                  placeholder="เช่น คุณสมชาย ใจดี หรือ Mr.John Carter"
                   value={customerName}
                   onChange={(e) => setCustomerName(e.target.value)}
                   className="w-full bg-slate-50 border border-slate-300 text-slate-900 rounded-xl px-3.5 py-2.5 text-sm focus:ring-2 focus:ring-cyan-500"
@@ -453,7 +456,7 @@ export const BookingModal: React.FC<BookingModalProps> = ({
                   <input
                     type="tel"
                     required
-                    placeholder="062-681-6494"
+                    placeholder="061-123-4567"
                     value={customerPhone}
                     onChange={(e) => setCustomerPhone(e.target.value)}
                     className="w-full bg-slate-50 border border-slate-300 text-slate-900 rounded-xl px-3.5 py-2.5 text-sm focus:ring-2 focus:ring-cyan-500"
@@ -508,44 +511,63 @@ export const BookingModal: React.FC<BookingModalProps> = ({
           {/* STEP 3: PromptPay QR Payment & Slip Attachment */}
           {step === 3 && (
             <div className="space-y-5 animate-in fade-in">
-              {/* QR Code Container */}
-              <div className="bg-gradient-to-br from-slate-900 to-slate-950 text-white p-5 rounded-3xl border border-slate-800 text-center shadow-xl relative overflow-hidden">
-                <div className="absolute top-0 right-0 w-32 h-32 bg-cyan-500/10 rounded-full blur-2xl" />
-
-                <div className="inline-flex items-center gap-2 bg-cyan-500/20 text-cyan-300 px-3 py-1 rounded-full text-xs font-bold mb-3 border border-cyan-500/30">
-                  <QrCode className="w-4 h-4" />
-                  <span>{t.promptPayPayment}</span>
-                </div>
-
-                <p className="text-xs text-slate-300 mb-3">
-                  {t.scanToPay}
-                </p>
-
-                {/* Exact Amount Banner */}
-                <div className="bg-slate-800/90 border border-slate-700 p-3 rounded-2xl mb-4 max-w-sm mx-auto">
-                  <span className="text-[11px] text-slate-400 block">{t.exactAmountToPay}</span>
-                  <span className="text-3xl font-extrabold text-amber-400 tracking-tight">
-                    ฿{totalAmount.toLocaleString()}
-                  </span>
-                  <span className="text-[10px] text-slate-400 block mt-0.5">
-                    (ผู้ใหญ่ {adults} ท่าน x ฿{tour.priceAdult.toLocaleString()} {children > 0 ? `+ เด็ก ${children} ท่าน x ฿${tour.priceChild.toLocaleString()}` : ''})
-                  </span>
-                </div>
-
-                {/* QR Display */}
-                <div className="bg-white p-3 rounded-2xl inline-block shadow-2xl border-4 border-cyan-400 mb-3">
-                  {qrCodeDataUrl ? (
-                    <img src={qrCodeDataUrl} alt="PromptPay QR Code" className="w-48 h-48 mx-auto" />
-                  ) : (
-                    <div className="w-48 h-48 flex items-center justify-center text-slate-400 text-xs">
-                      <Loader2 className="w-8 h-8 animate-spin text-cyan-500" />
+              {/* PromptPay Official Redesigned Card */}
+              <div className="bg-slate-900 text-white rounded-3xl overflow-hidden shadow-2xl border border-slate-800">
+                {/* Official Header Banner */}
+                <div className="bg-gradient-to-r from-[#003B5C] via-[#004B75] to-[#003B5C] p-3.5 text-center border-b border-white/10">
+                  <div className="flex items-center justify-center gap-2 mb-1">
+                    <div className="bg-white text-[#003B5C] px-2.5 py-0.5 rounded-md font-black text-xs tracking-wider uppercase shadow-2xs">
+                      PROMPTPAY
                     </div>
-                  )}
+                    <span className="text-xs font-bold text-slate-200">| พร้อมเพย์ Official</span>
+                  </div>
+                  <p className="text-[11px] text-slate-300 font-medium">
+                    สแกน QR Code ด้วยแอปพลิเคชันทุกธนาคารเพื่อชำระเงิน
+                  </p>
                 </div>
 
-                <div className="text-xs space-y-1 text-slate-300">
-                  <p className="font-bold text-white">{settings.promptPayName}</p>
-                  <p className="text-cyan-300 font-mono text-sm">พร้อมเพย์: {settings.promptPayId}</p>
+                <div className="p-5 text-center space-y-4">
+                  {/* Centered White QR Code Box */}
+                  <div className="bg-white p-4 rounded-2xl inline-block shadow-xl border-2 border-teal-500/30">
+                    {qrCodeDataUrl ? (
+                      <img
+                        src={qrCodeDataUrl}
+                        alt="PromptPay QR Code"
+                        className="w-52 h-52 sm:w-60 sm:h-60 mx-auto object-contain"
+                      />
+                    ) : (
+                      <div className="w-52 h-52 sm:w-60 sm:h-60 flex items-center justify-center text-slate-400">
+                        <Loader2 className="w-8 h-8 animate-spin text-teal-600" />
+                      </div>
+                    )}
+                    <span className="text-[10px] font-bold text-slate-500 block mt-2 tracking-wide uppercase">
+                      • PromptPay Dynamic QR Code •
+                    </span>
+                  </div>
+
+                  {/* Payment Amount & Account Details */}
+                  <div className="bg-slate-800/80 border border-slate-700/80 rounded-2xl p-4 max-w-md mx-auto space-y-3 text-center">
+                    <div>
+                      <span className="text-xs text-slate-400 block font-medium">{t.exactAmountToPay}</span>
+                      <div className="flex items-center justify-center gap-2.5 mt-0.5">
+                        <span className="text-3xl sm:text-4xl font-black text-amber-400 tracking-tight">
+                          ฿{totalAmount.toLocaleString()}
+                        </span>
+                      </div>
+                      <span className="text-[10px] text-slate-400 block mt-1">
+                        (ผู้ใหญ่ {adults} ท่าน x ฿{tour.priceAdult.toLocaleString()} {children > 0 ? `+ เด็ก ${children} ท่าน x ฿${tour.priceChild.toLocaleString()}` : ''})
+                      </span>
+                    </div>
+
+                    <div className="pt-2.5 border-t border-slate-700/70 text-xs text-slate-300 space-y-1">
+                      <p className="font-bold text-white">
+                        ชื่อบัญชี: <span className="text-teal-300">{(settings.promptPayName && !settings.promptPayName.includes('บริษัท')) ? settings.promptPayName : 'พรทิพย์ แดงทัด'}</span>
+                      </p>
+                      <div className="flex items-center justify-center gap-2 text-slate-300 text-[11px] pt-0.5">
+                        <span>เลขพร้อมเพย์: <b className="text-white font-mono text-xs">{settings.promptPayId}</b></span>
+                      </div>
+                    </div>
+                  </div>
                 </div>
               </div>
 
@@ -556,12 +578,6 @@ export const BookingModal: React.FC<BookingModalProps> = ({
                     <Upload className="w-4 h-4 text-cyan-600" />
                     <span>{t.uploadSlip} *</span>
                   </span>
-                  <button
-                    onClick={handleSimulateSlip}
-                    className="text-[11px] text-cyan-700 bg-cyan-50 border border-cyan-200 px-2.5 py-1 rounded-lg hover:bg-cyan-100 transition font-semibold"
-                  >
-                    🧪 จำลองแนบสลิปโอนเงิน
-                  </button>
                 </label>
 
                 <div className="border-2 border-dashed border-slate-300 hover:border-cyan-500 rounded-2xl p-4 text-center bg-slate-50 transition relative">
@@ -635,8 +651,8 @@ export const BookingModal: React.FC<BookingModalProps> = ({
           {step === 1 && (
             <button
               onClick={() => {
-                if (!pickupHotel) {
-                  alert('กรุณากรอกชื่อโรงแรม/ที่พัก');
+                if (!pickupHotel || !pickupHotel.trim()) {
+                  alert('โรงแรมที่พักห้ามเป็นค่าว่าง: กรุณากรอกชื่อโรงแรม/ที่พัก เพื่อใช้สำหรับการจัดรถรับ-ส่ง');
                   return;
                 }
                 setStep(2);

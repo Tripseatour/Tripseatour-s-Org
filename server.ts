@@ -97,6 +97,11 @@ async function loadStateFromSupabase() {
         };
       }
     }
+    // Ensure promptPayName is set to พรทิพย์ แดงทัด if missing or previously company name
+    if (!settings.promptPayName || settings.promptPayName.includes('บริษัท')) {
+      settings.promptPayName = 'พรทิพย์ แดงทัด';
+      await persistState('settings');
+    }
   } catch (e) {
     console.warn('Could not load settings from Supabase:', e);
   }
@@ -507,15 +512,17 @@ app.post('/api/bookings', async (req, res) => {
   const {
     tourId, customerName, customerEmail, customerPhone, customerLineId,
     nationality, travelDate, pickupHotel, pickupZone, roomNumber, specialRequests,
-    adults, children, infants, totalAmount
+    adults, children, infants, totalAmount, slipUrl, paymentStatus
   } = req.body;
 
   const tour = tours.find(t => t.id === tourId);
   const refNum = Math.floor(1000 + Math.random() * 9000);
   const bookingRef = `TST-${new Date().toISOString().slice(0, 7).replace('-', '')}-${refNum}`;
 
+  const hasSlip = Boolean(slipUrl && slipUrl.trim().length > 0);
+
   const newBooking: Booking = {
-    id: `bk-${Date.now()}`,
+    id: `bk-${Date.now()}-${Math.floor(Math.random() * 1000)}`,
     bookingRef,
     tourId,
     tourTitle: tour ? tour.title.TH : 'ทัวร์ภูเก็ต',
@@ -536,8 +543,10 @@ app.post('/api/bookings', async (req, res) => {
     totalAmount: Number(totalAmount) || 0,
     paymentMethod: 'promptpay',
     promptPayIdUsed: settings.promptPayId,
-    paymentStatus: 'pending',
+    paymentStatus: hasSlip ? 'slip_uploaded' : (paymentStatus || 'pending'),
     orderStatus: 'pending',
+    slipUrl: hasSlip ? slipUrl : undefined,
+    slipUploadedAt: hasSlip ? new Date().toISOString() : undefined,
     createdAt: new Date().toISOString(),
     lineNotifySent: false
   };
@@ -566,16 +575,17 @@ app.post('/api/bookings', async (req, res) => {
   }
 
   // LINE Notification Alert
-  const lineMsg = `\n🆕 [มีคำสั่งจองใหม่!] ${bookingRef}\n` +
+  const lineMsg = `\n🆕 [มีคำสั่งจองใหม่${hasSlip ? ' (แนบสลิปแล้ว)' : ''}!] ${bookingRef}\n` +
     `📍 ทัวร์: ${newBooking.tourTitle}\n` +
     `👤 ลูกค้า: ${customerName} (${customerPhone})\n` +
     `📅 วันเดินทาง: ${travelDate}\n` +
     `🏨 โรงแรม: ${pickupHotel}\n` +
     `👥 จำนวน: ผู้ใหญ่ ${adults} / เด็ก ${children}\n` +
     `💰 ยอดรวม: ${totalAmount.toLocaleString()} บาท (PromptPay QR)\n` +
+    `📄 สลิปโอนเงิน: ${hasSlip ? 'แนบสลิปเรียบร้อย' : 'รอแนบสลิป'}\n` +
     `🌐 เว็บไซต์: ${SITE_URL}`;
 
-  await sendLineNotification(lineMsg, bookingRef, 'NEW_ORDER', newBooking.tourImage);
+  await sendLineNotification(lineMsg, bookingRef, hasSlip ? 'NEW_ORDER' : 'NEW_ORDER', (hasSlip ? slipUrl : undefined) || newBooking.tourImage);
   newBooking.lineNotifySent = true;
 
   await persistState('bookings');
@@ -804,7 +814,11 @@ app.get('/api/reviews', (req, res) => {
 });
 
 app.post('/api/reviews', async (req, res) => {
-  const { tourId, userName, rating, comment, nationality, photo } = req.body;
+  const { tourId, userName, rating, comment, nationality, photo, photos } = req.body;
+  const photoList = Array.isArray(photos) && photos.length > 0 
+    ? photos 
+    : (photo ? [photo] : undefined);
+
   const newRev: Review = {
     id: `rev-${Date.now()}`,
     tourId: tourId || (tours[0]?.id || 'tour-1'),
@@ -814,7 +828,7 @@ app.post('/api/reviews', async (req, res) => {
     comment: comment || '',
     date: new Date().toISOString().split('T')[0],
     verifiedBooking: true,
-    photos: photo ? [photo] : undefined,
+    photos: photoList,
     isApproved: true
   };
   reviews.unshift(newRev);
@@ -1200,6 +1214,163 @@ app.delete(['/api/admin/google-emails', '/api/admin/google-accounts', '/api/admi
   res.json({ success: true, adminGoogleEmails: settings.adminGoogleEmails });
 });
 
+// Live Chat Support API Store
+export interface LiveChatMessage {
+  id: string;
+  sender: 'customer' | 'admin' | 'system';
+  senderName?: string;
+  text: string;
+  imageUrl?: string;
+  timestamp: string;
+}
+
+export interface LiveChatSession {
+  id: string;
+  customerName: string;
+  customerPhone?: string;
+  unreadCount: number;
+  status: 'active' | 'closed';
+  createdAt: string;
+  updatedAt: string;
+  messages: LiveChatMessage[];
+}
+
+let liveChatSessions: LiveChatSession[] = [
+  {
+    id: 'session-demo-1',
+    customerName: 'คุณสมชาย (สนใจทัวร์พีพี)',
+    customerPhone: '081-234-5678',
+    unreadCount: 1,
+    status: 'active',
+    createdAt: new Date(Date.now() - 1800000).toISOString(),
+    updatedAt: new Date().toISOString(),
+    messages: [
+      {
+        id: 'm1',
+        sender: 'customer',
+        senderName: 'คุณสมชาย',
+        text: 'สวัสดีครับ สอบถามทัวร์เกาะพีพีวันเสาร์นี้ยังมีที่ว่างไหมครับ?',
+        timestamp: new Date(Date.now() - 1800000).toLocaleTimeString('th-TH', { hour: '2-digit', minute: '2-digit' })
+      },
+      {
+        id: 'm2',
+        sender: 'admin',
+        senderName: 'แอดมิน TripSea Tour',
+        text: 'สวัสดีค่ะคุณสมชาย! วันเสาร์นี้ยังมีที่ว่างสำหรับเรือสปีดโบ๊ท 4 ท่านค่ะ สามารถกดจองผ่านหน้าเว็บได้เลยนะคะ',
+        timestamp: new Date(Date.now() - 1200000).toLocaleTimeString('th-TH', { hour: '2-digit', minute: '2-digit' })
+      },
+      {
+        id: 'm3',
+        sender: 'customer',
+        senderName: 'คุณสมชาย',
+        text: 'ขอบคุณครับ กำลังเลือกแพ็กเกจบนหน้าเว็บเลยครับ',
+        timestamp: new Date().toLocaleTimeString('th-TH', { hour: '2-digit', minute: '2-digit' })
+      }
+    ]
+  }
+];
+
+// --- Live Chat Endpoints ---
+app.get('/api/livechat/sessions', (req, res) => {
+  res.json(liveChatSessions);
+});
+
+app.get('/api/livechat/sessions/:id', (req, res) => {
+  const session = liveChatSessions.find(s => s.id === req.params.id);
+  if (session) {
+    res.json(session);
+  } else {
+    res.status(404).json({ error: 'Session not found' });
+  }
+});
+
+app.post('/api/livechat/sessions', (req, res) => {
+  const { sessionId, customerName, customerPhone } = req.body;
+  let session = liveChatSessions.find(s => s.id === sessionId);
+  if (!session) {
+    session = {
+      id: sessionId || `session-${Date.now()}`,
+      customerName: customerName || 'นักท่องเที่ยวบนหน้าเว็บ',
+      customerPhone: customerPhone || '',
+      unreadCount: 0,
+      status: 'active',
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+      messages: [
+        {
+          id: `msg-welcome-${Date.now()}`,
+          sender: 'admin',
+          senderName: 'แอดมิน TripSea Tour',
+          text: 'สวัสดีค่ะ! ยินดีต้อนรับสู่แชทสดกับเจ้าหน้าที่ Trip Sea Tour Phuket ค่ะ 🌊\n\nมีข้อสงสัยหรือต้องการสอบถามทัวร์ด่วน พิมพ์ข้อความไว้ได้เลยค่ะ แอดมินพร้อมตอบกลับทันทีนะคะ!',
+          timestamp: new Date().toLocaleTimeString('th-TH', { hour: '2-digit', minute: '2-digit' })
+        }
+      ]
+    };
+    liveChatSessions.unshift(session);
+  } else if (customerName && customerName !== session.customerName) {
+    session.customerName = customerName;
+  }
+  res.json(session);
+});
+
+app.post('/api/livechat/send', (req, res) => {
+  const { sessionId, sender, senderName, text, imageUrl } = req.body;
+  let session = liveChatSessions.find(s => s.id === sessionId);
+
+  if (!session) {
+    session = {
+      id: sessionId || `session-${Date.now()}`,
+      customerName: senderName || 'นักท่องเที่ยวบนหน้าเว็บ',
+      unreadCount: 0,
+      status: 'active',
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+      messages: []
+    };
+    liveChatSessions.unshift(session);
+  }
+
+  const newMsg: LiveChatMessage = {
+    id: `msg-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`,
+    sender: sender || 'customer',
+    senderName: senderName || (sender === 'admin' ? 'แอดมิน TripSea Tour' : 'คุณลูกค้า'),
+    text: text || '',
+    imageUrl,
+    timestamp: new Date().toLocaleTimeString('th-TH', { hour: '2-digit', minute: '2-digit' })
+  };
+
+  session.messages.push(newMsg);
+  session.updatedAt = new Date().toISOString();
+
+  if (sender === 'customer') {
+    session.unreadCount += 1;
+  } else if (sender === 'admin') {
+    session.unreadCount = 0;
+  }
+
+  res.json({ success: true, message: newMsg, session });
+});
+
+app.post('/api/livechat/read/:id', (req, res) => {
+  const session = liveChatSessions.find(s => s.id === req.params.id);
+  if (session) {
+    session.unreadCount = 0;
+    res.json({ success: true, session });
+  } else {
+    res.status(404).json({ error: 'Session not found' });
+  }
+});
+
+app.post('/api/livechat/close/:id', (req, res) => {
+  const session = liveChatSessions.find(s => s.id === req.params.id);
+  if (session) {
+    session.status = session.status === 'active' ? 'closed' : 'active';
+    res.json({ success: true, session });
+  } else {
+    res.status(404).json({ error: 'Session not found' });
+  }
+});
+
 // --- Customers ---
 app.get('/api/customers', (req, res) => {
   res.json(customers);
@@ -1416,153 +1587,152 @@ app.get(['/api/ticket-image', '/api/ticket-image/:ref'], async (req, res) => {
   const remark = (booking?.specialRequests || booking?.notes || '-').slice(0, 60);
 
   const svg = `
-  <svg xmlns="http://www.w3.org/2000/svg" width="900" height="1280" viewBox="0 0 900 1280" style="background:#f1f5f9; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;">
+  <svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" width="920" height="650" viewBox="0 0 920 650" style="background:#f8fafc; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;">
     <defs>
-      <filter id="cardShadow" x="-5%" y="-5%" width="110%" height="110%">
-        <feDropShadow dx="0" dy="4" stdDeviation="8" flood-color="#000000" flood-opacity="0.12" />
+      <filter id="cardShadow" x="-3%" y="-3%" width="106%" height="106%">
+        <feDropShadow dx="0" dy="4" stdDeviation="6" flood-color="#000000" flood-opacity="0.12" />
       </filter>
     </defs>
 
-    <!-- White Ticket Card -->
-    <rect x="25" y="25" width="850" height="1230" rx="16" fill="#ffffff" stroke="#0f172a" stroke-width="3" filter="url(#cardShadow)" />
+    <!-- White Ticket Card (A5 Landscape) -->
+    <rect x="15" y="15" width="890" height="620" rx="12" fill="#ffffff" stroke="#0f172a" stroke-width="3" filter="url(#cardShadow)" />
 
     <!-- Top Header -->
-    <g transform="translate(45, 45)">
+    <g transform="translate(35, 30)">
       <!-- Logo Box -->
-      <rect x="0" y="0" width="70" height="70" rx="14" fill="#0d3b66" stroke="#0f172a" stroke-width="2" />
-      <text x="35" y="44" fill="#38bdf8" font-size="28" font-weight="900" text-anchor="middle">TST</text>
+      <rect x="0" y="0" width="60" height="60" rx="12" fill="#0d3b66" stroke="#0f172a" stroke-width="2" />
+      <text x="30" y="38" fill="#38bdf8" font-size="22" font-weight="900" text-anchor="middle">TST</text>
       
       <!-- Company Text -->
-      <text x="85" y="28" fill="#0d3b66" font-size="22" font-weight="900" letter-spacing="0.5">Trip Sea Tour Phuket Co., Ltd.</text>
+      <text x="75" y="24" fill="#0d3b66" font-size="18" font-weight="900" letter-spacing="0.5">Trip Sea Tour Phuket Co., Ltd.</text>
       
       <!-- License Badge -->
-      <rect x="420" y="10" width="125" height="24" rx="6" fill="#ccfbf1" stroke="#5eead4" stroke-width="1" />
-      <text x="482" y="26" fill="#115e59" font-size="11" font-weight="800" text-anchor="middle">ททท. 33/11100</text>
+      <rect x="360" y="8" width="115" height="20" rx="5" fill="#fef3c7" stroke="#f59e0b" stroke-width="1" />
+      <text x="417" y="22" fill="#78350f" font-size="10" font-weight="800" text-anchor="middle">ททท. 33/11100</text>
       
-      <text x="85" y="48" fill="#475569" font-size="12" font-weight="500">ภูเก็ต ประเทศไทย (Phuket, Thailand)</text>
-      <text x="85" y="66" fill="#475569" font-size="12" font-weight="500">Tel. (+66) 97 924 1399 / (+66) 62 681 6494 | Email: tripseatourphuket@gmail.com</text>
+      <text x="75" y="42" fill="#475569" font-size="10" font-weight="500">ภูเก็ต ประเทศไทย (Phuket, Thailand)</text>
+      <text x="75" y="56" fill="#475569" font-size="10" font-weight="500">Tel. (+66) 97 924 1399 / (+66) 62 681 6494 | Email: tripseatourphuket@gmail.com</text>
 
       <!-- Ticket Ref Header Right -->
-      <text x="800" y="24" fill="#64748b" font-size="11" font-weight="bold" text-anchor="end">OFFICIAL E-TICKET</text>
-      <text x="800" y="52" fill="#0f766e" font-size="20" font-weight="900" font-family="monospace" text-anchor="end">${ref}</text>
+      <rect x="670" y="2" width="180" height="22" rx="4" fill="#0f172a" />
+      <text x="760" y="17" fill="#ffffff" font-size="9.5" font-weight="bold" text-anchor="middle">OFFICIAL E-TICKET</text>
+      <rect x="670" y="24" width="180" height="34" rx="4" fill="#f0fdfa" stroke="#0f172a" stroke-width="1.5" />
+      <text x="760" y="48" fill="#0f766e" font-size="17" font-weight="900" font-family="monospace" text-anchor="middle">${ref}</text>
     </g>
 
     <!-- Header Divider Line -->
-    <line x1="45" y1="130" x2="855" y2="130" stroke="#0f172a" stroke-width="2.5" />
+    <line x1="35" y1="98" x2="885" y2="98" stroke="#0f172a" stroke-width="2" />
 
-    <!-- Table Grid -->
-    <g transform="translate(45, 145)">
-      <!-- Outer Table Border -->
-      <rect x="0" y="0" width="810" height="660" fill="#ffffff" stroke="#0f172a" stroke-width="2" />
+    <!-- Main Layout Grid -->
+    <!-- Left Panel: Booking Details (Width 565px) -->
+    <g transform="translate(35, 108)">
+      <rect x="0" y="0" width="565" height="425" rx="8" fill="#ffffff" stroke="#0f172a" stroke-width="2" />
 
-      <!-- Row 1: Program & Booking Date -->
-      <line x1="0" y1="70" x2="810" y2="70" stroke="#0f172a" stroke-width="1.5" />
-      <line x1="200" y1="0" x2="200" y2="70" stroke="#0f172a" stroke-width="1.5" />
-      <line x1="500" y1="0" x2="500" y2="70" stroke="#0f172a" stroke-width="1.5" />
-      <line x1="660" y1="0" x2="660" y2="70" stroke="#0f172a" stroke-width="1.5" />
-      <rect x="0" y="0" width="200" height="70" fill="#f8fafc" />
-      <rect x="500" y="0" width="160" height="70" fill="#f8fafc" />
-      <text x="15" y="40" fill="#1e293b" font-size="13" font-weight="bold">Program (โปรแกรมทัวร์):</text>
-      <text x="215" y="42" fill="#0f172a" font-size="14" font-weight="bold">${tourTitle}</text>
-      <text x="515" y="40" fill="#1e293b" font-size="13" font-weight="bold">Booking Date (วันที่จอง):</text>
-      <text x="675" y="42" fill="#0f172a" font-size="14" font-weight="600">${bookingDate}</text>
+      <!-- Program Banner -->
+      <rect x="0" y="0" width="565" height="48" rx="7 7 0 0" fill="#0f766e" />
+      <text x="15" y="18" fill="#99f6e4" font-size="9" font-weight="bold">TOUR PROGRAM (โปรแกรมทัวร์):</text>
+      <text x="15" y="38" fill="#ffffff" font-size="14" font-weight="900">${tourTitle}</text>
 
-      <!-- Row 2: Booking No & Pick up Time -->
-      <line x1="0" y1="135" x2="810" y2="135" stroke="#0f172a" stroke-width="1.5" />
-      <line x1="200" y1="70" x2="200" y2="135" stroke="#0f172a" stroke-width="1.5" />
-      <line x1="500" y1="70" x2="500" y2="135" stroke="#0f172a" stroke-width="1.5" />
-      <line x1="660" y1="70" x2="660" y2="135" stroke="#0f172a" stroke-width="1.5" />
-      <rect x="0" y="70" width="200" height="65" fill="#f8fafc" />
-      <rect x="500" y="70" width="160" height="65" fill="#f8fafc" />
-      <text x="15" y="108" fill="#1e293b" font-size="13" font-weight="bold">Booking No (เลขบุ๊คกิ้ง):</text>
-      <text x="215" y="110" fill="#e11d48" font-size="16" font-weight="900" font-family="monospace">${ref}</text>
-      <text x="515" y="108" fill="#1e293b" font-size="13" font-weight="bold">Pick up Time (เวลารับ):</text>
-      <text x="675" y="110" fill="#e11d48" font-size="15" font-weight="900">${pickupTime}</text>
+      <!-- Row 1: Guest Name & Mobile -->
+      <line x1="0" y1="96" x2="565" y2="96" stroke="#0f172a" stroke-width="1.5" />
+      <line x1="282" y1="48" x2="282" y2="96" stroke="#0f172a" stroke-width="1.5" />
+      <text x="15" y="66" fill="#64748b" font-size="9" font-weight="bold">GUEST NAME (ชื่อลูกค้า):</text>
+      <text x="15" y="85" fill="#0f172a" font-size="13" font-weight="bold">${customerName}</text>
+      <text x="295" y="66" fill="#64748b" font-size="9" font-weight="bold">MOBILE NO. (เบอร์โทร):</text>
+      <text x="295" y="85" fill="#0f172a" font-size="13" font-weight="bold" font-family="monospace">${customerPhone}</text>
 
-      <!-- Row 3: Tour Date & Nation Ality -->
-      <line x1="0" y1="200" x2="810" y2="200" stroke="#0f172a" stroke-width="1.5" />
-      <line x1="200" y1="135" x2="200" y2="200" stroke="#0f172a" stroke-width="1.5" />
-      <line x1="500" y1="135" x2="500" y2="200" stroke="#0f172a" stroke-width="1.5" />
-      <line x1="660" y1="135" x2="660" y2="200" stroke="#0f172a" stroke-width="1.5" />
-      <rect x="0" y="135" width="200" height="65" fill="#f8fafc" />
-      <rect x="500" y="135" width="160" height="65" fill="#f8fafc" />
-      <text x="15" y="165" fill="#1e293b" font-size="13" font-weight="bold">Tour Date (วันที่ไป):</text>
-      <text x="15" y="185" fill="#64748b" font-size="11">出发日期:</text>
-      <text x="215" y="175" fill="#e11d48" font-size="16" font-weight="900">${travelDate}</text>
-      <text x="515" y="173" fill="#1e293b" font-size="13" font-weight="bold">Nation Ality (สัญชาติ):</text>
-      <text x="675" y="173" fill="#0f172a" font-size="14" font-weight="600">${nationality}</text>
+      <!-- Row 2: Tour Date & Pickup Time (Highlight) -->
+      <rect x="0" y="96" width="282" height="54" fill="#fff1f2" />
+      <rect x="282" y="96" width="283" height="54" fill="#fffbeb" />
+      <line x1="0" y1="150" x2="565" y2="150" stroke="#0f172a" stroke-width="1.5" />
+      <line x1="282" y1="96" x2="282" y2="150" stroke="#0f172a" stroke-width="1.5" />
+      <text x="15" y="114" fill="#9f1239" font-size="9.5" font-weight="900">TOUR DATE (วันที่เดินทาง):</text>
+      <text x="15" y="138" fill="#e11d48" font-size="17" font-weight="900" font-family="monospace">${travelDate}</text>
+      <text x="295" y="114" fill="#92400e" font-size="9.5" font-weight="900">PICKUP TIME (เวลารับ):</text>
+      <text x="295" y="138" fill="#d97706" font-size="15" font-weight="900">${pickupTime}</text>
 
-      <!-- Row 4: Guest Name & Mobile No -->
-      <line x1="0" y1="265" x2="810" y2="265" stroke="#0f172a" stroke-width="1.5" />
-      <line x1="200" y1="200" x2="200" y2="265" stroke="#0f172a" stroke-width="1.5" />
-      <line x1="500" y1="200" x2="500" y2="265" stroke="#0f172a" stroke-width="1.5" />
-      <line x1="660" y1="200" x2="660" y2="265" stroke="#0f172a" stroke-width="1.5" />
-      <rect x="0" y="200" width="200" height="65" fill="#f8fafc" />
-      <rect x="500" y="200" width="160" height="65" fill="#f8fafc" />
-      <text x="15" y="238" fill="#1e293b" font-size="13" font-weight="bold">Guest Name (ชื่อลูกค้า):</text>
-      <text x="215" y="240" fill="#0f172a" font-size="15" font-weight="bold">${customerName}</text>
-      <text x="515" y="238" fill="#1e293b" font-size="13" font-weight="bold">Mobile No (เบอร์โทร):</text>
-      <text x="675" y="240" fill="#0f172a" font-size="15" font-weight="bold" font-family="monospace">${customerPhone}</text>
+      <!-- Row 3: Booking Date & Nationality -->
+      <line x1="0" y1="198" x2="565" y2="198" stroke="#0f172a" stroke-width="1.5" />
+      <line x1="282" y1="150" x2="282" y2="198" stroke="#0f172a" stroke-width="1.5" />
+      <text x="15" y="168" fill="#64748b" font-size="9" font-weight="bold">BOOKING DATE (วันที่จอง):</text>
+      <text x="15" y="187" fill="#1e293b" font-size="12" font-weight="600">${bookingDate}</text>
+      <text x="295" y="168" fill="#64748b" font-size="9" font-weight="bold">NATIONALITY (สัญชาติ):</text>
+      <text x="295" y="187" fill="#1e293b" font-size="12" font-weight="600">${nationality}</text>
 
-      <!-- Row 5: PAX Passengers & Total -->
-      <line x1="0" y1="330" x2="810" y2="330" stroke="#0f172a" stroke-width="1.5" />
-      <line x1="200" y1="265" x2="200" y2="330" stroke="#0f172a" stroke-width="1.5" />
-      <rect x="0" y="265" width="200" height="65" fill="#f8fafc" />
-      <text x="15" y="303" fill="#1e293b" font-size="13" font-weight="bold">PAX (จำนวนคน):</text>
-      <text x="215" y="303" fill="#0f172a" font-size="14" font-weight="600">Adult(ผู้ใหญ่): <tspan font-weight="bold" font-size="16">${adults}</tspan>   Child(เด็ก): <tspan font-weight="bold" font-size="16">${children}</tspan>   Infant(ทารก): <tspan font-weight="bold" font-size="16">${infants}</tspan></text>
-      <text x="610" y="303" fill="#047857" font-size="15" font-weight="900">ยอดชำระ: ฿${totalAmount}</text>
+      <!-- Row 4: Pick up Hotel -->
+      <line x1="0" y1="250" x2="565" y2="250" stroke="#0f172a" stroke-width="1.5" />
+      <text x="15" y="218" fill="#64748b" font-size="9" font-weight="bold">PICK UP HOTEL (รับโรงแรม):</text>
+      <text x="15" y="238" fill="#0f172a" font-size="12.5" font-weight="bold">🏨 ${pickupHotel}</text>
 
-      <!-- Row 6: Pick up Hotel -->
-      <line x1="0" y1="410" x2="810" y2="410" stroke="#0f172a" stroke-width="1.5" />
-      <line x1="200" y1="330" x2="200" y2="410" stroke="#0f172a" stroke-width="1.5" />
-      <rect x="0" y="330" width="200" height="80" fill="#f8fafc" />
-      <text x="15" y="375" fill="#1e293b" font-size="13" font-weight="bold">Pick up Hotel (รับโรงแรม):</text>
-      <text x="215" y="375" fill="#0f172a" font-size="14" font-weight="600">${pickupHotel}</text>
+      <!-- Row 5: Send Back Hotel -->
+      <line x1="0" y1="302" x2="565" y2="302" stroke="#0f172a" stroke-width="1.5" />
+      <text x="15" y="270" fill="#64748b" font-size="9" font-weight="bold">SEND BACK HOTEL (ส่งกลับโรงแรม):</text>
+      <text x="15" y="290" fill="#1e293b" font-size="12" font-weight="600">🚐 ${sendBackHotel}</text>
 
-      <!-- Row 7: Send back Hotel -->
-      <line x1="0" y1="490" x2="810" y2="490" stroke="#0f172a" stroke-width="1.5" />
-      <line x1="200" y1="410" x2="200" y2="490" stroke="#0f172a" stroke-width="1.5" />
-      <rect x="0" y="410" width="200" height="80" fill="#f8fafc" />
-      <text x="15" y="455" fill="#1e293b" font-size="13" font-weight="bold">Send back (ส่งกลับ):</text>
-      <text x="215" y="455" fill="#0f172a" font-size="14" font-weight="600">${sendBackHotel}</text>
-
-      <!-- Row 8: Remark -->
-      <line x1="0" y1="560" x2="810" y2="560" stroke="#0f172a" stroke-width="1.5" />
-      <line x1="200" y1="490" x2="200" y2="560" stroke="#0f172a" stroke-width="1.5" />
-      <rect x="0" y="490" width="200" height="70" fill="#f8fafc" />
-      <text x="15" y="530" fill="#1e293b" font-size="13" font-weight="bold">Remark (หมายเหตุ):</text>
-      <text x="215" y="530" fill="#475569" font-size="13" font-weight="500">${remark}</text>
-
-      <!-- Row 9: Multi-Lingual Cautions & Conditions -->
-      <rect x="0" y="560" width="810" height="100" fill="#fafafa" />
-      
-      <!-- Thai Cautions (Red) -->
-      <text x="15" y="582" fill="#dc2626" font-size="10.5" font-weight="bold">1. กรุณารอที่ล็อบบี้โรงแรมตามเวลานัด คนขับจะรอไม่เกิน 5 นาที หากมาช้าและตกรถจะไม่สามารถคืนเงินหรือเลื่อนวันได้</text>
-      <text x="15" y="598" fill="#dc2626" font-size="10.5" font-weight="bold">2. โปรดคาดเข็มขัดนิรภัยตลอดเวลาบนรถ | 3. หากเกินเวลานัด 20 นาทีไม่พบคนขับ โทร (+66) 97 924 1399</text>
-      <text x="15" y="614" fill="#dc2626" font-size="10.5" font-weight="bold">4. ห้ามสตรีมีครรภ์ ผู้ป่วยโรคหัวใจ โรคความดันรุนแรง และโรคกระดูกสันหลังเข้าร่วมทริปทางทะเล</text>
-
-      <!-- Chinese & English -->
-      <text x="15" y="632" fill="#334155" font-size="9.5" font-weight="bold">重要提醒: 请按时在酒店大堂等候，司机最多等待5分钟。严禁孕妇、心脏病患者参加出海行程。</text>
-      <text x="15" y="648" fill="#334155" font-size="9.5">Cautions: Please stand by at hotel lobby on time. Driver waits max 5 mins. Fasten seat belts.</text>
+      <!-- Row 6: Remarks -->
+      <rect x="0" y="302" width="565" height="123" rx="0 0 7 7" fill="#f8fafc" />
+      <text x="15" y="322" fill="#64748b" font-size="9" font-weight="bold">REMARKS (หมายเหตุ):</text>
+      <text x="15" y="344" fill="#475569" font-size="11.5" font-style="italic">${remark}</text>
     </g>
 
-    <!-- Voucher Footer Wish Banner -->
-    <g transform="translate(45, 820)">
-      <rect x="0" y="0" width="810" height="42" rx="10" fill="#f1f5f9" stroke="#cbd5e1" stroke-width="1.5" />
-      <text x="405" y="26" fill="#0f172a" font-size="13" font-weight="900" letter-spacing="1" text-anchor="middle">
-        HAVE A NICE TRIP - ขอให้เป็นทริปที่สนุกนะครับ/ค่ะ - 祝您旅途愉快
+    <!-- Right Panel: Status, PAX Summary, Boarding Notice (Width 270px) -->
+    <g transform="translate(615, 108)">
+      <rect x="0" y="0" width="270" height="425" rx="8" fill="#f8fafc" stroke="#0f172a" stroke-width="2" />
+
+      <!-- Status Header -->
+      <rect x="15" y="15" width="240" height="50" rx="8" fill="#0f766e" stroke="#0f172a" stroke-width="1.5" />
+      <text x="135" y="34" fill="#99f6e4" font-size="9" font-weight="bold" text-anchor="middle">BOOKING STATUS</text>
+      <text x="135" y="52" fill="#ffffff" font-size="13" font-weight="900" text-anchor="middle">CONFIRMED (ยืนยันสิทธิ์แล้ว)</text>
+
+      <!-- PAX Summary Box -->
+      <rect x="15" y="75" width="240" height="150" rx="8" fill="#ffffff" stroke="#0f172a" stroke-width="1.5" />
+      <text x="135" y="98" fill="#0f172a" font-size="10" font-weight="900" text-anchor="middle">PAX SUMMARY (จำนวนผู้เดินทาง)</text>
+      <line x1="25" y1="108" x2="245" y2="108" stroke="#e2e8f0" stroke-width="1" />
+      
+      <!-- Adult -->
+      <rect x="25" y="116" width="100" height="46" rx="6" fill="#f8fafc" stroke="#cbd5e1" stroke-width="1" />
+      <text x="75" y="132" fill="#64748b" font-size="8.5" font-weight="bold" text-anchor="middle">ผู้ใหญ่ (Adult)</text>
+      <text x="75" y="152" fill="#0f766e" font-size="14" font-weight="900" text-anchor="middle">${adults} ท่าน</text>
+
+      <!-- Child -->
+      <rect x="135" y="116" width="100" height="46" rx="6" fill="#f8fafc" stroke="#cbd5e1" stroke-width="1" />
+      <text x="185" y="132" fill="#64748b" font-size="8.5" font-weight="bold" text-anchor="middle">เด็ก (Child)</text>
+      <text x="185" y="152" fill="#0f766e" font-size="14" font-weight="900" text-anchor="middle">${children} ท่าน</text>
+
+      <!-- Total Guests Banner -->
+      <rect x="25" y="172" width="210" height="38" rx="6" fill="#f0fdfa" stroke="#0f766e" stroke-width="1" />
+      <text x="130" y="196" fill="#0f766e" font-size="11" font-weight="bold" text-anchor="middle">ผู้เดินทางรวมทั้งหมด: ${Number(adults) + Number(children) + Number(infants)} ท่าน</text>
+
+      <!-- Boarding Notice Box -->
+      <rect x="15" y="235" width="240" height="85" rx="8" fill="#fffbeb" stroke="#f59e0b" stroke-width="1" />
+      <text x="135" y="255" fill="#92400e" font-size="9.5" font-weight="900" text-anchor="middle">📌 แสดงตั๋วนี้แก่คนขับรถ / ไกด์</text>
+      <text x="135" y="272" fill="#475569" font-size="7.5" text-anchor="middle">Please present this E-Ticket on your mobile</text>
+      <text x="135" y="284" fill="#475569" font-size="7.5" text-anchor="middle">to the driver upon boarding.</text>
+      <line x1="25" y1="292" x2="245" y2="292" stroke="#fde68a" stroke-width="1" />
+      <text x="135" y="308" fill="#78350f" font-size="9" font-weight="bold" text-anchor="middle">📞 Hotline: (+66) 97 924 1399</text>
+
+      <!-- Ink Stamp -->
+      <circle cx="135" cy="370" r="35" fill="none" stroke="#059669" stroke-width="2" stroke-dasharray="4 2" />
+      <text x="135" y="364" fill="#059669" font-size="8" font-weight="900" text-anchor="middle">CONFIRMED</text>
+      <text x="135" y="376" fill="#059669" font-size="7" font-weight="bold" text-anchor="middle">TRIP SEA TOUR</text>
+      <text x="135" y="388" fill="#059669" font-size="6" font-weight="bold" text-anchor="middle">OFFICIAL VOUCHER</text>
+    </g>
+
+    <!-- Multi-Lingual Cautions (Footer) -->
+    <g transform="translate(35, 542)">
+      <text x="0" y="10" fill="#b91c1c" font-size="8" font-weight="bold">1. กรุณารอที่ล็อบบี้ตรงเวลานัด คนขับรอไม่เกิน 5 นาที หากล่าช้าถือว่าสละสิทธิ์และไม่คืนเงิน</text>
+      <text x="0" y="22" fill="#b91c1c" font-size="8" font-weight="bold">2. สตรีมีครรภ์ ผู้ป่วยโรคหัวใจ ความดันรุนแรง หรือกระดูกสันหลัง ห้ามออกทะเล | หากเกินเวลานัด 20 นาที โทร (+66) 97 924 1399</text>
+      <text x="0" y="34" fill="#475569" font-size="7.5" font-weight="bold">重要提醒: 请准时在酒店大堂等候。严禁孕妇、心脏病患者出海。超过20分钟未见司机请联系 (+66) 97 924 1399</text>
+      <text x="0" y="46" fill="#475569" font-size="7.5">Cautions: Please standby at lobby on time. Driver waits max 5 mins. If delayed over 20 mins, contact (+66) 97 924 1399.</text>
+    </g>
+
+    <!-- Bottom Wish Banner -->
+    <g transform="translate(35, 600)">
+      <rect x="0" y="0" width="850" height="24" rx="4" fill="#0f766e" />
+      <text x="425" y="16" fill="#f0fdfa" font-size="10" font-weight="bold" letter-spacing="1" text-anchor="middle">
+        HAVE A NICE TRIP - ขอให้เป็นทริปที่สนุกและปลอดภัยนะครับ/ค่ะ - 祝您旅途愉快
       </text>
     </g>
-
-    <!-- Verification Stamp Bottom -->
-    <g transform="translate(680, 875)">
-      <circle cx="60" cy="45" r="42" fill="none" stroke="#059669" stroke-width="2.5" stroke-dasharray="5 3" />
-      <text x="60" y="38" fill="#059669" font-size="10" font-weight="bold" text-anchor="middle">TRIP SEA TOUR</text>
-      <text x="60" y="52" fill="#059669" font-size="12" font-weight="900" text-anchor="middle">OFFICIAL</text>
-      <text x="60" y="64" fill="#059669" font-size="8" font-weight="bold" text-anchor="middle">E-TICKET</text>
-    </g>
-
-    <text x="450" y="930" fill="#64748b" font-size="12" text-anchor="middle">กรุณาแสดงตั๋ว E-Ticket ใบนี้แก่คนขับรถ/ไกด์เมื่อถึงเวลานัดหมาย</text>
   </svg>
   `;
   res.setHeader('Content-Type', 'image/svg+xml');

@@ -13,12 +13,13 @@ import { TatLicenseCertificate } from './components/TatLicenseCertificate';
 import { AdminDashboard } from './components/AdminDashboard';
 import { AdminAuthModal } from './components/AdminAuthModal';
 import { TripSeaAiChatbot } from './components/TripSeaAiChatbot';
+import { CartModal } from './components/CartModal';
 
-import { Tour, Booking, Review, Customer, AppSettings, LineNotificationLog, Language, AdminUser } from './types';
+import { Tour, Booking, Review, Customer, AppSettings, LineNotificationLog, Language, AdminUser, CartItem } from './types';
 import { Currency } from './utils/currency';
 import { translations } from './data/translations';
 import { initialTours, initialBookings, initialReviews, initialCustomers, initialSettings } from './data/mockData';
-import { Compass, Sparkles, Filter, Ticket, QrCode, Phone, MessageCircle, ShieldCheck } from 'lucide-react';
+import { Compass, Sparkles, Filter, Ticket, QrCode, Phone, MessageCircle, ShieldCheck, Clock } from 'lucide-react';
 import { supabaseApi } from './lib/supabase';
 
 export default function App() {
@@ -95,6 +96,7 @@ export default function App() {
   // Search & Filters
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedCategory, setSelectedCategory] = useState('all');
+  const [selectedDuration, setSelectedDuration] = useState<'all' | 'full-day' | 'half-day'>('all');
   const [sortBy, setSortBy] = useState<'recommended' | 'priceLow' | 'priceHigh' | 'rating'>('recommended');
 
   // Active Modals
@@ -103,19 +105,87 @@ export default function App() {
   const [itineraryTour, setItineraryTour] = useState<Tour | null>(null);
   const [isLookupOpen, setIsLookupOpen] = useState(false);
 
+  // Multi-Tour Shopping Cart State (persisted in localStorage)
+  const [cart, setCart] = useState<CartItem[]>(() => {
+    try {
+      const saved = localStorage.getItem('tst_cart');
+      return saved ? JSON.parse(saved) : [];
+    } catch {
+      return [];
+    }
+  });
+  const [isCartOpen, setIsCartOpen] = useState<boolean>(false);
+
+  // Save Cart to localStorage
+  useEffect(() => {
+    try {
+      localStorage.setItem('tst_cart', JSON.stringify(cart));
+    } catch (e) {
+      console.warn('Failed to save cart to localStorage', e);
+    }
+  }, [cart]);
+
   // Toast alert
   const [toastMessage, setToastMessage] = useState<string | null>(null);
-
-  // Sync status state & server version tracking
-  const [syncStatus, setSyncStatus] = useState<'synced' | 'syncing' | 'error'>('synced');
-  const [lastSyncedAt, setLastSyncedAt] = useState<string>(new Date().toLocaleTimeString('th-TH'));
-  const lastServerVersionRef = React.useRef<number>(0);
-  const lastMutationTimeRef = React.useRef<number>(0);
 
   const showToast = (msg: string) => {
     setToastMessage(msg);
     setTimeout(() => setToastMessage(null), 4000);
   };
+
+  // Cart Handlers
+  const handleAddToCart = (tour: Tour) => {
+    setCart(prev => {
+      const existing = prev.find(item => item.tourId === tour.id);
+      if (existing) {
+        showToast(`เพิ่มจำนวนผู้เดินทางสำหรับ "${tour.title[currentLang] || tour.title.TH}" แล้ว`);
+        return prev.map(item => item.tourId === tour.id ? { ...item, adults: item.adults + 1 } : item);
+      } else {
+        const tomorrow = new Date();
+        tomorrow.setDate(tomorrow.getDate() + 1);
+        const dateStr = tomorrow.toISOString().split('T')[0];
+        showToast(`🛒 เพิ่ม "${tour.title[currentLang] || tour.title.TH}" ลงในตะกร้าแล้ว`);
+        return [
+          ...prev,
+          {
+            id: `cart-item-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`,
+            tourId: tour.id,
+            tour,
+            travelDate: dateStr,
+            adults: 2,
+            children: 0,
+            infants: 0,
+            pickupHotel: '',
+            pickupZone: 'Patong',
+            roomNumber: '',
+            specialRequests: '',
+          }
+        ];
+      }
+    });
+  };
+
+  const handleUpdateCartItem = (id: string, updates: Partial<CartItem>) => {
+    setCart(prev => prev.map(item => item.id === id ? { ...item, ...updates } : item));
+  };
+
+  const handleRemoveFromCart = (id: string) => {
+    setCart(prev => prev.filter(item => item.id !== id));
+    showToast('🗑️ นำโปรแกรมทัวร์ออกจากตะกร้าแล้ว');
+  };
+
+  const handleClearCart = () => {
+    setCart([]);
+  };
+
+  const handleMultiBookingsCreated = (newBookings: Booking[]) => {
+    setBookings(prev => [...newBookings, ...prev]);
+    showToast(`🎉 จองสำเร็จเรียบร้อยครบทั้ง ${newBookings.length} โปรแกรมทัวร์!`);
+  };
+  const [syncStatus, setSyncStatus] = useState<'synced' | 'syncing' | 'error'>('synced');
+  const [lastSyncedAt, setLastSyncedAt] = useState<string>(new Date().toLocaleTimeString('th-TH'));
+  const lastServerVersionRef = React.useRef<number>(0);
+  const lastMutationTimeRef = React.useRef<number>(0);
 
   // Fetch initial data & auto-sync with version / lastUpdatedAt check
   const loadInitialData = useCallback(async (forceReload: boolean = false) => {
@@ -278,6 +348,26 @@ export default function App() {
     return () => clearInterval(interval);
   }, [loadInitialData]);
 
+  // Helper to check if tour is half-day
+  const isHalfDayTour = (t: Tour): boolean => {
+    const combined = `${t.duration?.TH || ''} ${t.duration?.EN || ''} ${t.duration?.ZH || ''} ${t.duration?.RU || ''}`.toLowerCase();
+    return combined.includes('ครึ่งวัน') || 
+           combined.includes('half day') || 
+           combined.includes('half-day') || 
+           combined.includes('afternoon') || 
+           combined.includes('sunset') || 
+           combined.includes('รอบเช้า') || 
+           combined.includes('รอบบ่าย') || 
+           combined.includes('4 ชม') || 
+           combined.includes('4 hours') || 
+           combined.includes('5 ชม') || 
+           combined.includes('5 hours') || 
+           combined.includes('6 ชม') || 
+           combined.includes('6 hours') || 
+           combined.includes('半日') || 
+           combined.includes('半天');
+  };
+
   // Filter & Sort Tours
   const filteredTours = tours
     .filter((t) => {
@@ -287,7 +377,14 @@ export default function App() {
       const queryLower = searchQuery.toLowerCase();
       const matchesSearch = !searchQuery || titleStr.includes(queryLower) || descStr.includes(queryLower) || t.tags.some(tag => tag.toLowerCase().includes(queryLower));
 
-      return matchesCategory && matchesSearch;
+      let matchesDuration = true;
+      if (selectedDuration === 'half-day') {
+        matchesDuration = isHalfDayTour(t);
+      } else if (selectedDuration === 'full-day') {
+        matchesDuration = !isHalfDayTour(t);
+      }
+
+      return matchesCategory && matchesSearch && matchesDuration;
     })
     .sort((a, b) => {
       if (sortBy === 'priceLow') return a.priceAdult - b.priceAdult;
@@ -678,7 +775,7 @@ export default function App() {
   };
 
   // Review Handlers
-  const handleAddReview = async (reviewData: { tourId: string; userName: string; rating: number; comment: string; photo?: string }) => {
+  const handleAddReview = async (reviewData: { tourId: string; userName: string; rating: number; comment: string; photo?: string; photos?: string[] }) => {
     try {
       lastMutationTimeRef.current = Date.now();
       const res = await fetch('/api/reviews', {
@@ -701,6 +798,10 @@ export default function App() {
       }
 
       // Fallback local review creation if offline / Vercel
+      const photosList = reviewData.photos && reviewData.photos.length > 0
+        ? reviewData.photos
+        : (reviewData.photo ? [reviewData.photo] : []);
+
       const localReview: Review = {
         id: `rev-${Date.now()}`,
         tourId: reviewData.tourId,
@@ -710,7 +811,7 @@ export default function App() {
         comment: reviewData.comment,
         date: new Date().toISOString().split('T')[0],
         verifiedBooking: true,
-        photos: reviewData.photo ? [reviewData.photo] : [],
+        photos: photosList,
         isApproved: true
       };
       const nextReviews = [localReview, ...reviews];
@@ -883,6 +984,8 @@ export default function App() {
           onNavigate={handleNavigate}
           activeView={activeView}
           onOpenLookup={() => setIsLookupOpen(true)}
+          cartCount={cart.length}
+          onOpenCart={() => setIsCartOpen(true)}
           promptPayId={settings.promptPayId}
           isAdminAuthenticated={isAdminAuthenticated}
         />
@@ -939,30 +1042,64 @@ export default function App() {
               {/* Tour Catalog Section */}
               <section id="tours-catalog" className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
                 {/* Catalog Controls */}
-                <div className="flex flex-col sm:flex-row items-center justify-between gap-4 mb-8 bg-white p-4 rounded-2xl border border-slate-200 shadow-sm">
+                <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-4 mb-8 bg-white p-4 sm:p-5 rounded-2xl border border-slate-200 shadow-xs">
                   <div>
-                    <h2 className="text-xl sm:text-2xl font-extrabold text-slate-900 tracking-tight">
-                      {currentLang === 'TH' ? 'โปรแกรมทัวร์แนะนำ' :
-                       currentLang === 'EN' ? 'Recommended Tours' :
-                       currentLang === 'ZH' ? '推荐行程' : 'Рекомендуемые туры'} ({filteredTours.length})
+                    <h2 className="text-xl sm:text-2xl font-extrabold text-slate-900 tracking-tight flex items-center gap-2">
+                      <span>
+                        {currentLang === 'TH' ? 'โปรแกรมทัวร์แนะนำ' :
+                         currentLang === 'EN' ? 'Recommended Tours' :
+                         currentLang === 'ZH' ? '推荐行程' : 'Рекомендуемые туры'}
+                      </span>
+                      <span className="bg-teal-50 text-teal-700 text-xs px-2.5 py-0.5 rounded-full font-bold border border-teal-200">
+                        {filteredTours.length}
+                      </span>
                     </h2>
-                    <p className="text-xs text-slate-500">
+                    <p className="text-xs text-slate-500 mt-0.5">
                       โปรแกรมท่องเที่ยวภูเก็ต ยืนยันตรง ชำระผ่าน พร้อมเพย์ QR Code
                     </p>
                   </div>
 
-                  <div className="flex items-center gap-2 w-full sm:w-auto">
-                    <span className="text-xs text-slate-500 font-semibold shrink-0">จัดเรียง:</span>
-                    <select
-                      value={sortBy}
-                      onChange={(e) => setSortBy(e.target.value as any)}
-                      className="bg-slate-50 border border-slate-200 text-slate-800 text-xs font-semibold rounded-xl px-3 py-2 focus:outline-none focus:ring-2 focus:ring-teal-500 w-full sm:w-auto"
-                    >
-                      <option value="recommended">{t.sortRecommended}</option>
-                      <option value="priceLow">{t.sortPriceLow}</option>
-                      <option value="priceHigh">{t.sortPriceHigh}</option>
-                      <option value="rating">{t.sortRating}</option>
-                    </select>
+                  <div className="flex flex-wrap items-center gap-2.5 w-full sm:w-auto">
+                    {/* Tour Duration Dropdown */}
+                    <div className="flex items-center gap-1.5 bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs font-medium focus-within:ring-2 focus-within:ring-teal-500 flex-1 sm:flex-initial">
+                      <Clock className="w-4 h-4 text-teal-600 shrink-0" />
+                      <span className="text-slate-500 font-semibold shrink-0 hidden md:inline">
+                        {currentLang === 'TH' ? 'ระยะเวลา:' : currentLang === 'EN' ? 'Duration:' : currentLang === 'ZH' ? '时长:' : 'Длительность:'}
+                      </span>
+                      <select
+                        value={selectedDuration}
+                        onChange={(e) => setSelectedDuration(e.target.value as any)}
+                        className="bg-transparent text-slate-800 font-bold focus:outline-none cursor-pointer w-full sm:w-auto"
+                      >
+                        <option value="all">
+                          {currentLang === 'TH' ? '⏱️ ทุกระยะเวลา' : currentLang === 'EN' ? '⏱️ All Durations' : currentLang === 'ZH' ? '⏱️ 所有时长' : '⏱️ Любая длительность'}
+                        </option>
+                        <option value="half-day">
+                          {currentLang === 'TH' ? '⛅ ครึ่งวัน (3-6 ชม.)' : currentLang === 'EN' ? '⛅ Half-day (3-6 hrs)' : currentLang === 'ZH' ? '⛅ 半日游 (3-6小时)' : '⛅ Полдня (3-6 ч)'}
+                        </option>
+                        <option value="full-day">
+                          {currentLang === 'TH' ? '☀️ เต็มวัน (7-12 ชม.)' : currentLang === 'EN' ? '☀️ Full-day (7-12 hrs)' : currentLang === 'ZH' ? '☀️ 全天 (7-12小时)' : '☀️ Полный день (7-12 ч)'}
+                        </option>
+                      </select>
+                    </div>
+
+                    {/* Sort Dropdown */}
+                    <div className="flex items-center gap-1.5 bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs font-medium focus-within:ring-2 focus-within:ring-teal-500 flex-1 sm:flex-initial">
+                      <Filter className="w-4 h-4 text-slate-400 shrink-0" />
+                      <span className="text-slate-500 font-semibold shrink-0 hidden md:inline">
+                        {currentLang === 'TH' ? 'จัดเรียง:' : currentLang === 'EN' ? 'Sort:' : currentLang === 'ZH' ? '排序:' : 'Сортировка:'}
+                      </span>
+                      <select
+                        value={sortBy}
+                        onChange={(e) => setSortBy(e.target.value as any)}
+                        className="bg-transparent text-slate-800 font-bold focus:outline-none cursor-pointer w-full sm:w-auto"
+                      >
+                        <option value="recommended">{t.sortRecommended}</option>
+                        <option value="priceLow">{t.sortPriceLow}</option>
+                        <option value="priceHigh">{t.sortPriceHigh}</option>
+                        <option value="rating">{t.sortRating}</option>
+                      </select>
+                    </div>
                   </div>
                 </div>
 
@@ -975,8 +1112,10 @@ export default function App() {
                         tour={tour}
                         currentLang={currentLang}
                         currentCurrency={currentCurrency}
+                        isInCart={cart.some(c => c.tourId === tour.id)}
                         onSelectTour={setDetailTour}
                         onBookNow={setBookingTour}
+                        onAddToCart={handleAddToCart}
                         onViewItinerary={setItineraryTour}
                       />
                     ))}
@@ -987,7 +1126,7 @@ export default function App() {
                     <h3 className="font-extrabold text-slate-800 text-base">ไม่พบโปรแกรมทัวร์ที่ค้นหา</h3>
                     <p className="text-xs text-slate-500 mt-1 mb-4">โปรดลองเปลี่ยนคำค้นหา หรือ เลือกดูทุกหมวดหมู่</p>
                     <button
-                      onClick={() => { setSearchQuery(''); setSelectedCategory('all'); }}
+                      onClick={() => { setSearchQuery(''); setSelectedCategory('all'); setSelectedDuration('all'); }}
                       className="bg-teal-600 hover:bg-teal-700 text-white font-bold px-4 py-2 rounded-xl text-xs transition shadow-md shadow-teal-200"
                     >
                       ล้างตัวกรองทั้งหมด
@@ -1152,6 +1291,20 @@ export default function App() {
         </main>
       )}
 
+      {/* Floating Facebook Messenger Chat Quick Button */}
+      <div className="fixed bottom-22 sm:bottom-24 right-4 sm:right-6 z-40 no-print flex items-center gap-2">
+        <a
+          href={settings.facebookMessengerUrl || 'https://m.me/tripseatoursphuket'}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="bg-gradient-to-r from-[#0084FF] via-[#0099FF] to-[#00C6FF] hover:opacity-95 text-white px-3.5 py-2.5 rounded-full shadow-2xl flex items-center gap-2 transition transform hover:scale-105 active:scale-95 group border border-blue-300/40"
+          title="แชทผ่าน Facebook Messenger ด่วน"
+        >
+          <MessageCircle className="w-5 h-5 fill-current text-white shrink-0" />
+          <span className="hidden sm:inline text-xs font-bold tracking-tight">แชท Facebook Messenger</span>
+        </a>
+      </div>
+
       {/* 24/7 AI Chatbot Assistant Powered by Gemini AI */}
       <div className="no-print">
         <TripSeaAiChatbot
@@ -1167,6 +1320,36 @@ export default function App() {
         <Footer currentLang={currentLang} settings={settings} onNavigate={handleNavigate} />
       </div>
 
+      {/* Floating Cart Quick Bar (Visible when cart has items) */}
+      {cart.length > 0 && !isCartOpen && (
+        <div className="fixed bottom-38 sm:bottom-40 right-4 sm:right-6 z-40 animate-in slide-in-from-bottom duration-300 no-print">
+          <button
+            onClick={() => setIsCartOpen(true)}
+            className="bg-gradient-to-r from-slate-900 via-slate-800 to-teal-950 text-white hover:from-slate-800 hover:to-teal-900 px-4 py-3 rounded-2xl shadow-2xl border border-teal-500/40 flex items-center gap-3 transition transform hover:scale-105 active:scale-95 group"
+          >
+            <div className="relative">
+              <div className="w-9 h-9 rounded-xl bg-teal-500 text-slate-950 flex items-center justify-center font-black">
+                🛒
+              </div>
+              <span className="absolute -top-1.5 -right-1.5 bg-rose-500 text-white font-black text-[10px] w-4.5 h-4.5 rounded-full flex items-center justify-center border-2 border-slate-900 animate-pulse">
+                {cart.length}
+              </span>
+            </div>
+            <div className="text-left pr-1">
+              <div className="text-[11px] text-teal-300 font-extrabold flex items-center gap-1">
+                <span>{t.myCart}</span>
+                <span className="bg-teal-500/20 text-teal-300 text-[10px] px-1.5 py-0.2 rounded-md">
+                  {cart.length} ทัวร์
+                </span>
+              </div>
+              <div className="text-xs font-black text-white">
+                ฿{cart.reduce((sum, item) => sum + (item.adults * item.tour.priceAdult) + (item.children * item.tour.priceChild), 0).toLocaleString()}
+              </div>
+            </div>
+          </button>
+        </div>
+      )}
+
       {/* Modals */}
       <AdminAuthModal
         isOpen={isAdminAuthModalOpen}
@@ -1179,12 +1362,27 @@ export default function App() {
       <TourDetailModal
         tour={detailTour}
         currentLang={currentLang}
+        isInCart={detailTour ? cart.some(c => c.tourId === detailTour.id) : false}
         onClose={() => setDetailTour(null)}
         onBookNow={(tour) => {
           setDetailTour(null);
           setBookingTour(tour);
         }}
+        onAddToCart={handleAddToCart}
         reviews={reviews}
+      />
+
+      <CartModal
+        isOpen={isCartOpen}
+        cart={cart}
+        currentLang={currentLang}
+        currentCurrency={currentCurrency}
+        settings={settings}
+        onClose={() => setIsCartOpen(false)}
+        onUpdateCartItem={handleUpdateCartItem}
+        onRemoveFromCart={handleRemoveFromCart}
+        onClearCart={handleClearCart}
+        onBookingsCreated={handleMultiBookingsCreated}
       />
 
       <ItineraryModal
@@ -1208,6 +1406,7 @@ export default function App() {
       {isLookupOpen && (
         <BookingLookupModal
           currentLang={currentLang}
+          settings={settings}
           onClose={() => setIsLookupOpen(false)}
           bookings={bookings}
         />

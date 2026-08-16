@@ -31,6 +31,8 @@ export const initialTours: Tour[] = [
     },
     priceAdult: 1890,
     priceChild: 1390,
+    costAdult: 1250,
+    costChild: 900,
     originalPriceAdult: 2800,
     originalPriceChild: 2000,
     duration: {
@@ -97,6 +99,8 @@ export const initialTours: Tour[] = [
     },
     priceAdult: 1650,
     priceChild: 1200,
+    costAdult: 1100,
+    costChild: 800,
     originalPriceAdult: 2400,
     originalPriceChild: 1800,
     duration: {
@@ -161,6 +165,8 @@ export const initialTours: Tour[] = [
     },
     priceAdult: 2490,
     priceChild: 1790,
+    costAdult: 1600,
+    costChild: 1150,
     originalPriceAdult: 3500,
     originalPriceChild: 2500,
     duration: {
@@ -225,6 +231,8 @@ export const initialTours: Tour[] = [
     },
     priceAdult: 2790,
     priceChild: 1990,
+    costAdult: 1850,
+    costChild: 1300,
     originalPriceAdult: 3900,
     originalPriceChild: 2800,
     duration: {
@@ -289,6 +297,8 @@ export const initialTours: Tour[] = [
     },
     priceAdult: 1950,
     priceChild: 1450,
+    costAdult: 1300,
+    costChild: 950,
     originalPriceAdult: 2600,
     originalPriceChild: 1900,
     duration: {
@@ -352,6 +362,8 @@ export const initialTours: Tour[] = [
     },
     priceAdult: 890,
     priceChild: 650,
+    costAdult: 550,
+    costChild: 400,
     originalPriceAdult: 1400,
     originalPriceChild: 1000,
     duration: {
@@ -559,7 +571,7 @@ export const initialSettings: AppSettings = {
   siteName: 'Trip Sea Tour Phuket',
   companyName: 'ทริปซีทัวร์ ภูเก็ต จำกัด (Trip Sea Tour Phuket Co., Ltd.)',
   promptPayId: '0979241399', // PromptPay Phone Number or Tax ID
-  promptPayName: 'บริษัท ทริปซีทัวร์ ภูเก็ต จำกัด',
+  promptPayName: 'พรทิพย์ แดงทัด',
   lineMessagingChannelAccessToken: 'Na3ekdkIyTshDZwZItjOQGv4MXBqo/j6zzXfoES2K6Od6HEjLXDjookdpV5QzuUA6FqXknMZL3MwgiPNmupdAy9oZweKN5QKlTjdloODikwIgrlJEeyrWJW7vAzydq38jHDmKR1NZE58ji2oYNy9VwdB04t89/1O/w1cDnyilFU=',
   lineMessagingUserId: 'C1bb0d71ad5dbb960801dad6bd5208afa',
   lineNotifyToken: 'SIMULATED_LINE_NOTIFY_TOKEN_XYZ123',
@@ -571,5 +583,6 @@ export const initialSettings: AppSettings = {
   adminGoogleEmails: ['asmr9941@gmail.com', 'admin@tripseatour.com'],
   tatLicenseNo: '33/11100',
   tatLicenseImgUrl: '/tat_license_original.jpg',
-  facebookUrl: 'https://www.facebook.com/tripseatoursphuket/'
+  facebookUrl: 'https://www.facebook.com/tripseatoursphuket/',
+  facebookMessengerUrl: 'https://m.me/tripseatoursphuket'
 };

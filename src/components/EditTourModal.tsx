@@ -37,6 +37,8 @@ export const EditTourModal: React.FC<EditTourModalProps> = ({
   const [location, setLocation] = useState('');
   const [priceAdult, setPriceAdult] = useState(1500);
   const [priceChild, setPriceChild] = useState(1000);
+  const [costAdult, setCostAdult] = useState(1000);
+  const [costChild, setCostChild] = useState(650);
   const [originalPriceAdult, setOriginalPriceAdult] = useState(2200);
   const [originalPriceChild, setOriginalPriceChild] = useState(1500);
   const [imageUrl, setImageUrl] = useState('');
@@ -65,6 +67,8 @@ export const EditTourModal: React.FC<EditTourModalProps> = ({
       setLocation(tour.location || 'ภูเก็ต');
       setPriceAdult(tour.priceAdult || 0);
       setPriceChild(tour.priceChild || 0);
+      setCostAdult(tour.costAdult !== undefined ? tour.costAdult : Math.round((tour.priceAdult || 0) * 0.65));
+      setCostChild(tour.costChild !== undefined ? tour.costChild : Math.round((tour.priceChild || 0) * 0.65));
       setOriginalPriceAdult(tour.originalPriceAdult || Math.round(tour.priceAdult * 1.3));
       setOriginalPriceChild(tour.originalPriceChild || Math.round(tour.priceChild * 1.3));
       setImageUrl(tour.images && tour.images[0] ? tour.images[0] : '');
@@ -210,6 +214,8 @@ export const EditTourModal: React.FC<EditTourModalProps> = ({
       location,
       priceAdult: Number(priceAdult),
       priceChild: Number(priceChild),
+      costAdult: Number(costAdult),
+      costChild: Number(costChild),
       originalPriceAdult: Number(originalPriceAdult),
       originalPriceChild: Number(originalPriceChild),
       images: [imageUrl || 'https://images.unsplash.com/photo-1537996194471-e657df975ab4?auto=format&fit=crop&q=80&w=1000'],
@@ -358,6 +364,28 @@ export const EditTourModal: React.FC<EditTourModalProps> = ({
               </div>
 
               <div>
+                <label className="font-bold text-amber-400 block mb-1">🏭 ทุนเอเยนต์ ผู้ใหญ่ (Net)</label>
+                <input
+                  type="number"
+                  required
+                  value={costAdult}
+                  onChange={(e) => setCostAdult(Number(e.target.value))}
+                  className="w-full bg-slate-900 border border-amber-500/50 rounded-xl p-2.5 text-amber-300 font-bold"
+                />
+              </div>
+
+              <div>
+                <label className="font-bold text-amber-400 block mb-1">🏭 ทุนเอเยนต์ เด็ก (Net)</label>
+                <input
+                  type="number"
+                  required
+                  value={costChild}
+                  onChange={(e) => setCostChild(Number(e.target.value))}
+                  className="w-full bg-slate-900 border border-amber-500/50 rounded-xl p-2.5 text-amber-300 font-bold"
+                />
+              </div>
+
+              <div>
                 <label className="font-bold text-slate-400 block mb-1">ราคาปกติผู้ใหญ่ (ขีดฆ่า)</label>
                 <input
                   type="number"
@@ -375,6 +403,13 @@ export const EditTourModal: React.FC<EditTourModalProps> = ({
                   onChange={(e) => setOriginalPriceChild(Number(e.target.value))}
                   className="w-full bg-slate-900 border border-slate-700 rounded-xl p-2.5 text-slate-400"
                 />
+              </div>
+
+              <div className="col-span-2 bg-emerald-950/40 border border-emerald-500/30 p-2.5 rounded-xl flex items-center justify-between">
+                <span className="text-slate-300 font-medium">กำไรคาดการณ์/ตั๋ว (Estimated Profit):</span>
+                <span className="font-extrabold text-emerald-400">
+                  ผู้ใหญ่ ฿{(priceAdult - costAdult).toLocaleString()} / เด็ก ฿{(priceChild - costChild).toLocaleString()}
+                </span>
               </div>
             </div>
 

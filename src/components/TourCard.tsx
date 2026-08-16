@@ -1,5 +1,5 @@
 import React from 'react';
-import { Star, Clock, MapPin, CheckCircle, QrCode, ArrowRight, Calendar } from 'lucide-react';
+import { Star, Clock, MapPin, CheckCircle, QrCode, ArrowRight, Calendar, ShoppingCart, Check } from 'lucide-react';
 import { Tour, Language } from '../types';
 import { Currency, formatPrice } from '../utils/currency';
 import { translations } from '../data/translations';
@@ -8,8 +8,10 @@ interface TourCardProps {
   tour: Tour;
   currentLang: Language;
   currentCurrency?: Currency;
+  isInCart?: boolean;
   onSelectTour: (tour: Tour) => void;
   onBookNow: (tour: Tour) => void;
+  onAddToCart?: (tour: Tour) => void;
   onViewItinerary?: (tour: Tour) => void;
 }
 
@@ -17,8 +19,10 @@ export const TourCard: React.FC<TourCardProps> = ({
   tour,
   currentLang,
   currentCurrency = 'THB',
+  isInCart = false,
   onSelectTour,
   onBookNow,
+  onAddToCart,
   onViewItinerary,
 }) => {
   const t = translations[currentLang];
@@ -136,18 +140,30 @@ export const TourCard: React.FC<TourCardProps> = ({
           <div className="grid grid-cols-2 gap-2">
             <button
               onClick={() => onSelectTour(tour)}
-              className="w-full bg-slate-100 hover:bg-slate-200 text-slate-800 font-bold py-2.5 px-3 rounded-xl text-xs transition text-center"
+              className="w-full bg-slate-100 hover:bg-slate-200 text-slate-800 font-bold py-2.5 px-2 rounded-xl text-xs transition text-center"
             >
               {t.viewDetails}
             </button>
             <button
-              onClick={() => onBookNow(tour)}
-              className="w-full bg-teal-600 hover:bg-teal-700 text-white font-bold py-2.5 px-3 rounded-xl text-xs transition shadow-md shadow-teal-200 text-center flex items-center justify-center gap-1 active:scale-95"
+              onClick={() => onAddToCart && onAddToCart(tour)}
+              className={`w-full font-bold py-2.5 px-2 rounded-xl text-xs transition text-center flex items-center justify-center gap-1 border active:scale-95 ${
+                isInCart
+                  ? 'bg-teal-50 border-teal-300 text-teal-800 font-extrabold'
+                  : 'bg-emerald-50 hover:bg-emerald-100 border-emerald-300 text-emerald-800'
+              }`}
             >
-              <span>{t.bookNow}</span>
-              <ArrowRight className="w-3.5 h-3.5" />
+              {isInCart ? <Check className="w-3.5 h-3.5 text-teal-600" /> : <ShoppingCart className="w-3.5 h-3.5 text-emerald-600" />}
+              <span>{isInCart ? t.addedToCart : t.addToCart}</span>
             </button>
           </div>
+
+          <button
+            onClick={() => onBookNow(tour)}
+            className="w-full bg-teal-600 hover:bg-teal-700 text-white font-extrabold py-2.5 px-3 rounded-xl text-xs transition shadow-md shadow-teal-200 text-center flex items-center justify-center gap-1 active:scale-95"
+          >
+            <span>{t.bookNow}</span>
+            <ArrowRight className="w-3.5 h-3.5" />
+          </button>
         </div>
       </div>
     </div>
