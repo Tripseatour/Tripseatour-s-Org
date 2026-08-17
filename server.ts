@@ -191,6 +191,21 @@ async function loadStateFromSupabase() {
   } catch (e) {
     console.warn('Could not load customers from Supabase:', e);
   }
+
+  // 6. Live Chat Sessions
+  try {
+    const { data: kvChat } = await supabase.from('app_store').select('value').eq('key', 'live_chat_sessions').maybeSingle();
+    if (kvChat && kvChat.value !== undefined && kvChat.value !== null) {
+      try {
+        const loaded = JSON.parse(kvChat.value);
+        if (Array.isArray(loaded) && loaded.length > 0) {
+          liveChatSessions = loaded;
+        }
+      } catch (e) {}
+    }
+  } catch (e) {
+    console.warn('Could not load live chat sessions from Supabase:', e);
+  }
 }
 
 let syncMetadata = {
@@ -1270,6 +1285,17 @@ let liveChatSessions: LiveChatSession[] = [
   }
 ];
 
+async function persistLiveChat() {
+  if (!supabase) return;
+  try {
+    await supabase.from('app_store').upsert({
+      key: 'live_chat_sessions',
+      value: JSON.stringify(liveChatSessions),
+      updated_at: new Date().toISOString()
+    }, { onConflict: 'key' });
+  } catch (err) {}
+}
+
 // --- Live Chat Endpoints ---
 app.get('/api/livechat/sessions', (req, res) => {
   res.json(liveChatSessions);
@@ -1307,8 +1333,10 @@ app.post('/api/livechat/sessions', (req, res) => {
       ]
     };
     liveChatSessions.unshift(session);
+    persistLiveChat();
   } else if (customerName && customerName !== session.customerName) {
     session.customerName = customerName;
+    persistLiveChat();
   }
   res.json(session);
 });
@@ -1344,9 +1372,27 @@ app.post('/api/livechat/send', (req, res) => {
 
   if (sender === 'customer') {
     session.unreadCount += 1;
+
+    // Trigger LINE Notification to Admin Group / Official Channel
+    const custName = session.customerName || senderName || 'นักท่องเที่ยวบนหน้าเว็บ';
+    const timeStr = new Date().toLocaleTimeString('th-TH', { hour: '2-digit', minute: '2-digit' });
+    const lineMessage = `💬 [แจ้งเตือนแชทสดลูกค้าใหม่!]\n` +
+      `👤 ลูกค้า: ${custName}\n` +
+      `💬 ข้อความ: "${text || (imageUrl ? '[แนบไฟล์รูปภาพ/สลิป]' : '')}"\n` +
+      `⏰ เวลา: ${timeStr}\n` +
+      `🔗 คลิกแชทตอบกลับทันที: ${SITE_URL}/#admin (เมนู 💬 แชทสดลูกค้า)`;
+
+    sendLineNotification(
+      lineMessage,
+      session.id,
+      'NEW_ORDER',
+      imageUrl && imageUrl.startsWith('https://') ? imageUrl : undefined
+    ).catch(err => console.error('Failed to send LINE notification for live chat:', err));
   } else if (sender === 'admin') {
     session.unreadCount = 0;
   }
+
+  persistLiveChat();
 
   res.json({ success: true, message: newMsg, session });
 });
