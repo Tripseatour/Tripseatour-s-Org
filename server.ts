@@ -323,7 +323,7 @@ async function sendLineNotification(
       // 1. E-Ticket Image
       const effectiveTicketUrl = (ticketImageUrl && ticketImageUrl.startsWith('https://'))
         ? ticketImageUrl
-        : (bookingRef && bookingRef !== 'N/A' && bookingRef !== 'TEST' ? `${hostUrl}/api/ticket-image?ref=${bookingRef}` : null);
+        : (ticketImageUrl || (bookingRef && bookingRef.startsWith('TST-')) ? `${hostUrl}/api/ticket-image?ref=${bookingRef}` : null);
 
       if (effectiveTicketUrl) {
         messagesPayload.push({
@@ -336,7 +336,7 @@ async function sendLineNotification(
       // 2. Slip Image
       const effectiveSlipUrl = (slipImageUrl && slipImageUrl.startsWith('https://'))
         ? slipImageUrl
-        : (slipImageUrl || type === 'NEW_ORDER' || type === 'PAYMENT_VERIFIED' 
+        : (slipImageUrl || ((type === 'NEW_ORDER' || type === 'PAYMENT_VERIFIED') && bookingRef && bookingRef.startsWith('TST-'))
             ? `${hostUrl}/api/slip-image?ref=${bookingRef}` 
             : null);
 
@@ -1385,7 +1385,7 @@ app.post('/api/livechat/send', (req, res) => {
     sendLineNotification(
       lineMessage,
       session.id,
-      'NEW_ORDER',
+      'LIVE_CHAT' as any,
       imageUrl && imageUrl.startsWith('https://') ? imageUrl : undefined
     ).catch(err => console.error('Failed to send LINE notification for live chat:', err));
   } else if (sender === 'admin') {

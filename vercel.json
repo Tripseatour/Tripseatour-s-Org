@@ -1,6 +1,14 @@
 {
   "rewrites": [
     {
+      "source": "/api/livechat/sessions/:id",
+      "destination": "/api/livechat/sessions?id=:id"
+    },
+    {
+      "source": "/api/livechat/read/:id",
+      "destination": "/api/livechat/read?id=:id"
+    },
+    {
       "source": "/((?!api/).*)",
       "destination": "/index.html"
     }
