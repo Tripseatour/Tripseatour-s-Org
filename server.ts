@@ -198,7 +198,7 @@ async function loadStateFromSupabase() {
     if (kvChat && kvChat.value !== undefined && kvChat.value !== null) {
       try {
         const loaded = JSON.parse(kvChat.value);
-        if (Array.isArray(loaded) && loaded.length > 0) {
+        if (Array.isArray(loaded)) {
           liveChatSessions = loaded;
         }
       } catch (e) {}
@@ -1415,6 +1415,33 @@ app.post('/api/livechat/close/:id', (req, res) => {
   } else {
     res.status(404).json({ error: 'Session not found' });
   }
+});
+
+app.delete('/api/livechat/delete/:id', async (req, res) => {
+  const id = req.params.id || req.query.id || req.body?.id || req.body?.sessionId;
+  if (id) {
+    liveChatSessions = liveChatSessions.filter(s => s.id !== id);
+    await persistLiveChat();
+  }
+  res.json({ success: true, sessions: liveChatSessions });
+});
+
+app.post('/api/livechat/delete/:id', async (req, res) => {
+  const id = req.params.id || req.query.id || req.body?.id || req.body?.sessionId;
+  if (id) {
+    liveChatSessions = liveChatSessions.filter(s => s.id !== id);
+    await persistLiveChat();
+  }
+  res.json({ success: true, sessions: liveChatSessions });
+});
+
+app.post('/api/livechat/delete', async (req, res) => {
+  const id = req.query.id || req.body?.id || req.body?.sessionId;
+  if (id) {
+    liveChatSessions = liveChatSessions.filter(s => s.id !== id);
+    await persistLiveChat();
+  }
+  res.json({ success: true, sessions: liveChatSessions });
 });
 
 // --- Customers ---

@@ -83,6 +83,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
   const [selectedLiveSessionId, setSelectedLiveSessionId] = useState<string | null>(null);
   const [adminReplyText, setAdminReplyText] = useState<string>('');
   const [isSendingAdminReply, setIsSendingAdminReply] = useState<boolean>(false);
+  const [sessionToDelete, setSessionToDelete] = useState<any | null>(null);
 
   const fetchLiveChatSessions = async () => {
     try {
@@ -132,6 +133,44 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
       console.error('Error sending admin reply:', err);
     } finally {
       setIsSendingAdminReply(false);
+    }
+  };
+
+  const handleDeleteLiveChatSession = (sessionOrId: any, e?: React.MouseEvent) => {
+    if (e) {
+      e.stopPropagation();
+      e.preventDefault();
+    }
+    const sessionObj = typeof sessionOrId === 'string'
+      ? (liveChatSessions.find(s => s.id === sessionOrId) || { id: sessionOrId, customerName: 'ลูกค้า' })
+      : sessionOrId;
+
+    setSessionToDelete(sessionObj);
+  };
+
+  const confirmDeleteLiveChatSession = async () => {
+    if (!sessionToDelete) return;
+    const sessionIdToDelete = sessionToDelete.id;
+    setSessionToDelete(null);
+
+    // Immediately update local UI state
+    setLiveChatSessions(prev => {
+      const remaining = prev.filter(s => s.id !== sessionIdToDelete);
+      if (selectedLiveSessionId === sessionIdToDelete) {
+        setSelectedLiveSessionId(remaining.length > 0 ? remaining[0].id : null);
+      }
+      return remaining;
+    });
+
+    try {
+      await fetch(`/api/livechat/delete/${sessionIdToDelete}?id=${encodeURIComponent(sessionIdToDelete)}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id: sessionIdToDelete, sessionId: sessionIdToDelete })
+      });
+      fetchLiveChatSessions();
+    } catch (err) {
+      console.error('Failed to delete live chat session:', err);
     }
   };
 
@@ -1489,20 +1528,23 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                         <p className="text-[11px] mt-1 text-slate-500">เมื่อลูกค้ากด "แชทสดเจ้าหน้าที่" บนหน้าเว็บ ข้อความจะมาปรากฏที่นี่ทันที</p>
                       </div>
                     ) : (
-                      liveChatSessions.map((session) => {
+                      liveChatSessions.map((session, sIdx) => {
                         const isSelected = selectedLiveSessionId === session.id;
                         const lastMsg = session.messages?.[session.messages.length - 1];
                         return (
-                          <button
-                            key={session.id}
-                            onClick={() => setSelectedLiveSessionId(session.id)}
-                            className={`w-full p-3.5 text-left transition flex items-start justify-between gap-3 ${
+                          <div
+                            key={session.id || `chat-session-${sIdx}`}
+                            className={`w-full p-3.5 text-left transition flex items-start justify-between gap-3 group ${
                               isSelected
                                 ? 'bg-blue-900/40 border-l-4 border-blue-500'
                                 : 'hover:bg-slate-900/60 border-l-4 border-transparent'
                             }`}
                           >
-                            <div className="flex-1 min-w-0">
+                            <button
+                              type="button"
+                              onClick={() => setSelectedLiveSessionId(session.id)}
+                              className="flex-1 min-w-0 text-left"
+                            >
                               <div className="flex items-center gap-2 mb-1">
                                 <div className="w-7 h-7 rounded-full bg-blue-600/30 text-blue-300 border border-blue-500/40 flex items-center justify-center font-bold text-xs shrink-0">
                                   {session.customerName ? session.customerName.charAt(0) : 'ค'}
@@ -1520,12 +1562,22 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                               <p className="text-[11px] text-slate-400 truncate pl-9">
                                 {lastMsg ? lastMsg.text : 'เริ่มเปิดห้องสนทนา...'}
                               </p>
-                            </div>
+                            </button>
 
-                            <div className="text-[9px] text-slate-500 shrink-0 font-mono">
-                              {session.updatedAt ? new Date(session.updatedAt).toLocaleTimeString('th-TH', { hour: '2-digit', minute: '2-digit' }) : ''}
+                            <div className="flex flex-col items-end gap-1.5 shrink-0">
+                              <span className="text-[9px] text-slate-500 font-mono">
+                                {session.updatedAt ? new Date(session.updatedAt).toLocaleTimeString('th-TH', { hour: '2-digit', minute: '2-digit' }) : ''}
+                              </span>
+                              <button
+                                type="button"
+                                onClick={(e) => handleDeleteLiveChatSession(session, e)}
+                                className="opacity-60 hover:opacity-100 p-1 bg-rose-950/60 hover:bg-rose-900 text-rose-400 hover:text-rose-200 border border-rose-800/80 rounded-lg transition"
+                                title="ลบห้องสนทนานี้"
+                              >
+                                <Trash2 className="w-3 h-3" />
+                              </button>
                             </div>
-                          </button>
+                          </div>
                         );
                       })
                     )}
@@ -1569,13 +1621,15 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                           </div>
 
                           <div className="flex items-center gap-2">
-                            <a
-                              href="tel:0626816494"
-                              className="bg-slate-800 hover:bg-slate-700 text-teal-300 text-xs font-bold px-3 py-1.5 rounded-xl border border-slate-700 flex items-center gap-1 transition"
+                            <button
+                              type="button"
+                              onClick={(e) => handleDeleteLiveChatSession(activeSession, e)}
+                              className="bg-rose-950/80 hover:bg-rose-900 text-rose-300 border border-rose-800 text-xs font-bold px-3 py-1.5 rounded-xl flex items-center gap-1.5 transition shadow-sm cursor-pointer"
+                              title="ลบห้องสนทนานี้ออก"
                             >
-                              <PhoneCall className="w-3.5 h-3.5" />
-                              <span>โทรหาลูกค้า</span>
-                            </a>
+                              <Trash2 className="w-3.5 h-3.5 text-rose-400" />
+                              <span>ลบแชทนี้</span>
+                            </button>
                           </div>
                         </div>
 
@@ -1601,11 +1655,11 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
 
                         {/* Messages Stream */}
                         <div className="flex-1 p-4 overflow-y-auto space-y-3 text-xs bg-slate-900/50">
-                          {activeSession.messages.map((m: any) => {
+                          {activeSession.messages.map((m: any, mIdx: number) => {
                             const isAdmin = m.sender === 'admin';
                             return (
                               <div
-                                key={m.id}
+                                key={m.id || `msg-${mIdx}`}
                                 className={`flex gap-2.5 ${isAdmin ? 'justify-end' : 'justify-start'}`}
                               >
                                 {!isAdmin && (
@@ -1681,6 +1735,45 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                   })()}
                 </div>
               </div>
+
+              {/* Custom Modal for Chat Deletion Confirmation */}
+              {sessionToDelete && (
+                <div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-[9999] flex items-center justify-center p-4 animate-in fade-in">
+                  <div className="bg-slate-900 border border-slate-700 rounded-2xl max-w-md w-full p-6 shadow-2xl space-y-4">
+                    <div className="flex items-center gap-3 text-rose-400">
+                      <div className="w-10 h-10 rounded-full bg-rose-500/20 flex items-center justify-center shrink-0 border border-rose-500/30">
+                        <Trash2 className="w-5 h-5 text-rose-400" />
+                      </div>
+                      <div>
+                        <h3 className="text-base font-bold text-white">ยืนยันการลบห้องสนทนา</h3>
+                        <p className="text-xs text-slate-400">การดำเนินการนี้ไม่สามารถกู้คืนได้</p>
+                      </div>
+                    </div>
+
+                    <p className="text-xs text-slate-300 leading-relaxed bg-slate-950/80 p-3.5 rounded-xl border border-slate-800">
+                      คุณต้องการลบแชทของ <span className="font-bold text-amber-300">{sessionToDelete.customerName || 'ลูกค้า'}</span> ใช่หรือไม่?
+                    </p>
+
+                    <div className="flex items-center justify-end gap-2.5 pt-2">
+                      <button
+                        type="button"
+                        onClick={() => setSessionToDelete(null)}
+                        className="px-4 py-2 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-xl text-xs font-bold transition"
+                      >
+                        ยกเลิก
+                      </button>
+                      <button
+                        type="button"
+                        onClick={confirmDeleteLiveChatSession}
+                        className="px-4 py-2 bg-rose-600 hover:bg-rose-500 text-white rounded-xl text-xs font-bold transition flex items-center gap-1.5 shadow-lg shadow-rose-900/40 active:scale-95"
+                      >
+                        <Trash2 className="w-4 h-4" />
+                        <span>ยืนยันลบถาวร</span>
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              )}
             </div>
           )
         )}
@@ -1910,257 +2003,6 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
               </div>
             </div>
           </div>
-          )
-        )}
-
-        {/* TAB: LIVE CHAT CUSTOMER INBOX */}
-        {activeTab === 'livechat' && (
-          !hasAccess('livechat') ? (
-            renderRestrictedArea('ระบบแชทสดลูกค้า (Live Chat Inbox)')
-          ) : (
-            <div className="space-y-6 animate-in fade-in">
-              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-slate-800/80 border border-slate-700/80 p-5 rounded-2xl shadow-xl">
-                <div>
-                  <div className="flex items-center gap-2">
-                    <span className="bg-blue-500/20 text-blue-400 font-bold text-xs px-2.5 py-0.5 rounded-full border border-blue-500/30 flex items-center gap-1">
-                      <span className="w-2 h-2 rounded-full bg-emerald-400 animate-ping"></span>
-                      Real-time On-site Messenger
-                    </span>
-                    <span className="text-xs text-slate-400">ระบบสนทนาสดตรงจากหน้าเว็บไซต์</span>
-                  </div>
-                  <h2 className="text-xl font-black text-white mt-1 flex items-center gap-2">
-                    <Headphones className="w-6 h-6 text-blue-400" />
-                    <span>กล่องข้อความแชทสดลูกค้า (Live Chat Customer Service)</span>
-                  </h2>
-                </div>
-
-                <div className="flex items-center gap-3">
-                  <button
-                    onClick={fetchLiveChatSessions}
-                    className="bg-slate-700 hover:bg-slate-600 text-white font-bold px-3 py-2 rounded-xl text-xs transition flex items-center gap-1.5 shadow-md"
-                    title="ดึงข้อมูลแชทล่าสุด"
-                  >
-                    <RefreshCw className="w-4 h-4 text-blue-300" />
-                    <span>รีเฟรชข้อความ</span>
-                  </button>
-                  <span className="bg-blue-950 text-blue-300 border border-blue-800 font-extrabold text-xs px-3.5 py-2 rounded-xl">
-                    {liveChatSessions.length} ห้องสนทนา
-                  </span>
-                </div>
-              </div>
-
-              {/* Chat Inbox Interface */}
-              <div className="bg-slate-900 border border-slate-800 rounded-2xl shadow-2xl overflow-hidden flex flex-col md:flex-row min-h-[600px] max-h-[750px]">
-                {/* Left Column: Sessions List */}
-                <div className="w-full md:w-80 lg:w-96 border-b md:border-b-0 md:border-r border-slate-800 flex flex-col bg-slate-950/60 shrink-0">
-                  <div className="p-3.5 border-b border-slate-800 bg-slate-900/90 font-bold text-xs text-slate-300 flex items-center justify-between">
-                    <span>รายการผู้สนทนาสดล่าสุด</span>
-                    <span className="text-[10px] text-emerald-400 bg-emerald-950 px-2 py-0.5 rounded-full border border-emerald-800">
-                      Auto Polling 3s
-                    </span>
-                  </div>
-
-                  <div className="flex-1 overflow-y-auto divide-y divide-slate-800/60">
-                    {liveChatSessions.length === 0 ? (
-                      <div className="p-8 text-center text-slate-500 text-xs">
-                        <MessageSquare className="w-8 h-8 mx-auto mb-2 opacity-40 text-blue-400" />
-                        <p className="font-bold text-slate-400">ยังไม่มีผู้กดแชทสดจากหน้าเว็บ</p>
-                        <p className="text-[11px] mt-1 text-slate-500">เมื่อลูกค้ากด "แชทสดเจ้าหน้าที่" บนหน้าเว็บ ข้อความจะมาปรากฏที่นี่ทันที</p>
-                      </div>
-                    ) : (
-                      liveChatSessions.map((session) => {
-                        const isSelected = selectedLiveSessionId === session.id;
-                        const lastMsg = session.messages?.[session.messages.length - 1];
-                        return (
-                          <button
-                            key={session.id}
-                            onClick={() => setSelectedLiveSessionId(session.id)}
-                            className={`w-full p-3.5 text-left transition flex items-start justify-between gap-3 ${
-                              isSelected
-                                ? 'bg-blue-900/40 border-l-4 border-blue-500'
-                                : 'hover:bg-slate-900/60 border-l-4 border-transparent'
-                            }`}
-                          >
-                            <div className="flex-1 min-w-0">
-                              <div className="flex items-center gap-2 mb-1">
-                                <div className="w-7 h-7 rounded-full bg-blue-600/30 text-blue-300 border border-blue-500/40 flex items-center justify-center font-bold text-xs shrink-0">
-                                  {session.customerName ? session.customerName.charAt(0) : 'ค'}
-                                </div>
-                                <span className="font-bold text-slate-200 text-xs truncate">
-                                  {session.customerName || 'ลูกค้าทั่วไป'}
-                                </span>
-                                {session.unreadCount > 0 && (
-                                  <span className="bg-rose-500 text-white text-[9px] font-black px-1.5 py-0.2 rounded-full animate-pulse ml-auto">
-                                    NEW {session.unreadCount}
-                                  </span>
-                                )}
-                              </div>
-
-                              <p className="text-[11px] text-slate-400 truncate pl-9">
-                                {lastMsg ? lastMsg.text : 'เริ่มเปิดห้องสนทนา...'}
-                              </p>
-                            </div>
-
-                            <div className="text-[9px] text-slate-500 shrink-0 font-mono">
-                              {session.updatedAt ? new Date(session.updatedAt).toLocaleTimeString('th-TH', { hour: '2-digit', minute: '2-digit' }) : ''}
-                            </div>
-                          </button>
-                        );
-                      })
-                    )}
-                  </div>
-                </div>
-
-                {/* Right Column: Active Conversation */}
-                <div className="flex-1 flex flex-col bg-slate-900/90">
-                  {(() => {
-                    const activeSession = liveChatSessions.find(s => s.id === selectedLiveSessionId);
-                    if (!activeSession) {
-                      return (
-                        <div className="flex-1 flex flex-col items-center justify-center p-8 text-slate-500 text-xs text-center">
-                          <Headphones className="w-12 h-12 text-slate-700 mb-3" />
-                          <p className="text-sm font-bold text-slate-300">เลือกห้องสนทนาฝั่งซ้ายเพื่อเริ่มคุยตอบกลับ</p>
-                          <p className="text-xs text-slate-500 mt-1">แอดมินสามารถส่งข้อความตอบกลับลูกค้าที่คุยผ่านหน้าเว็บได้แบบ Real-time</p>
-                        </div>
-                      );
-                    }
-
-                    return (
-                      <>
-                        {/* Conversation Header */}
-                        <div className="p-4 border-b border-slate-800 bg-slate-950 flex items-center justify-between shrink-0">
-                          <div className="flex items-center gap-3">
-                            <div className="w-10 h-10 rounded-2xl bg-blue-600 text-white flex items-center justify-center font-extrabold shadow-md">
-                              {activeSession.customerName ? activeSession.customerName.charAt(0) : 'ค'}
-                            </div>
-                            <div>
-                              <div className="flex items-center gap-2">
-                                <h3 className="font-extrabold text-sm text-white">{activeSession.customerName || 'ลูกค้าทั่วไป'}</h3>
-                                <span className="text-[10px] bg-emerald-950 text-emerald-400 font-bold px-2 py-0.5 rounded-full border border-emerald-800/80 flex items-center gap-1">
-                                  <span className="w-1.5 h-1.5 rounded-full bg-emerald-400"></span>
-                                  Online On-site
-                                </span>
-                              </div>
-                              <p className="text-[10px] text-slate-400 font-mono">
-                                Session ID: {activeSession.id}
-                              </p>
-                            </div>
-                          </div>
-
-                          <div className="flex items-center gap-2">
-                            <a
-                              href="tel:0626816494"
-                              className="bg-slate-800 hover:bg-slate-700 text-teal-300 text-xs font-bold px-3 py-1.5 rounded-xl border border-slate-700 flex items-center gap-1 transition"
-                            >
-                              <PhoneCall className="w-3.5 h-3.5" />
-                              <span>โทรหาลูกค้า</span>
-                            </a>
-                          </div>
-                        </div>
-
-                        {/* Quick Response Buttons */}
-                        <div className="p-2.5 bg-slate-950/80 border-b border-slate-800/80 flex items-center gap-1.5 overflow-x-auto no-scrollbar shrink-0 text-[11px]">
-                          <span className="text-slate-500 font-medium shrink-0 text-[10px]">ข้อความตอบด่วน:</span>
-                          {[
-                            'สวัสดีค่ะ มีอะไรให้แอดมินช่วยดูแลไหมคะ? 🙏',
-                            'ยินดีให้บริการค่ะ สามารถสอบถามรอบเรือได้เลยค่ะ',
-                            'ท่านสามารถโอนชำระเงินและแนบสลิปผ่านหน้าเว็บได้เลยค่ะ',
-                            'แอดมินยืนยันรายการจองและตั๋วเรียบร้อยแล้วค่ะ 😊'
-                          ].map((quickText, qIdx) => (
-                            <button
-                              key={qIdx}
-                              type="button"
-                              onClick={() => setAdminReplyText(quickText)}
-                              className="whitespace-nowrap bg-slate-800 hover:bg-blue-900/60 text-slate-300 hover:text-white border border-slate-700 text-[10px] px-2.5 py-1 rounded-lg transition shrink-0"
-                            >
-                              {quickText}
-                            </button>
-                          ))}
-                        </div>
-
-                        {/* Messages Stream */}
-                        <div className="flex-1 p-4 overflow-y-auto space-y-3 text-xs bg-slate-900/50">
-                          {activeSession.messages.map((m: any) => {
-                            const isAdmin = m.sender === 'admin';
-                            return (
-                              <div
-                                key={m.id}
-                                className={`flex gap-2.5 ${isAdmin ? 'justify-end' : 'justify-start'}`}
-                              >
-                                {!isAdmin && (
-                                  <div className="w-7 h-7 rounded-xl bg-slate-800 border border-slate-700 text-slate-200 flex items-center justify-center shrink-0 mt-0.5 font-bold text-[10px]">
-                                    {activeSession.customerName ? activeSession.customerName.charAt(0) : 'ค'}
-                                  </div>
-                                )}
-
-                                <div
-                                  className={`max-w-[75%] rounded-2xl p-3 shadow-md ${
-                                    isAdmin
-                                      ? 'bg-blue-600 text-white rounded-tr-xs'
-                                      : 'bg-slate-800 text-slate-100 border border-slate-700 rounded-tl-xs'
-                                  }`}
-                                >
-                                  <div className="text-[9px] font-extrabold mb-1 opacity-80 flex items-center justify-between gap-2">
-                                    <span>{m.senderName || (isAdmin ? 'แอดมิน TripSea' : activeSession.customerName || 'ลูกค้า')}</span>
-                                    {isAdmin && <CheckCheck className="w-3 h-3 text-blue-200" />}
-                                  </div>
-
-                                  {m.imageUrl && (
-                                    <div className="mb-2 rounded-xl overflow-hidden border border-black/20">
-                                      <a href={m.imageUrl} target="_blank" rel="noopener noreferrer">
-                                        <img src={m.imageUrl} alt="attached" className="max-h-60 w-full object-cover hover:opacity-90 transition" />
-                                      </a>
-                                    </div>
-                                  )}
-
-                                  <p className="whitespace-pre-line leading-relaxed text-xs">{m.text}</p>
-
-                                  <div
-                                    className={`text-[9px] mt-1 text-right ${
-                                      isAdmin ? 'text-blue-200' : 'text-slate-400'
-                                    }`}
-                                  >
-                                    {m.timestamp}
-                                  </div>
-                                </div>
-
-                                {isAdmin && (
-                                  <div className="w-7 h-7 rounded-xl bg-blue-700 text-white flex items-center justify-center shrink-0 mt-0.5 shadow-sm">
-                                    <Headphones className="w-3.5 h-3.5" />
-                                  </div>
-                                )}
-                              </div>
-                            );
-                          })}
-                        </div>
-
-                        {/* Reply Form Footer */}
-                        <div className="p-3.5 bg-slate-950 border-t border-slate-800 shrink-0">
-                          <form onSubmit={handleSendAdminReply} className="flex items-center gap-2">
-                            <input
-                              type="text"
-                              value={adminReplyText}
-                              onChange={(e) => setAdminReplyText(e.target.value)}
-                              placeholder="พิมพ์ข้อความตอบกลับลูกค้าที่นี่..."
-                              className="flex-1 bg-slate-900 border border-slate-700 text-white placeholder-slate-500 rounded-xl px-4 py-2.5 text-xs focus:outline-none focus:ring-2 focus:ring-blue-500 transition"
-                              disabled={isSendingAdminReply}
-                            />
-                            <button
-                              type="submit"
-                              disabled={!adminReplyText.trim() || isSendingAdminReply}
-                              className="bg-blue-600 hover:bg-blue-500 disabled:opacity-40 text-white font-extrabold px-4 py-2.5 rounded-xl text-xs transition flex items-center gap-1.5 shadow-lg shadow-blue-900/30 active:scale-95 shrink-0"
-                            >
-                              <Send className="w-4 h-4" />
-                              <span>ส่งตอบกลับ</span>
-                            </button>
-                          </form>
-                        </div>
-                      </>
-                    );
-                  })()}
-                </div>
-              </div>
-            </div>
           )
         )}
 

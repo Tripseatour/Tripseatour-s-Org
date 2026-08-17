@@ -43,7 +43,7 @@ async function loadSessionsFromSupabase(supabase: any) {
     const { data } = await supabase.from('app_store').select('value').eq('key', 'live_chat_sessions').maybeSingle();
     if (data && data.value) {
       const parsed = JSON.parse(data.value);
-      if (Array.isArray(parsed) && parsed.length > 0) {
+      if (Array.isArray(parsed)) {
         return parsed;
       }
     }

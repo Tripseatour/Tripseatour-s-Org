@@ -9,6 +9,10 @@
       "destination": "/api/livechat/read?id=:id"
     },
     {
+      "source": "/api/livechat/delete/:id",
+      "destination": "/api/livechat/delete?id=:id"
+    },
+    {
       "source": "/((?!api/).*)",
       "destination": "/index.html"
     }
