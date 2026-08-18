@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Compass, Globe, ShieldCheck, Phone, Ticket, Check, Menu, X, Home, BookOpen, User, Sparkles, ShoppingCart } from 'lucide-react';
+import { Compass, Globe, ShieldCheck, Phone, Ticket, Check, Menu, X, Home, BookOpen, User, Sparkles, ShoppingCart, Smartphone } from 'lucide-react';
 import { Language } from '../types';
 import { Currency } from '../utils/currency';
 import { CurrencySelector } from './CurrencySelector';
@@ -78,6 +78,19 @@ export const Navbar: React.FC<NavbarProps> = ({
             >
               <Ticket className="w-3.5 h-3.5" />
               <span>{t.checkStatus}</span>
+            </button>
+            <span className="text-slate-700 hidden sm:inline">|</span>
+            <button
+              onClick={() => {
+                sessionStorage.removeItem('pwa_prompt_dismissed');
+                window.dispatchEvent(new Event('beforeinstallprompt'));
+                window.location.hash = '#install-app';
+              }}
+              className="hidden sm:inline-flex items-center gap-1 text-cyan-300 hover:text-cyan-200 font-bold bg-cyan-950/80 px-2 py-0.5 rounded-md border border-cyan-800/60 transition"
+              title="ติดตั้งแอปพลิเคชันลงบนมือถือหรือคอมพิวเตอร์"
+            >
+              <Smartphone className="w-3 h-3 text-cyan-400" />
+              <span>ติดตั้งแอป</span>
             </button>
           </div>
         </div>

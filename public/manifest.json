@@ -1,0 +1,38 @@
+{
+  "short_name": "TripSeaTour",
+  "name": "TripSeaTour Phuket - ทัวร์ท่องเที่ยวภูเก็ต",
+  "description": "ระบบจองทัวร์ท่องเที่ยวภูเก็ตออนไลน์ เที่ยวเกาะ ล่องเรือยอชท์ ชำระเงินสะดวกด้วย PromptPay QR Code",
+  "icons": [
+    {
+      "src": "/pwa-192x192.png",
+      "type": "image/png",
+      "sizes": "192x192",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "/pwa-512x512.png",
+      "type": "image/png",
+      "sizes": "512x512",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "/apple-touch-icon.png",
+      "type": "image/png",
+      "sizes": "180x180",
+      "purpose": "any"
+    },
+    {
+      "src": "/icon.svg",
+      "type": "image/svg+xml",
+      "sizes": "any",
+      "purpose": "any maskable"
+    }
+  ],
+  "start_url": "/",
+  "background_color": "#0f172a",
+  "theme_color": "#0284c7",
+  "display": "standalone",
+  "orientation": "portrait",
+  "scope": "/",
+  "categories": ["travel", "booking", "lifestyle"]
+}

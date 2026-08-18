@@ -14,6 +14,7 @@ import { AdminDashboard } from './components/AdminDashboard';
 import { AdminAuthModal } from './components/AdminAuthModal';
 import { TripSeaAiChatbot } from './components/TripSeaAiChatbot';
 import { CartModal } from './components/CartModal';
+import { PwaInstallPrompt } from './components/PwaInstallPrompt';
 
 import { Tour, Booking, Review, Customer, AppSettings, LineNotificationLog, Language, AdminUser, CartItem } from './types';
 import { Currency } from './utils/currency';
@@ -1411,6 +1412,9 @@ export default function App() {
           bookings={bookings}
         />
       )}
+
+      {/* PWA Install Prompt Banner & Guide */}
+      <PwaInstallPrompt currentLang={currentLang} />
     </div>
   );
 }

@@ -1,0 +1,33 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="100%" height="100%">
+  <defs>
+    <linearGradient id="bg" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#0f172a" />
+      <stop offset="50%" stop-color="#0284c7" />
+      <stop offset="100%" stop-color="#0d9488" />
+    </linearGradient>
+    <linearGradient id="wave" x1="0%" y1="0%" x2="100%" y2="0%">
+      <stop offset="0%" stop-color="#38bdf8" />
+      <stop offset="100%" stop-color="#2dd4bf" />
+    </linearGradient>
+  </defs>
+
+  <!-- Background Circle/Card -->
+  <rect width="512" height="512" rx="112" fill="url(#bg)" />
+
+  <!-- Outer Ring -->
+  <rect x="16" y="16" width="480" height="480" rx="96" fill="none" stroke="#ffffff" stroke-opacity="0.15" stroke-width="8" />
+
+  <!-- Ship/Yacht Sail -->
+  <path d="M256 96 L256 310 L370 310 Z" fill="#ffffff" opacity="0.95" />
+  <path d="M236 140 L236 310 L150 310 Z" fill="#38bdf8" opacity="0.85" />
+
+  <!-- Ship Hull -->
+  <path d="M120 330 C160 410, 352 410, 392 330 L370 320 L142 320 Z" fill="#ffffff" />
+
+  <!-- Ocean Waves -->
+  <path d="M60 380 Q 130 350, 200 380 T 340 380 T 480 380 L 480 430 Q 410 460, 340 430 T 200 430 T 60 430 Z" fill="url(#wave)" opacity="0.8" />
+  <path d="M40 410 Q 120 380, 200 410 T 360 410 T 500 410 L 500 460 Q 420 490, 340 460 T 180 460 T 40 460 Z" fill="#0f172a" opacity="0.4" />
+
+  <!-- Sun Rays -->
+  <circle cx="160" cy="140" r="32" fill="#fbbf24" />
+</svg>
