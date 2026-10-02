@@ -1485,6 +1485,7 @@ export default function App() {
       <TourDetailModal
         tour={detailTour}
         currentLang={currentLang}
+        settings={settings}
         isInCart={detailTour ? cart.some(c => c.tourId === detailTour.id) : false}
         onClose={() => setDetailTour(null)}
         onBookNow={(tour) => {
@@ -1511,6 +1512,7 @@ export default function App() {
       <ItineraryModal
         tour={itineraryTour}
         currentLang={currentLang}
+        settings={settings}
         onClose={() => setItineraryTour(null)}
         onBookNow={(tour) => {
           setItineraryTour(null);

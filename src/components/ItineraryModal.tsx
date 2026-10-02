@@ -1,11 +1,12 @@
 import React from 'react';
-import { X, Clock, MapPin, Calendar, ArrowRight, CheckCircle2, ShieldCheck } from 'lucide-react';
-import { Tour, Language } from '../types';
+import { X, Clock, MapPin, Calendar, ArrowRight, CheckCircle2, ShieldCheck, AlertCircle, MessageCircle } from 'lucide-react';
+import { Tour, Language, AppSettings } from '../types';
 import { translations } from '../data/translations';
 
 interface ItineraryModalProps {
   tour: Tour | null;
   currentLang: Language;
+  settings?: AppSettings;
   onClose: () => void;
   onBookNow: (tour: Tour) => void;
 }
@@ -13,6 +14,7 @@ interface ItineraryModalProps {
 export const ItineraryModal: React.FC<ItineraryModalProps> = ({
   tour,
   currentLang,
+  settings,
   onClose,
   onBookNow,
 }) => {
@@ -121,6 +123,42 @@ export const ItineraryModal: React.FC<ItineraryModalProps> = ({
                currentLang === 'RU' ? '* Время трансфера зависит от отеля. Бесплатный сбор в лобби: Патонг, Ката, Карон и Пхукет-таун.' :
                '* Exact pickup time depends on hotel location. Free hotel lobby pickup in Patong, Kata, Karon and Phuket Town.'}
             </p>
+          </div>
+
+          {/* LINE Boat Seat Availability Warning Banner Before Booking */}
+          <div className="bg-gradient-to-r from-amber-950/90 via-slate-900 to-amber-950/90 border-2 border-amber-500/60 rounded-2xl p-4 text-slate-200 shadow-md space-y-3">
+            <div className="flex items-start gap-3">
+              <div className="w-9 h-9 rounded-xl bg-amber-500 text-slate-950 flex items-center justify-center shrink-0 shadow-sm mt-0.5">
+                <AlertCircle className="w-5 h-5 text-slate-950 font-bold" />
+              </div>
+              <div className="space-y-1 flex-1">
+                <h4 className="font-black text-xs sm:text-sm text-amber-300 leading-snug">
+                  ⚠️ {t.checkSeatWarningNotice}
+                </h4>
+                <p className="text-[11px] text-slate-300 leading-relaxed">
+                  {t.checkSeatSubNotice}
+                </p>
+              </div>
+            </div>
+
+            <div className="pt-2 flex flex-wrap items-center justify-between gap-2 border-t border-amber-500/30">
+              <span className="text-[11px] font-semibold text-amber-200 flex items-center gap-1.5">
+                <span>LINE Official:</span>
+                <span className="font-extrabold text-emerald-400 bg-slate-800 px-2 py-0.5 rounded-md border border-amber-500/40 font-mono">
+                  {settings?.lineOaId || '@056hxinu'}
+                </span>
+              </span>
+
+              <a
+                href={`https://line.me/R/ti/p/${settings?.lineOaId || '@056hxinu'}`}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="inline-flex items-center gap-2 bg-[#06C755] hover:bg-[#05b34c] text-white font-black px-4 py-2 rounded-xl text-xs transition shadow-md shadow-emerald-900/40 active:scale-95 cursor-pointer"
+              >
+                <MessageCircle className="w-4 h-4 fill-white text-white" />
+                <span>{t.addlineToCheckSeats}</span>
+              </a>
+            </div>
           </div>
         </div>
 

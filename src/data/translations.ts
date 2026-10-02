@@ -179,6 +179,9 @@ export const translations: Record<Language, Record<string, string>> = {
     bookingCompleteMultiDesc: 'ระบบได้บันทึกคำสั่งจองและเตรียมตั๋ว E-Ticket ทุกทัวร์ไว้ให้คุณแล้ว สามารถดูและดาวน์โหลดตั๋วแยกแต่ละทริปได้ด้านล่าง',
     saveTicketVoucher: 'บันทึกรูปตั๋วลงเครื่อง (PNG)',
     generatingVoucher: 'กำลังสร้างรูปตั๋ว...',
+    checkSeatWarningNotice: 'กรุณาแอดไลน์เพื่อติดต่อสอบถามที่นั่งเรือในวันที่จองก่อนทำการชำระเงิน',
+    addlineToCheckSeats: 'แอด LINE สอบถามที่นั่งเรือ',
+    checkSeatSubNotice: 'เพื่อความสะดวกรวดเร็วและมั่นใจว่ามีที่นั่งเรือว่างในรอบวันที่ท่านต้องการเดินทาง เจ้าหน้าที่จะช่วยตรวจสอบคิวเรือและยืนยันรอบทันที',
   },
   EN: {
     siteTitle: 'Trip Sea Tour Phuket - Book Island Tours & Excursions',
@@ -355,6 +358,9 @@ export const translations: Record<Language, Record<string, string>> = {
     bookingCompleteMultiDesc: 'Your bookings are confirmed and E-Tickets are ready. View and download tickets below.',
     saveTicketVoucher: 'Save E-Ticket Voucher (PNG)',
     generatingVoucher: 'Generating voucher...',
+    checkSeatWarningNotice: 'Please add LINE to check boat seat availability for your travel date before making payment',
+    addlineToCheckSeats: 'Add LINE to Check Boat Seats',
+    checkSeatSubNotice: 'To ensure seats are available on your selected date, our team will verify boat availability immediately.',
   },
   ZH: {
     siteTitle: 'Trip Sea Tour 普吉岛跳岛游预订中心',
@@ -531,6 +537,9 @@ export const translations: Record<Language, Record<string, string>> = {
     bookingCompleteMultiDesc: '系统已生成全部电子确认单，可在下方查看或下载保存。',
     saveTicketVoucher: '保存电子凭证 (PNG)',
     generatingVoucher: '正在生成凭证...',
+    checkSeatWarningNotice: '付款前请先添加 LINE 联系客服确认所选出行日期的船位名额',
+    addlineToCheckSeats: '添加 LINE 确认船位',
+    checkSeatSubNotice: '为确保您所需的出发日期有充足船位，客服团队将立即为您核查并确认。',
   },
   RU: {
     siteTitle: 'Trip Sea Tour Пхукет - Экскурсии и Острова',
@@ -707,5 +716,8 @@ export const translations: Record<Language, Record<string, string>> = {
     bookingCompleteMultiDesc: 'Ваучеры готовы. Вы можете просмотреть и скачать каждый ваучер ниже.',
     saveTicketVoucher: 'Сохранить ваучер (PNG)',
     generatingVoucher: 'Создание ваучера...',
+    checkSeatWarningNotice: 'Пожалуйста, свяжитесь с нами в LINE для уточнения мест на катере перед оплатой',
+    addlineToCheckSeats: 'Добавить LINE для проверки мест',
+    checkSeatSubNotice: 'Чтобы гарантировать наличие свободных мест на выбранную дату, наш менеджер оперативно проверит расписание.',
   }
 };
