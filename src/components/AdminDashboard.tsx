@@ -4,15 +4,17 @@ import {
   Settings, MessageCircle, QrCode, Plus, Search, Eye, EyeOff, Copy, Check, X, RefreshCw, Send, Image as ImageIcon,
   ChevronRight, Filter, FileSpreadsheet, Sparkles, LogOut, Lock, Key, Ticket, Trash2, Edit3, Calendar, ListChecks,
   Star, MessageSquare, Bot, UserPlus, UserMinus, ShieldCheck, Mail, Database, Printer, Ship, FileText, ClipboardList, PhoneCall, Award,
-  TrendingUp, Calculator, Percent, Coins, Building2, Headphones, CheckCheck
+  TrendingUp, Calculator, Percent, Coins, Building2, Headphones, CheckCheck, MapPin, Navigation
 } from 'lucide-react';
 import {
   BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid, PieChart, Pie, Cell, Legend,
   LineChart, Line, AreaChart, Area, ComposedChart
 } from 'recharts';
-import { Booking, Tour, Customer, Review, AppSettings, LineNotificationLog, SalesStats, AdminUser } from '../types';
+import { Booking, Tour, Customer, Review, AppSettings, LineNotificationLog, SalesStats, AdminUser, Supplier } from '../types';
 import { TicketVoucher } from './TicketVoucher';
 import { EditTourModal } from './EditTourModal';
+import { PickupLogisticsMap } from './PickupLogisticsMap';
+import { SupplierModal } from './SupplierModal';
 import { isSupabaseConfigured, getSupabase, SUPABASE_SQL_SCHEMA } from '../lib/supabase';
 import { initialSettings } from '../data/mockData';
 
@@ -22,11 +24,13 @@ interface AdminDashboardProps {
   tours: Tour[];
   customers: Customer[];
   reviews?: Review[];
+  suppliers?: Supplier[];
   settings: AppSettings;
   lineLogs: LineNotificationLog[];
   syncStatus?: 'synced' | 'syncing' | 'error';
   lastSyncedAt?: string;
   onUpdateBookingStatus: (id: string, paymentStatus: string, orderStatus: string) => void;
+  onUpdateBookingSupplier?: (id: string, supplierId?: string, supplierName?: string) => void;
   onDeleteBooking?: (id: string) => void;
   onSaveSettings: (settings: AppSettings) => void;
   onSendTestLine: (message: string) => void;
@@ -42,6 +46,9 @@ interface AdminDashboardProps {
   onUpdateReview?: (id: string, updatedFields: Partial<Review>) => void;
   onReplyReview?: (id: string, reply: string) => void;
   onDeleteReview?: (id: string) => void;
+  onAddSupplier?: (supplier: Supplier) => void;
+  onUpdateSupplier?: (id: string, supplierData: Partial<Supplier>) => void;
+  onDeleteSupplier?: (id: string) => void;
   onRefreshData?: () => void;
   onForceSync?: () => void;
 }
@@ -52,11 +59,13 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
   tours,
   customers,
   reviews = [],
+  suppliers = [],
   settings,
   lineLogs,
   syncStatus = 'synced',
   lastSyncedAt,
   onUpdateBookingStatus,
+  onUpdateBookingSupplier,
   onDeleteBooking,
   onSaveSettings,
   onSendTestLine,
@@ -72,10 +81,13 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
   onUpdateReview,
   onReplyReview,
   onDeleteReview,
+  onAddSupplier,
+  onUpdateSupplier,
+  onDeleteSupplier,
   onRefreshData,
   onForceSync
 }) => {
-  const [activeTab, setActiveTab] = useState<'overview' | 'orders' | 'livechat' | 'tours' | 'customers' | 'reviews' | 'settings' | 'manifest'>('overview');
+  const [activeTab, setActiveTab] = useState<'overview' | 'orders' | 'livechat' | 'tours' | 'customers' | 'reviews' | 'settings' | 'manifest' | 'logistics' | 'suppliers'>('overview');
   const [stats, setStats] = useState<SalesStats | null>(null);
 
   // Live Chat States
@@ -176,6 +188,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
 
   // Filters
   const [orderFilter, setOrderFilter] = useState<string>('all');
+  const [supplierOrderFilter, setSupplierOrderFilter] = useState<string>('all');
   const [searchQuery, setSearchQuery] = useState<string>('');
   const [reviewFilter, setReviewFilter] = useState<'all' | 'pending' | 'approved'>('all');
 
@@ -189,6 +202,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
   // Passenger Manifest & Back-office States
   const [manifestDateFilter, setManifestDateFilter] = useState<string>('all');
   const [manifestTourFilter, setManifestTourFilter] = useState<string>('all');
+  const [manifestSupplierFilter, setManifestSupplierFilter] = useState<string>('all');
   const [manifestSearch, setManifestSearch] = useState<string>('');
   const [boatAssignments, setBoatAssignments] = useState<Record<string, string>>({});
   const [isPrintManifestOpen, setIsPrintManifestOpen] = useState<boolean>(false);
@@ -202,11 +216,21 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
   const [testLineMsg, setTestLineMsg] = useState('🧪 [ทดสอบการแจ้งเตือน LINE Notify จากระบบแอดมิน]\n');
   const [deleteBookingTarget, setDeleteBookingTarget] = useState<Booking | null>(null);
   const [deleteTourTarget, setDeleteTourTarget] = useState<Tour | null>(null);
+  const [tourVisibilityFilter, setTourVisibilityFilter] = useState<'all' | 'visible' | 'hidden'>('all');
+  const [tourSearchTerm, setTourSearchTerm] = useState('');
+  const [tourCategoryFilter, setTourCategoryFilter] = useState('all');
+  const [togglingTourId, setTogglingTourId] = useState<string | null>(null);
 
   // Customer Edit State
   const [editingCustomer, setEditingCustomer] = useState<Customer | null>(null);
   const [isCustomerModalOpen, setIsCustomerModalOpen] = useState(false);
   const [deleteCustomerTarget, setDeleteCustomerTarget] = useState<Customer | null>(null);
+
+  // Supplier State & Modals
+  const [supplierSearch, setSupplierSearch] = useState('');
+  const [editingSupplier, setEditingSupplier] = useState<Supplier | null>(null);
+  const [isSupplierModalOpen, setIsSupplierModalOpen] = useState(false);
+  const [deleteSupplierTarget, setDeleteSupplierTarget] = useState<Supplier | null>(null);
 
   // Review Reply State & AI
   const [replyTextMap, setReplyTextMap] = useState<Record<string, string>>({});
@@ -217,9 +241,9 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
 
   const isSuperAdmin = adminUser?.role === 'superadmin' || adminUser?.email?.trim().toLowerCase() === 'asmr9941@gmail.com';
 
-  const hasAccess = (tab: 'overview' | 'orders' | 'livechat' | 'tours' | 'customers' | 'reviews' | 'settings' | 'manifest') => {
+  const hasAccess = (tab: 'overview' | 'orders' | 'livechat' | 'tours' | 'customers' | 'reviews' | 'settings' | 'manifest' | 'logistics' | 'suppliers') => {
     if (isSuperAdmin) return true;
-    const allowed = settings.adminPermissions || ['overview', 'orders', 'livechat', 'tours', 'reviews', 'manifest'];
+    const allowed = settings.adminPermissions || ['overview', 'orders', 'livechat', 'tours', 'reviews', 'manifest', 'logistics', 'suppliers'];
     return allowed.includes(tab);
   };
 
@@ -642,14 +666,20 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
       (orderFilter === 'slip_uploaded' && b.paymentStatus === 'slip_uploaded') ||
       (orderFilter === 'verified' && b.paymentStatus === 'verified');
 
+    const matchesSupplier =
+      supplierOrderFilter === 'all' ||
+      (supplierOrderFilter === 'unassigned' && (!b.supplierId || b.supplierId === '')) ||
+      (b.supplierId === supplierOrderFilter);
+
     const matchesSearch =
       b.bookingRef.toLowerCase().includes(searchQuery.toLowerCase()) ||
       b.customerName.toLowerCase().includes(searchQuery.toLowerCase()) ||
       b.customerPhone.includes(searchQuery) ||
       (b.customerLineId && b.customerLineId.toLowerCase().includes(searchQuery.toLowerCase())) ||
+      (b.supplierName && b.supplierName.toLowerCase().includes(searchQuery.toLowerCase())) ||
       (b.pickupHotel && b.pickupHotel.toLowerCase().includes(searchQuery.toLowerCase()));
 
-    return matchesFilter && matchesSearch;
+    return matchesFilter && matchesSupplier && matchesSearch;
   });
 
   // Helper to calculate agency cost of a single booking
@@ -1024,6 +1054,44 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
             )}
             <span className="bg-cyan-500/30 text-cyan-200 text-[10px] font-extrabold px-2 py-0.5 rounded-full border border-cyan-400/30">
               Insurance List
+            </span>
+          </button>
+
+          <button
+            onClick={() => setActiveTab('logistics')}
+            className={`px-4 py-2 rounded-xl text-xs font-bold transition flex items-center gap-2 whitespace-nowrap relative ${
+              activeTab === 'logistics' ? 'bg-emerald-600 text-white shadow-lg shadow-emerald-600/30' : 'bg-slate-800/80 text-slate-400 hover:text-white'
+            }`}
+          >
+            <MapPin className="w-4 h-4 text-emerald-400 animate-bounce" />
+            <span>🗺️ แผนที่รถรับส่งประจำวัน (Pickup Map)</span>
+            {!hasAccess('logistics') && (
+              <span className="bg-rose-500/20 text-rose-300 text-[9px] font-extrabold px-1.5 py-0.5 rounded-full flex items-center gap-1 border border-rose-500/30 mr-1.5">
+                <Lock className="w-2.5 h-2.5" />
+                <span>จำกัดสิทธิ์</span>
+              </span>
+            )}
+            <span className="bg-emerald-500/30 text-emerald-200 text-[10px] font-extrabold px-2 py-0.5 rounded-full border border-emerald-400/30">
+              Logistics
+            </span>
+          </button>
+
+          <button
+            onClick={() => setActiveTab('suppliers')}
+            className={`px-4 py-2 rounded-xl text-xs font-bold transition flex items-center gap-2 whitespace-nowrap relative ${
+              activeTab === 'suppliers' ? 'bg-amber-500 text-slate-950 shadow-lg shadow-amber-500/30 font-black' : 'bg-slate-800/80 text-slate-400 hover:text-white'
+            }`}
+          >
+            <Building2 className="w-4 h-4 text-amber-400" />
+            <span>🏢 เอเยนต์/ซัพพลายเออร์ ({suppliers.length})</span>
+            {!hasAccess('suppliers') && (
+              <span className="bg-rose-500/20 text-rose-300 text-[9px] font-extrabold px-1.5 py-0.5 rounded-full flex items-center gap-1 border border-rose-500/30 mr-1.5">
+                <Lock className="w-2.5 h-2.5" />
+                <span>จำกัดสิทธิ์</span>
+              </span>
+            )}
+            <span className="bg-amber-500/30 text-amber-200 text-[10px] font-extrabold px-2 py-0.5 rounded-full border border-amber-400/30">
+              Suppliers
             </span>
           </button>
 
@@ -1832,6 +1900,24 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                 >
                   ชำระเงินแล้ว ({bookings.filter(b => b.paymentStatus === 'verified').length})
                 </button>
+
+                {/* Supplier Filter Dropdown */}
+                <div className="flex items-center gap-1.5 bg-slate-900 border border-slate-700 rounded-xl px-3 py-1.5 text-xs font-bold text-amber-300 shadow-sm">
+                  <Building2 className="w-4 h-4 text-amber-400 shrink-0" />
+                  <select
+                    value={supplierOrderFilter}
+                    onChange={(e) => setSupplierOrderFilter(e.target.value)}
+                    className="bg-transparent text-slate-200 text-xs font-bold focus:outline-none cursor-pointer"
+                  >
+                    <option value="all" className="bg-slate-900 text-white">🏢 เอเยนต์ทั้งหมด ({bookings.length})</option>
+                    <option value="unassigned" className="bg-slate-900 text-amber-300">⚠️ ยังไม่ระบุเอเยนต์ ({bookings.filter(b => !b.supplierId).length})</option>
+                    {suppliers.map(s => (
+                      <option key={s.id} value={s.id} className="bg-slate-900 text-white">
+                        🏢 [{s.code}] {s.name} ({bookings.filter(b => b.supplierId === s.id).length})
+                      </option>
+                    ))}
+                  </select>
+                </div>
               </div>
             </div>
 
@@ -1845,6 +1931,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                       <th className="p-3.5">โปรแกรมทัวร์</th>
                       <th className="p-3.5">ผู้จอง & เบอร์ / LINE</th>
                       <th className="p-3.5">วันเดินทาง / จำนวน</th>
+                      <th className="p-3.5">เอเยนต์ผู้ให้บริการ</th>
                       <th className="p-3.5">ยอดเงิน</th>
                       <th className="p-3.5">สลิปโอนเงิน</th>
                       <th className="p-3.5 text-center">จัดการคำสั่งซื้อ</th>
@@ -1919,6 +2006,43 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                         <td className="p-3.5 space-y-0.5">
                           <div className="font-bold text-teal-300">📅 {b.travelDate}</div>
                           <div className="text-slate-400">👥 ผญ: {b.adults} / เด็ก: {b.children}</div>
+                        </td>
+
+                        {/* Supplier Selector Cell */}
+                        <td className="p-3.5 min-w-[170px]">
+                          <div className="space-y-1">
+                            <select
+                              value={b.supplierId || ''}
+                              onChange={(e) => {
+                                const selectedId = e.target.value;
+                                const sup = suppliers.find(s => s.id === selectedId);
+                                if (onUpdateBookingSupplier) {
+                                  onUpdateBookingSupplier(b.id, selectedId || undefined, sup ? sup.name : undefined);
+                                }
+                              }}
+                              className={`w-full text-xs font-bold rounded-xl px-2.5 py-1.5 border transition focus:outline-none focus:ring-2 cursor-pointer ${
+                                b.supplierId
+                                  ? 'bg-amber-950/80 border-amber-700/80 text-amber-300 focus:ring-amber-500'
+                                  : 'bg-slate-900 border-slate-700 text-slate-400 hover:border-slate-500 focus:ring-teal-500'
+                              }`}
+                            >
+                              <option value="" className="bg-slate-900 text-slate-400">-- เลือกเอเยนต์ / รอส่งงาน --</option>
+                              {suppliers.map(s => (
+                                <option key={s.id} value={s.id} className="bg-slate-900 text-white font-bold">
+                                  [{s.code}] {s.name}
+                                </option>
+                              ))}
+                            </select>
+                            {b.supplierId ? (
+                              <span className="text-[10px] text-amber-400 font-bold block truncate">
+                                ✓ {suppliers.find(s => s.id === b.supplierId)?.name || b.supplierName}
+                              </span>
+                            ) : (
+                              <span className="text-[10px] text-slate-500 block">
+                                ⚠️ ยังไม่ระบุเอเยนต์
+                              </span>
+                            )}
+                          </div>
                         </td>
 
                         <td className="p-3.5">
@@ -2010,75 +2134,424 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
         {activeTab === 'tours' && (
           !hasAccess('tours') ? (
             renderRestrictedArea('จัดการโปรแกรมทัวร์')
-          ) : (
-            <div className="space-y-6 animate-in fade-in">
-            <div className="flex items-center justify-between">
-              <div>
-                <h2 className="text-lg font-bold text-white">จัดการรายการโปรแกรมทัวร์ (Tour Programs)</h2>
-                <p className="text-xs text-slate-400">เพิ่ม/แก้ไข หมวดหมู่ ราคา รายการที่รวมในทัวร์ และตารางเวลาเดินทาง (Itinerary)</p>
-              </div>
+          ) : (() => {
+            const isTourVisible = (tr: Tour) => {
+              return tr.isVisible !== false && tr.isAvailable !== false;
+            };
 
-              <button
-                onClick={() => {
-                  setEditingTour(null);
-                  setIsTourModalOpen(true);
-                }}
-                className="bg-teal-600 hover:bg-teal-500 text-white font-bold px-4 py-2.5 rounded-xl text-xs transition flex items-center gap-2 shadow-lg shadow-teal-900/30"
-              >
-                <Plus className="w-4 h-4" />
-                <span>เพิ่มโปรแกรมทัวร์ใหม่</span>
-              </button>
-            </div>
+            const visibleCount = tours.filter(t => isTourVisible(t)).length;
+            const hiddenCount = tours.filter(t => !isTourVisible(t)).length;
 
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
-              {tours.map((tr) => (
-                <div key={tr.id} className="bg-slate-800/80 border border-slate-700 rounded-2xl overflow-hidden shadow-lg flex flex-col justify-between">
-                  <div className="relative aspect-video">
-                    <img src={tr.images[0]} alt={tr.title.TH} className="w-full h-full object-cover" />
-                    <div className="absolute top-3 right-3 bg-slate-900/90 text-teal-300 text-[10px] font-bold px-2 py-0.5 rounded-md">
-                      {tr.categoryLabel.TH}
+            const filteredAdminTours = tours.filter(tr => {
+              const isVis = isTourVisible(tr);
+              if (tourVisibilityFilter === 'visible' && !isVis) return false;
+              if (tourVisibilityFilter === 'hidden' && isVis) return false;
+
+              if (tourCategoryFilter !== 'all' && tr.category !== tourCategoryFilter) return false;
+
+              if (tourSearchTerm.trim()) {
+                const q = tourSearchTerm.toLowerCase();
+                const matchTH = tr.title?.TH?.toLowerCase().includes(q);
+                const matchEN = tr.title?.EN?.toLowerCase().includes(q);
+                const matchLoc = tr.location?.toLowerCase().includes(q);
+                const matchSup = tr.supplierName?.toLowerCase().includes(q);
+                const matchTag = tr.tags?.some(tag => tag.toLowerCase().includes(q));
+                if (!matchTH && !matchEN && !matchLoc && !matchSup && !matchTag) return false;
+              }
+
+              return true;
+            });
+
+            const handleToggleTourVisibility = async (tr: Tour) => {
+              if (!onUpdateTour) return;
+              const currentVis = isTourVisible(tr);
+              const nextVis = !currentVis;
+              setTogglingTourId(tr.id);
+              try {
+                await onUpdateTour(tr.id, {
+                  isVisible: nextVis,
+                  isAvailable: nextVis
+                });
+              } catch (err) {
+                console.error('Failed to toggle tour visibility:', err);
+              } finally {
+                setTogglingTourId(null);
+              }
+            };
+
+            return (
+              <div className="space-y-6 animate-in fade-in">
+                {/* Header & Add Tour Button */}
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-slate-900/60 p-4 rounded-2xl border border-slate-800">
+                  <div>
+                    <h2 className="text-lg font-bold text-white flex items-center gap-2">
+                      <Sparkles className="w-5 h-5 text-teal-400" />
+                      <span>จัดการรายการโปรแกรมทัวร์ (Tour Programs)</span>
+                    </h2>
+                    <p className="text-xs text-slate-400 mt-0.5">
+                      กำหนดเปิด/ปิดการแสดงผลหน้าเว็บ (Show/Hide), ปรับราคา, หมวดหมู่, บริษัทเรือ และรายละเอียดโปรแกรม
+                    </p>
+                  </div>
+
+                  <button
+                    onClick={() => {
+                      setEditingTour(null);
+                      setIsTourModalOpen(true);
+                    }}
+                    className="bg-teal-600 hover:bg-teal-500 text-white font-bold px-4 py-2.5 rounded-xl text-xs transition flex items-center justify-center gap-2 shadow-lg shadow-teal-900/30 cursor-pointer shrink-0"
+                  >
+                    <Plus className="w-4 h-4" />
+                    <span>เพิ่มโปรแกรมทัวร์ใหม่</span>
+                  </button>
+                </div>
+
+                {/* Status KPI Counters */}
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                  <div
+                    onClick={() => setTourVisibilityFilter('all')}
+                    className={`p-3.5 rounded-2xl border transition cursor-pointer flex items-center justify-between ${
+                      tourVisibilityFilter === 'all'
+                        ? 'bg-slate-800 border-teal-500/80 shadow-md ring-1 ring-teal-500/40'
+                        : 'bg-slate-900/80 border-slate-800 hover:border-slate-700'
+                    }`}
+                  >
+                    <div>
+                      <div className="text-[11px] font-bold text-slate-400">โปรแกรมทัวร์ทั้งหมด</div>
+                      <div className="text-2xl font-black text-white mt-0.5 font-mono">{tours.length}</div>
+                    </div>
+                    <div className="w-10 h-10 rounded-xl bg-slate-800 border border-slate-700 flex items-center justify-center text-teal-400">
+                      <Ship className="w-5 h-5" />
                     </div>
                   </div>
 
-                  <div className="p-4 space-y-3 flex-1 flex flex-col justify-between">
+                  <div
+                    onClick={() => setTourVisibilityFilter('visible')}
+                    className={`p-3.5 rounded-2xl border transition cursor-pointer flex items-center justify-between ${
+                      tourVisibilityFilter === 'visible'
+                        ? 'bg-emerald-950/40 border-emerald-500 shadow-md ring-1 ring-emerald-500/40'
+                        : 'bg-slate-900/80 border-slate-800 hover:border-slate-700'
+                    }`}
+                  >
                     <div>
-                      <h3 className="font-bold text-white text-sm line-clamp-1">{tr.title.TH}</h3>
-                      <p className="text-[11px] text-slate-400 mt-1 line-clamp-2">{tr.description.TH}</p>
-                      <div className="mt-2 flex items-center justify-between text-xs pt-2 border-t border-slate-700/60">
-                        <span className="text-slate-400">ราคาผู้ใหญ่:</span>
-                        <span className="font-extrabold text-amber-400 font-mono">฿{tr.priceAdult.toLocaleString()}</span>
+                      <div className="text-[11px] font-bold text-emerald-400 flex items-center gap-1.5">
+                        <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>
+                        <span>เปิดแสดงบนหน้าเว็บ (Visible)</span>
                       </div>
-                      <div className="flex items-center justify-between text-xs">
-                        <span className="text-slate-400">ราคาเด็ก:</span>
-                        <span className="font-bold text-slate-300 font-mono">฿{tr.priceChild.toLocaleString()}</span>
-                      </div>
+                      <div className="text-2xl font-black text-emerald-300 mt-0.5 font-mono">{visibleCount}</div>
                     </div>
+                    <div className="w-10 h-10 rounded-xl bg-emerald-500/10 border border-emerald-500/30 flex items-center justify-center text-emerald-400">
+                      <Eye className="w-5 h-5" />
+                    </div>
+                  </div>
 
-                    <div className="grid grid-cols-2 gap-2 pt-2 border-t border-slate-700">
-                      <button
-                        onClick={() => {
-                          setEditingTour(tr);
-                          setIsTourModalOpen(true);
-                        }}
-                        className="bg-slate-700 hover:bg-slate-600 text-white font-bold py-2 rounded-xl text-xs transition flex items-center justify-center gap-1"
-                      >
-                        <Edit3 className="w-3.5 h-3.5" />
-                        <span>แก้ไข</span>
-                      </button>
-                      <button
-                        onClick={() => setDeleteTourTarget(tr)}
-                        className="bg-rose-950 hover:bg-rose-900 text-rose-300 border border-rose-800 font-bold py-2 rounded-xl text-xs transition flex items-center justify-center gap-1"
-                      >
-                        <Trash2 className="w-3.5 h-3.5" />
-                        <span>ลบ</span>
-                      </button>
+                  <div
+                    onClick={() => setTourVisibilityFilter('hidden')}
+                    className={`p-3.5 rounded-2xl border transition cursor-pointer flex items-center justify-between ${
+                      tourVisibilityFilter === 'hidden'
+                        ? 'bg-rose-950/40 border-rose-500 shadow-md ring-1 ring-rose-500/40'
+                        : 'bg-slate-900/80 border-slate-800 hover:border-slate-700'
+                    }`}
+                  >
+                    <div>
+                      <div className="text-[11px] font-bold text-rose-400 flex items-center gap-1.5">
+                        <span className="w-2 h-2 rounded-full bg-rose-400"></span>
+                        <span>ซ่อนไว้ / ไม่แสดง (Hidden)</span>
+                      </div>
+                      <div className="text-2xl font-black text-rose-300 mt-0.5 font-mono">{hiddenCount}</div>
+                    </div>
+                    <div className="w-10 h-10 rounded-xl bg-rose-500/10 border border-rose-500/30 flex items-center justify-center text-rose-400">
+                      <EyeOff className="w-5 h-5" />
                     </div>
                   </div>
                 </div>
-              ))}
-            </div>
-          </div>
-          )
+
+                {/* Filter and Search Bar */}
+                <div className="bg-slate-900/90 border border-slate-800 p-3.5 rounded-2xl flex flex-col md:flex-row items-stretch md:items-center justify-between gap-3">
+                  {/* Segmented Filter Pills */}
+                  <div className="flex items-center gap-1.5 bg-slate-950 p-1 rounded-xl border border-slate-800/80 overflow-x-auto shrink-0">
+                    <button
+                      type="button"
+                      onClick={() => setTourVisibilityFilter('all')}
+                      className={`px-3 py-1.5 rounded-lg text-xs font-bold transition flex items-center gap-1.5 cursor-pointer whitespace-nowrap ${
+                        tourVisibilityFilter === 'all'
+                          ? 'bg-teal-600 text-white shadow'
+                          : 'text-slate-400 hover:text-white'
+                      }`}
+                    >
+                      <span>ทั้งหมด</span>
+                      <span className="bg-slate-900/80 px-1.5 py-0.2 rounded text-[10px] font-mono">{tours.length}</span>
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={() => setTourVisibilityFilter('visible')}
+                      className={`px-3 py-1.5 rounded-lg text-xs font-bold transition flex items-center gap-1.5 cursor-pointer whitespace-nowrap ${
+                        tourVisibilityFilter === 'visible'
+                          ? 'bg-emerald-600 text-white shadow'
+                          : 'text-slate-400 hover:text-emerald-300'
+                      }`}
+                    >
+                      <Eye className="w-3.5 h-3.5" />
+                      <span>แสดงบนเว็บ</span>
+                      <span className="bg-slate-900/80 px-1.5 py-0.2 rounded text-[10px] font-mono">{visibleCount}</span>
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={() => setTourVisibilityFilter('hidden')}
+                      className={`px-3 py-1.5 rounded-lg text-xs font-bold transition flex items-center gap-1.5 cursor-pointer whitespace-nowrap ${
+                        tourVisibilityFilter === 'hidden'
+                          ? 'bg-rose-600 text-white shadow'
+                          : 'text-slate-400 hover:text-rose-300'
+                      }`}
+                    >
+                      <EyeOff className="w-3.5 h-3.5" />
+                      <span>ซ่อนไว้ (ไม่แสดง)</span>
+                      <span className="bg-slate-900/80 px-1.5 py-0.2 rounded text-[10px] font-mono">{hiddenCount}</span>
+                    </button>
+                  </div>
+
+                  {/* Search and Category Filter */}
+                  <div className="flex flex-1 items-center gap-2">
+                    <div className="relative flex-1">
+                      <Search className="w-4 h-4 text-slate-400 absolute left-3 top-2.5" />
+                      <input
+                        type="text"
+                        placeholder="ค้นหาชื่อโปรแกรม, ซัพพลายเออร์, หรือสถานที่..."
+                        value={tourSearchTerm}
+                        onChange={(e) => setTourSearchTerm(e.target.value)}
+                        className="w-full bg-slate-950 border border-slate-700/80 rounded-xl pl-9 pr-3 py-2 text-xs text-white placeholder-slate-500 focus:outline-none focus:ring-1 focus:ring-teal-500"
+                      />
+                      {tourSearchTerm && (
+                        <button
+                          type="button"
+                          onClick={() => setTourSearchTerm('')}
+                          className="absolute right-2.5 top-2.5 text-slate-500 hover:text-white"
+                        >
+                          <X className="w-3.5 h-3.5" />
+                        </button>
+                      )}
+                    </div>
+
+                    <select
+                      value={tourCategoryFilter}
+                      onChange={(e) => setTourCategoryFilter(e.target.value)}
+                      className="bg-slate-950 border border-slate-700/80 rounded-xl px-3 py-2 text-xs text-slate-200 font-bold focus:outline-none focus:ring-1 focus:ring-teal-500 shrink-0"
+                    >
+                      <option value="all">หมวดหมู่ทั้งหมด</option>
+                      <option value="island">🏝️ ทัวร์เกาะ (Island)</option>
+                      <option value="sunset">🌅 ล่องเรือยอชท์ (Sunset)</option>
+                      <option value="yacht">🛥️ เรือคาทามารัน (Catamaran)</option>
+                      <option value="eco">🐘 เชิงอนุรักษ์ (Eco)</option>
+                      <option value="sightseeing">🏙️ เที่ยวเมือง (Sightseeing)</option>
+                    </select>
+                  </div>
+                </div>
+
+                {/* Tour Cards Grid */}
+                {filteredAdminTours.length === 0 ? (
+                  <div className="bg-slate-900/50 border border-dashed border-slate-800 rounded-3xl p-12 text-center space-y-3">
+                    <div className="w-12 h-12 rounded-2xl bg-slate-800 text-slate-400 mx-auto flex items-center justify-center">
+                      <Search className="w-6 h-6" />
+                    </div>
+                    <h3 className="font-bold text-white text-sm">ไม่พบโปรแกรมทัวร์ตามเงื่อนไขที่เลือก</h3>
+                    <p className="text-xs text-slate-400 max-w-sm mx-auto">
+                      ลองเปลี่ยนตัวกรองการแสดงผล หรือล้างคำค้นหาเพื่อดูรายการทัวร์ทั้งหมด
+                    </p>
+                    <button
+                      onClick={() => {
+                        setTourVisibilityFilter('all');
+                        setTourSearchTerm('');
+                        setTourCategoryFilter('all');
+                      }}
+                      className="bg-slate-800 hover:bg-slate-700 text-teal-300 font-bold px-4 py-2 rounded-xl text-xs transition inline-flex items-center gap-1.5 cursor-pointer"
+                    >
+                      <RefreshCw className="w-3.5 h-3.5" />
+                      <span>รีเซ็ตตัวกรองทั้งหมด</span>
+                    </button>
+                  </div>
+                ) : (
+                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
+                    {filteredAdminTours.map((tr) => {
+                      const isVis = isTourVisible(tr);
+                      const isToggling = togglingTourId === tr.id;
+
+                      return (
+                        <div
+                          key={tr.id}
+                          className={`border rounded-2xl overflow-hidden shadow-lg flex flex-col justify-between transition-all duration-300 ${
+                            isVis
+                              ? 'bg-slate-800/90 border-slate-700 hover:border-slate-600'
+                              : 'bg-slate-900 border-rose-800/60 ring-1 ring-rose-500/20'
+                          }`}
+                        >
+                          {/* Image & Badges */}
+                          <div className="relative aspect-video bg-slate-950 overflow-hidden">
+                            <img
+                              src={tr.images[0]}
+                              alt={tr.title.TH}
+                              className={`w-full h-full object-cover transition duration-300 ${!isVis ? 'grayscale-[25%] opacity-85' : ''}`}
+                            />
+                            <div className="absolute inset-0 bg-gradient-to-t from-slate-950/80 via-transparent to-black/40" />
+
+                            {/* Status Badge (Top Left) */}
+                            <div className="absolute top-3 left-3 z-10">
+                              {isVis ? (
+                                <span className="bg-emerald-600/95 backdrop-blur-md text-white text-[10px] font-extrabold px-2.5 py-1 rounded-lg flex items-center gap-1.5 shadow-md border border-emerald-400/30">
+                                  <Eye className="w-3 h-3 text-emerald-200" />
+                                  <span>แสดงบนหน้าเว็บ</span>
+                                </span>
+                              ) : (
+                                <span className="bg-rose-600/95 backdrop-blur-md text-white text-[10px] font-extrabold px-2.5 py-1 rounded-lg flex items-center gap-1.5 shadow-md border border-rose-400/30">
+                                  <EyeOff className="w-3 h-3 text-rose-200" />
+                                  <span>ซ่อนจากหน้าเว็บ</span>
+                                </span>
+                              )}
+                            </div>
+
+                            {/* Category Badge (Top Right) */}
+                            <div className="absolute top-3 right-3 bg-slate-900/90 backdrop-blur-md text-teal-300 text-[10px] font-bold px-2.5 py-1 rounded-lg border border-teal-500/30 shadow-md">
+                              {tr.categoryLabel.TH}
+                            </div>
+
+                            {/* Location & Tags (Bottom of Image) */}
+                            <div className="absolute bottom-2 left-3 right-3 flex items-center justify-between text-[11px] text-slate-300">
+                              <span className="flex items-center gap-1 truncate">
+                                <MapPin className="w-3 h-3 text-teal-400 shrink-0" />
+                                <span className="truncate">{tr.location}</span>
+                              </span>
+                              {tr.supplierName && (
+                                <span className="bg-slate-900/90 text-amber-300 text-[10px] px-2 py-0.5 rounded border border-amber-500/30 truncate max-w-[120px]">
+                                  🏢 {tr.supplierName}
+                                </span>
+                              )}
+                            </div>
+                          </div>
+
+                          {/* Hidden Banner Warning */}
+                          {!isVis && (
+                            <div className="bg-rose-950/80 border-b border-rose-800/50 px-3 py-1.5 flex items-center gap-2 text-rose-300 text-[11px] font-medium">
+                              <EyeOff className="w-3.5 h-3.5 text-rose-400 shrink-0" />
+                              <span className="truncate">สถานะ: ซ่อนอยู่ — ลูกค้ามองไม่เห็นทัวร์นี้บนหน้าร้าน</span>
+                            </div>
+                          )}
+
+                          {/* Body Content */}
+                          <div className="p-4 space-y-3 flex-1 flex flex-col justify-between">
+                            <div className="space-y-2">
+                              <h3 className="font-bold text-white text-sm line-clamp-1 leading-snug">
+                                {tr.title.TH}
+                              </h3>
+                              <p className="text-[11px] text-slate-400 line-clamp-2 leading-relaxed">
+                                {tr.description.TH}
+                              </p>
+
+                              {/* Price Row */}
+                              <div className="pt-2 border-t border-slate-700/60 grid grid-cols-2 gap-2 text-xs">
+                                <div>
+                                  <span className="text-slate-400 block text-[10px]">ราคาผู้ใหญ่ / เด็ก</span>
+                                  <div className="font-extrabold text-amber-400 font-mono">
+                                    ฿{tr.priceAdult.toLocaleString()} <span className="text-slate-400 font-normal">/ ฿{tr.priceChild.toLocaleString()}</span>
+                                  </div>
+                                </div>
+                                {tr.costAdult !== undefined && (
+                                  <div className="text-right">
+                                    <span className="text-slate-400 block text-[10px]">ทุนเอเยนต์ (Net Cost)</span>
+                                    <div className="font-bold text-emerald-400 font-mono text-[11px]">
+                                      ฿{tr.costAdult.toLocaleString()} <span className="text-slate-500 font-normal text-[10px]">(กำไร +฿{(tr.priceAdult - tr.costAdult).toLocaleString()})</span>
+                                    </div>
+                                  </div>
+                                )}
+                              </div>
+                            </div>
+
+                            {/* Visibility Quick-Toggle Box */}
+                            <div className="space-y-2.5 pt-2">
+                              <div
+                                className={`p-2.5 rounded-xl border flex items-center justify-between transition ${
+                                  isVis
+                                    ? 'bg-emerald-950/40 border-emerald-500/30'
+                                    : 'bg-rose-950/40 border-rose-500/30'
+                                }`}
+                              >
+                                <div className="flex items-center gap-2">
+                                  <span
+                                    className={`w-2.5 h-2.5 rounded-full shrink-0 ${
+                                      isVis ? 'bg-emerald-400 animate-pulse' : 'bg-rose-400'
+                                    }`}
+                                  ></span>
+                                  <div>
+                                    <div className="text-[11px] font-bold text-white flex items-center gap-1">
+                                      {isVis ? 'เปิดแสดงบนเว็บไซต์' : 'ซ่อนไว้ (ไม่แสดงหน้าร้าน)'}
+                                    </div>
+                                    <div className="text-[10px] text-slate-400">
+                                      {isVis ? 'ลูกค้าค้นหาและจองได้ตามปกติ' : 'พักการขาย ลูกค้ามองไม่เห็น'}
+                                    </div>
+                                  </div>
+                                </div>
+
+                                <button
+                                  type="button"
+                                  onClick={() => handleToggleTourVisibility(tr)}
+                                  disabled={isToggling}
+                                  title={isVis ? 'คลิกเพื่อซ่อนโปรแกรมทัวร์นี้จากหน้าเว็บ' : 'คลิกเพื่อเปิดแสดงโปรแกรมทัวร์นี้บนหน้าเว็บ'}
+                                  className={`px-3 py-1.5 rounded-lg text-xs font-bold transition flex items-center gap-1.5 shadow shrink-0 cursor-pointer ${
+                                    isVis
+                                      ? 'bg-amber-500/20 hover:bg-amber-500/30 text-amber-300 border border-amber-500/40'
+                                      : 'bg-emerald-500/20 hover:bg-emerald-500/30 text-emerald-300 border border-emerald-500/40'
+                                  }`}
+                                >
+                                  {isToggling ? (
+                                    <>
+                                      <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+                                      <span>กำลังสลับ...</span>
+                                    </>
+                                  ) : isVis ? (
+                                    <>
+                                      <EyeOff className="w-3.5 h-3.5 text-amber-400" />
+                                      <span>คลิกเพื่อซ่อน</span>
+                                    </>
+                                  ) : (
+                                    <>
+                                      <Eye className="w-3.5 h-3.5 text-emerald-400" />
+                                      <span>คลิกเพื่อแสดง</span>
+                                    </>
+                                  )}
+                                </button>
+                              </div>
+
+                              {/* Card Action Buttons (Edit / Delete) */}
+                              <div className="grid grid-cols-2 gap-2 pt-1 border-t border-slate-700/60">
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    setEditingTour(tr);
+                                    setIsTourModalOpen(true);
+                                  }}
+                                  className="bg-slate-700 hover:bg-slate-600 text-white font-bold py-2 rounded-xl text-xs transition flex items-center justify-center gap-1 cursor-pointer"
+                                >
+                                  <Edit3 className="w-3.5 h-3.5" />
+                                  <span>แก้ไข</span>
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => setDeleteTourTarget(tr)}
+                                  className="bg-rose-950/80 hover:bg-rose-900 text-rose-300 border border-rose-800/80 font-bold py-2 rounded-xl text-xs transition flex items-center justify-center gap-1 cursor-pointer"
+                                >
+                                  <Trash2 className="w-3.5 h-3.5" />
+                                  <span>ลบ</span>
+                                </button>
+                              </div>
+                            </div>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
+            );
+          })()
         )}
 
         {/* TAB 4: CRM CUSTOMER DATABASE */}
@@ -3084,6 +3557,13 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
               {/* Action Buttons */}
               <div className="flex flex-wrap items-center gap-2.5 w-full md:w-auto">
                 <button
+                  onClick={() => setActiveTab('logistics')}
+                  className="bg-emerald-600 hover:bg-emerald-500 text-white font-extrabold px-4 py-2.5 rounded-xl text-xs transition shadow-lg shadow-emerald-950/50 flex items-center gap-2"
+                >
+                  <MapPin className="w-4 h-4 text-emerald-300" />
+                  <span>🗺️ สลับดูแผนที่รับส่ง (Logistics Map)</span>
+                </button>
+                <button
                   onClick={() => setIsPrintManifestOpen(true)}
                   className="bg-cyan-600 hover:bg-cyan-500 text-white font-extrabold px-4 py-2.5 rounded-xl text-xs transition shadow-lg shadow-cyan-950/50 flex items-center gap-2"
                 >
@@ -3101,7 +3581,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
             )}
 
             {/* Filter Toolbar */}
-            <div className="bg-slate-900/80 border border-slate-800 p-4 rounded-2xl grid grid-cols-1 sm:grid-cols-3 gap-3">
+            <div className="bg-slate-900/80 border border-slate-800 p-4 rounded-2xl grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
               {/* Date Filter */}
               <div>
                 <label className="text-[11px] font-bold text-slate-400 block mb-1">วันเดินทาง (Travel Date)</label>
@@ -3136,6 +3616,24 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                 </select>
               </div>
 
+              {/* Supplier Filter */}
+              <div>
+                <label className="text-[11px] font-bold text-slate-400 block mb-1">เอเยนต์ผู้ให้บริการ (Supplier)</label>
+                <select
+                  value={manifestSupplierFilter}
+                  onChange={(e) => setManifestSupplierFilter(e.target.value)}
+                  className="w-full bg-slate-950 border border-slate-700 rounded-xl p-2.5 text-xs font-bold text-amber-300 focus:ring-2 focus:ring-amber-500"
+                >
+                  <option value="all" className="bg-slate-900 text-white">🏢 เอเยนต์ทั้งหมด</option>
+                  <option value="unassigned" className="bg-slate-900 text-amber-300">⚠️ ยังไม่ระบุเอเยนต์</option>
+                  {suppliers.map((s) => (
+                    <option key={s.id} value={s.id} className="bg-slate-900 text-white">
+                      🏢 [{s.code}] {s.name}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
               {/* Search Box */}
               <div>
                 <label className="text-[11px] font-bold text-slate-400 block mb-1">ค้นหาผู้โดยสาร (Search)</label>
@@ -3157,13 +3655,18 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
               const filteredList = bookings.filter((b) => {
                 const matchDate = manifestDateFilter === 'all' || b.travelDate === manifestDateFilter;
                 const matchTour = manifestTourFilter === 'all' || b.tourId === manifestTourFilter;
+                const matchSupplier =
+                  manifestSupplierFilter === 'all' ||
+                  (manifestSupplierFilter === 'unassigned' && (!b.supplierId || b.supplierId === '')) ||
+                  (b.supplierId === manifestSupplierFilter);
                 const matchSearch =
                   !manifestSearch ||
                   b.customerName.toLowerCase().includes(manifestSearch.toLowerCase()) ||
                   b.customerPhone.includes(manifestSearch) ||
                   b.bookingRef.toLowerCase().includes(manifestSearch.toLowerCase()) ||
-                  b.hotelName.toLowerCase().includes(manifestSearch.toLowerCase());
-                return matchDate && matchTour && matchSearch;
+                  b.hotelName.toLowerCase().includes(manifestSearch.toLowerCase()) ||
+                  (b.supplierName && b.supplierName.toLowerCase().includes(manifestSearch.toLowerCase()));
+                return matchDate && matchTour && matchSupplier && matchSearch;
               });
 
               const totalAdults = filteredList.reduce((sum, b) => sum + (b.adultsCount || 1), 0);
@@ -3214,6 +3717,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                             <th className="p-3.5">จำนวน (คน)</th>
                             <th className="p-3.5">โรงแรมรับ-ส่ง & เลขห้อง</th>
                             <th className="p-3.5">โปรแกรมทัวร์</th>
+                            <th className="p-3.5">เอเยนต์ผู้ให้บริการ</th>
                             <th className="p-3.5">เรือ / กัปตัน</th>
                             <th className="p-3.5 pr-4 text-center">ประกันภัย</th>
                           </tr>
@@ -3221,7 +3725,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                         <tbody className="divide-y divide-slate-800/60 text-xs">
                           {filteredList.length === 0 ? (
                             <tr>
-                              <td colSpan={9} className="p-8 text-center text-slate-500 italic">
+                              <td colSpan={10} className="p-8 text-center text-slate-500 italic">
                                 ไม่พบข้อมูลผู้โดยสารตามเงื่อนไขที่เลือก
                               </td>
                             </tr>
@@ -3261,6 +3765,17 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                                     <span className="text-[10px] text-slate-500 block">📅 {bk.travelDate}</span>
                                   </td>
                                   <td className="p-3.5">
+                                    {bk.supplierId ? (
+                                      <span className="bg-amber-950/80 text-amber-300 border border-amber-700/80 px-2 py-0.5 rounded-lg text-[11px] font-bold inline-flex items-center gap-1 font-mono">
+                                        🏢 [{suppliers.find(s => s.id === bk.supplierId)?.code || 'SUP'}] {suppliers.find(s => s.id === bk.supplierId)?.name || bk.supplierName}
+                                      </span>
+                                    ) : (
+                                      <span className="text-[10px] text-slate-500 italic bg-slate-950 px-2 py-0.5 rounded border border-slate-800">
+                                        ⚠️ ยังไม่ระบุ
+                                      </span>
+                                    )}
+                                  </td>
+                                  <td className="p-3.5">
                                     <input
                                       type="text"
                                       placeholder="ระบุชื่อเรือ/กัปตัน..."
@@ -3289,6 +3804,255 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
               );
             })()}
           </div>
+          )
+        )}
+
+        {/* TAB: LOGISTICS PICKUP MAP */}
+        {activeTab === 'logistics' && (
+          !hasAccess('logistics') ? (
+            renderRestrictedArea('แผนที่รถรับส่งประจำวัน')
+          ) : (
+            <div className="space-y-6 animate-in fade-in">
+              <PickupLogisticsMap
+                bookings={bookings}
+                tours={tours}
+              />
+            </div>
+          )
+        )}
+
+        {/* TAB: SUPPLIERS MANAGEMENT */}
+        {activeTab === 'suppliers' && (
+          !hasAccess('suppliers') ? (
+            renderRestrictedArea('จัดการเอเยนต์ & ซัพพลายเออร์')
+          ) : (
+            <div className="space-y-6 animate-in fade-in">
+              {/* Header & Actions Banner */}
+              <div className="bg-slate-950/80 border border-amber-500/30 p-5 sm:p-6 rounded-3xl flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 shadow-xl">
+                <div>
+                  <div className="flex items-center gap-2">
+                    <span className="bg-amber-500/20 text-amber-300 font-extrabold text-[10px] px-2.5 py-0.5 rounded-full border border-amber-500/40 uppercase">
+                      Supplier Network
+                    </span>
+                    <span className="text-xs text-slate-400">ระบบบริหารจัดการพาร์ทเนอร์ผู้ให้บริการทัวร์ & เรือ</span>
+                  </div>
+                  <h2 className="text-xl sm:text-2xl font-black text-white mt-1 flex items-center gap-2">
+                    <Building2 className="w-6 h-6 text-amber-400" />
+                    <span>บริษัทผู้ให้บริการทัวร์ & ซัพพลายเออร์ ({suppliers.length} ราย)</span>
+                  </h2>
+                </div>
+
+                <button
+                  type="button"
+                  onClick={() => {
+                    setEditingSupplier(null);
+                    setIsSupplierModalOpen(true);
+                  }}
+                  className="bg-amber-500 hover:bg-amber-400 text-slate-950 font-black px-5 py-2.5 rounded-xl text-xs transition shadow-lg shadow-amber-950/40 flex items-center gap-2"
+                >
+                  <Plus className="w-4 h-4" />
+                  <span>+ เพิ่มซัพพลายเออร์ / เอเยนต์ใหม่</span>
+                </button>
+              </div>
+
+              {/* Summary Stats Grid */}
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+                <div className="bg-slate-950/70 border border-slate-800 p-4 rounded-2xl">
+                  <span className="text-slate-400 text-xs block font-medium">ซัพพลายเออร์ทั้งหมด</span>
+                  <span className="text-2xl font-black text-amber-400 font-mono mt-1 block">{suppliers.length} บริษัท</span>
+                  <span className="text-[10px] text-slate-500 mt-1 block">ลงทะเบียนในระบบ</span>
+                </div>
+
+                <div className="bg-slate-950/70 border border-slate-800 p-4 rounded-2xl">
+                  <span className="text-slate-400 text-xs block font-medium">สถานะพร้อมใช้งาน (Active)</span>
+                  <span className="text-2xl font-black text-emerald-400 font-mono mt-1 block">
+                    {suppliers.filter(s => s.isActive !== false).length} บริษัท
+                  </span>
+                  <span className="text-[10px] text-slate-500 mt-1 block">เปิดรับจองปกติ</span>
+                </div>
+
+                <div className="bg-slate-950/70 border border-slate-800 p-4 rounded-2xl">
+                  <span className="text-slate-400 text-xs block font-medium">โปรแกรมทัวร์เชื่อมโยง</span>
+                  <span className="text-2xl font-black text-cyan-400 font-mono mt-1 block">
+                    {tours.filter(t => t.supplierId).length} ทัวร์
+                  </span>
+                  <span className="text-[10px] text-slate-500 mt-1 block">ผูกกับซัพพลายเออร์แล้ว</span>
+                </div>
+
+                <div className="bg-slate-950/70 border border-slate-800 p-4 rounded-2xl">
+                  <span className="text-slate-400 text-xs block font-medium">ยอดสั่งซื้อเชื่อมโยง</span>
+                  <span className="text-2xl font-black text-teal-400 font-mono mt-1 block">
+                    {bookings.filter(b => b.supplierId || tours.find(t => t.id === b.tourId)?.supplierId).length} รายการ
+                  </span>
+                  <span className="text-[10px] text-slate-500 mt-1 block">ส่งงานเอเยนต์แล้ว</span>
+                </div>
+              </div>
+
+              {/* Search Bar */}
+              <div className="bg-slate-950/60 p-4 rounded-2xl border border-slate-800 flex items-center gap-3">
+                <Search className="w-4 h-4 text-slate-400 shrink-0" />
+                <input
+                  type="text"
+                  placeholder="ค้นหาตามชื่อบริษัท, รหัสซัพพลายเออร์, ผู้ติดต่อ, เบอร์โทร..."
+                  value={supplierSearch}
+                  onChange={(e) => setSupplierSearch(e.target.value)}
+                  className="bg-transparent text-xs text-white placeholder-slate-500 w-full focus:outline-none"
+                />
+              </div>
+
+              {/* Suppliers List / Table */}
+              {(() => {
+                const filteredSuppliers = suppliers.filter(s => {
+                  const q = supplierSearch.toLowerCase();
+                  return (
+                    s.name.toLowerCase().includes(q) ||
+                    s.code.toLowerCase().includes(q) ||
+                    (s.contactPerson && s.contactPerson.toLowerCase().includes(q)) ||
+                    (s.phone && s.phone.includes(q)) ||
+                    (s.lineId && s.lineId.toLowerCase().includes(q))
+                  );
+                });
+
+                if (filteredSuppliers.length === 0) {
+                  return (
+                    <div className="bg-slate-950/60 border border-slate-800 rounded-3xl p-12 text-center space-y-3">
+                      <Building2 className="w-12 h-12 text-slate-600 mx-auto" />
+                      <h3 className="text-base font-bold text-slate-300">ไม่พบข้อมูลบริษัทผู้ให้บริการ (Supplier)</h3>
+                      <p className="text-xs text-slate-500 max-w-sm mx-auto">
+                        ลองค้นหาด้วยคำค้นอื่น หรือคลิกปุ่ม "+ เพิ่มซัพพลายเออร์ / เอเยนต์ใหม่" เพื่อสร้างข้อมูล
+                      </p>
+                    </div>
+                  );
+                }
+
+                return (
+                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                    {filteredSuppliers.map(sup => {
+                      const associatedTours = tours.filter(t => t.supplierId === sup.id);
+                      return (
+                        <div
+                          key={sup.id}
+                          className={`bg-slate-950/80 border rounded-3xl p-5 shadow-xl transition relative flex flex-col justify-between space-y-4 ${
+                            sup.isActive !== false ? 'border-amber-500/30 hover:border-amber-500/60' : 'border-slate-800 opacity-60'
+                          }`}
+                        >
+                          <div className="space-y-3">
+                            <div className="flex items-start justify-between gap-2 border-b border-slate-800/80 pb-3">
+                              <div>
+                                <div className="flex items-center gap-1.5">
+                                  <span className="font-mono text-[10px] font-black bg-amber-500/20 text-amber-300 px-2 py-0.5 rounded border border-amber-500/30">
+                                    [{sup.code}]
+                                  </span>
+                                  {sup.isActive !== false ? (
+                                    <span className="text-[10px] bg-emerald-500/20 text-emerald-400 px-2 py-0.5 rounded-full font-bold">
+                                      Active
+                                    </span>
+                                  ) : (
+                                    <span className="text-[10px] bg-slate-800 text-slate-400 px-2 py-0.5 rounded-full font-bold">
+                                      Inactive
+                                    </span>
+                                  )}
+                                </div>
+                                <h3 className="text-base font-black text-white mt-1.5 leading-snug">
+                                  {sup.name}
+                                </h3>
+                              </div>
+
+                              <div className="flex items-center gap-1 shrink-0">
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    setEditingSupplier(sup);
+                                    setIsSupplierModalOpen(true);
+                                  }}
+                                  className="w-8 h-8 rounded-xl bg-slate-800 hover:bg-slate-700 text-amber-300 flex items-center justify-center transition"
+                                  title="แก้ไขข้อมูลซัพพลายเออร์"
+                                >
+                                  <Edit3 className="w-4 h-4" />
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => setDeleteSupplierTarget(sup)}
+                                  className="w-8 h-8 rounded-xl bg-slate-800 hover:bg-rose-950/80 text-rose-400 flex items-center justify-center transition"
+                                  title="ลบซัพพลายเออร์"
+                                >
+                                  <Trash2 className="w-4 h-4" />
+                                </button>
+                              </div>
+                            </div>
+
+                            {/* Details */}
+                            <div className="space-y-2 text-xs text-slate-300">
+                              {sup.contactPerson && (
+                                <div className="flex items-center gap-2">
+                                  <Users className="w-3.5 h-3.5 text-amber-400 shrink-0" />
+                                  <span>ผู้ติดต่อ: <strong className="text-white">{sup.contactPerson}</strong></span>
+                                </div>
+                              )}
+                              {sup.phone && (
+                                <div className="flex items-center gap-2">
+                                  <PhoneCall className="w-3.5 h-3.5 text-teal-400 shrink-0" />
+                                  <a href={`tel:${sup.phone}`} className="hover:text-teal-300 font-mono">
+                                    {sup.phone}
+                                  </a>
+                                </div>
+                              )}
+                              {sup.lineId && (
+                                <div className="flex items-center gap-2">
+                                  <MessageCircle className="w-3.5 h-3.5 text-emerald-400 shrink-0" />
+                                  <span>LINE ID: <strong className="text-emerald-300 font-mono">{sup.lineId}</strong></span>
+                                </div>
+                              )}
+                              {sup.email && (
+                                <div className="flex items-center gap-2">
+                                  <Mail className="w-3.5 h-3.5 text-slate-400 shrink-0" />
+                                  <span className="truncate">{sup.email}</span>
+                                </div>
+                              )}
+                              {sup.bankName && sup.accountNo && (
+                                <div className="bg-slate-900 border border-slate-800 p-2.5 rounded-xl space-y-0.5 mt-2">
+                                  <div className="text-[10px] text-amber-400 font-bold">💳 บัญชีจ่ายเงิน Net / Payout:</div>
+                                  <div className="text-xs font-mono font-bold text-white">
+                                    {sup.bankName}: {sup.accountNo}
+                                  </div>
+                                  {sup.accountName && (
+                                    <div className="text-[10px] text-slate-400">({sup.accountName})</div>
+                                  )}
+                                </div>
+                              )}
+                            </div>
+                          </div>
+
+                          {/* Associated Tours */}
+                          <div className="pt-3 border-t border-slate-800/80">
+                            <div className="text-[10px] text-slate-400 font-bold mb-1 flex items-center justify-between">
+                              <span>โปรแกรมทัวร์ที่ให้บริการ:</span>
+                              <span className="text-amber-400 font-mono">{associatedTours.length} ทัวร์</span>
+                            </div>
+                            {associatedTours.length > 0 ? (
+                              <div className="flex flex-wrap gap-1">
+                                {associatedTours.slice(0, 3).map(t => (
+                                  <span key={t.id} className="text-[10px] bg-slate-900 text-cyan-300 px-2 py-0.5 rounded-md border border-slate-800 truncate max-w-[160px]">
+                                    {t.title.TH}
+                                  </span>
+                                ))}
+                                {associatedTours.length > 3 && (
+                                  <span className="text-[10px] text-slate-500 font-bold">
+                                    +{associatedTours.length - 3}
+                                  </span>
+                                )}
+                              </div>
+                            ) : (
+                              <span className="text-[10px] text-slate-500 italic">ยังไม่ได้ผูกกับทัวร์ใดๆ</span>
+                            )}
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                );
+              })()}
+            </div>
           )
         )}
       </div>
@@ -3320,6 +4084,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
       {/* Edit / Add Tour Modal */}
       <EditTourModal
         tour={editingTour}
+        suppliers={suppliers}
         isOpen={isTourModalOpen}
         onClose={() => setIsTourModalOpen(false)}
         onSave={async (tourData) => {
@@ -3915,6 +4680,80 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
             </div>
           </div>
         </div>
+      )}
+      {/* Delete Supplier Modal */}
+      {deleteSupplierTarget && (
+        <div className="fixed inset-0 z-50 bg-slate-950/85 backdrop-blur-md flex items-center justify-center p-4 animate-in fade-in">
+          <div className="bg-slate-900 border border-rose-800 max-w-md w-full rounded-3xl p-6 shadow-2xl relative space-y-4 text-center">
+            <div className="w-12 h-12 bg-rose-500/20 rounded-full flex items-center justify-center mx-auto border border-rose-500/40 text-rose-400">
+              <Trash2 className="w-6 h-6" />
+            </div>
+            <div>
+              <h3 className="text-lg font-extrabold text-white">ยืนยันลบซัพพลายเออร์</h3>
+              <p className="text-xs text-slate-300 mt-1 leading-relaxed">
+                คุณต้องการลบซัพพลายเออร์ <strong className="text-amber-300">{deleteSupplierTarget.name}</strong> ([{deleteSupplierTarget.code}]) ออกจากระบบใช่หรือไม่?
+              </p>
+            </div>
+
+            <div className="grid grid-cols-2 gap-3 pt-2">
+              <button
+                type="button"
+                onClick={() => setDeleteSupplierTarget(null)}
+                className="w-full bg-slate-800 hover:bg-slate-700 text-slate-300 font-bold py-2.5 rounded-xl text-xs transition border border-slate-700"
+              >
+                ยกเลิก
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  if (onDeleteSupplier && deleteSupplierTarget) {
+                    onDeleteSupplier(deleteSupplierTarget.id);
+                  }
+                  setDeleteSupplierTarget(null);
+                }}
+                className="w-full bg-rose-600 hover:bg-rose-500 text-white font-bold py-2.5 rounded-xl text-xs transition shadow-lg shadow-rose-900/40 flex items-center justify-center gap-1.5"
+              >
+                <Trash2 className="w-4 h-4" />
+                <span>ยืนยันลบข้อมูล</span>
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Add / Edit Supplier Modal */}
+      {isSupplierModalOpen && (
+        <SupplierModal
+          supplier={editingSupplier}
+          onClose={() => {
+            setIsSupplierModalOpen(false);
+            setEditingSupplier(null);
+          }}
+          onSave={(supData) => {
+            if (editingSupplier && onUpdateSupplier) {
+              onUpdateSupplier(editingSupplier.id, supData);
+            } else if (onAddSupplier) {
+              const newSup: Supplier = {
+                id: `sup-${Date.now()}`,
+                name: supData.name || 'บริษัทใหม่',
+                code: supData.code || `SUP-${Math.floor(100 + Math.random() * 900)}`,
+                contactPerson: supData.contactPerson,
+                phone: supData.phone,
+                lineId: supData.lineId,
+                email: supData.email,
+                address: supData.address,
+                bankName: supData.bankName,
+                accountNo: supData.accountNo,
+                accountName: supData.accountName,
+                notes: supData.notes,
+                isActive: supData.isActive !== false
+              };
+              onAddSupplier(newSup);
+            }
+            setIsSupplierModalOpen(false);
+            setEditingSupplier(null);
+          }}
+        />
       )}
     </div>
   );

@@ -13,49 +13,49 @@ export const Footer: React.FC<FooterProps> = ({ currentLang, settings, onNavigat
   const t = translations[currentLang];
 
   return (
-    <footer className="bg-slate-900 text-slate-400 pt-12 pb-8 border-t border-slate-800">
+    <footer className="bg-gradient-to-b from-slate-900 via-sky-950 to-slate-950 text-slate-300 pt-12 pb-8 border-t border-cyan-800/40">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-8 mb-12">
           {/* Col 1: Brand Info */}
           <div className="space-y-4">
             <div className="flex items-center gap-3">
-              <div className="w-10 h-10 bg-blue-600 rounded-lg flex items-center justify-center text-white font-bold text-xl shadow-md shadow-blue-900">
+              <div className="w-10 h-10 bg-gradient-to-r from-cyan-500 via-sky-500 to-blue-600 rounded-xl flex items-center justify-center text-white font-black text-xl shadow-md shadow-cyan-500/20">
                 T
               </div>
-              <span className="text-xl font-bold text-white tracking-tight">
-                TRIP SEA <span className="text-blue-500">TOUR</span>
+              <span className="text-xl font-black text-white tracking-tight">
+                TRIP SEA <span className="bg-gradient-to-r from-cyan-400 via-sky-300 to-teal-300 bg-clip-text text-transparent">TOUR</span>
               </span>
             </div>
-            <p className="text-xs text-slate-400 leading-relaxed">
+            <p className="text-xs text-cyan-100/80 leading-relaxed">
               {t.tagline}
             </p>
-            <div className="inline-flex items-center gap-2.5 bg-slate-800/80 border border-slate-700/80 rounded-xl p-3 text-xs text-slate-300">
-              <QrCode className="w-5 h-5 text-blue-400 shrink-0" />
+            <div className="inline-flex items-center gap-2.5 bg-cyan-950/60 border border-cyan-800/60 rounded-xl p-3 text-xs text-cyan-200">
+              <QrCode className="w-5 h-5 text-cyan-400 shrink-0" />
               <div>
                 <span className="font-bold text-white block">PromptPay QR Ready</span>
-                <span className="text-[11px] text-slate-400">ชำระเงินตรง สะดวก ปลอดภัย 100%</span>
+                <span className="text-[11px] text-cyan-300/80">ชำระเงินตรง สะดวก ปลอดภัย 100%</span>
               </div>
             </div>
           </div>
 
           {/* Col 2: Quick Links */}
           <div className="space-y-3">
-            <h4 className="text-xs font-bold text-slate-200 uppercase tracking-wider">
+            <h4 className="text-xs font-extrabold text-cyan-300 uppercase tracking-wider">
               Menu
             </h4>
             <ul className="space-y-2 text-xs">
               <li>
-                <button onClick={() => onNavigate('home')} className="hover:text-blue-400 text-left transition">
+                <button onClick={() => onNavigate('home')} className="hover:text-cyan-300 text-left transition">
                   {t.home}
                 </button>
               </li>
               <li>
-                <button onClick={() => onNavigate('how-to-book')} className="hover:text-blue-400 text-left transition">
+                <button onClick={() => onNavigate('how-to-book')} className="hover:text-cyan-300 text-left transition">
                   {t.howToBook}
                 </button>
               </li>
               <li>
-                <button onClick={() => onNavigate('about-me')} className="hover:text-blue-400 text-left transition">
+                <button onClick={() => onNavigate('about-me')} className="hover:text-cyan-300 text-left transition">
                   {t.aboutMe}
                 </button>
               </li>
@@ -64,33 +64,33 @@ export const Footer: React.FC<FooterProps> = ({ currentLang, settings, onNavigat
 
           {/* Col 3: Contact Info */}
           <div className="space-y-3">
-            <h4 className="text-xs font-bold text-slate-200 uppercase tracking-wider">
+            <h4 className="text-xs font-extrabold text-cyan-300 uppercase tracking-wider">
               {t.contact}
             </h4>
             <ul className="space-y-2.5 text-xs">
               <li className="flex items-start gap-2">
-                <MapPin className="w-4 h-4 text-blue-400 shrink-0 mt-0.5" />
+                <MapPin className="w-4 h-4 text-cyan-400 shrink-0 mt-0.5" />
                 <span>{settings.address}</span>
               </li>
               <li className="flex items-start gap-2">
-                <Phone className="w-4 h-4 text-blue-400 shrink-0 mt-0.5" />
+                <Phone className="w-4 h-4 text-cyan-400 shrink-0 mt-0.5" />
                 <div className="space-y-1">
                   <div className="text-slate-300">
-                    <span className="text-[10px] text-slate-400 block">เบอร์โทรหลัก:</span>
-                    <a href="tel:0626816494" className="font-bold text-white hover:text-blue-400 transition font-mono">
+                    <span className="text-[10px] text-cyan-200/70 block">เบอร์โทรหลัก:</span>
+                    <a href="tel:0626816494" className="font-bold text-white hover:text-cyan-300 transition font-mono">
                       062-681-6494
                     </a>
                   </div>
                   <div className="text-slate-300">
-                    <span className="text-[10px] text-slate-400 block">เบอร์สำรอง:</span>
-                    <a href="tel:0979241399" className="font-bold text-white hover:text-blue-400 transition font-mono">
+                    <span className="text-[10px] text-cyan-200/70 block">เบอร์สำรอง:</span>
+                    <a href="tel:0979241399" className="font-bold text-white hover:text-cyan-300 transition font-mono">
                       097-924-1399
                     </a>
                   </div>
                 </div>
               </li>
               <li className="flex items-center gap-2 pt-1">
-                <Mail className="w-4 h-4 text-blue-400 shrink-0" />
+                <Mail className="w-4 h-4 text-cyan-400 shrink-0" />
                 <span>{settings.contactEmail}</span>
               </li>
             </ul>

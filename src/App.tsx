@@ -16,10 +16,10 @@ import { TripSeaAiChatbot } from './components/TripSeaAiChatbot';
 import { CartModal } from './components/CartModal';
 import { PwaInstallPrompt } from './components/PwaInstallPrompt';
 
-import { Tour, Booking, Review, Customer, AppSettings, LineNotificationLog, Language, AdminUser, CartItem } from './types';
+import { Tour, Booking, Review, Customer, AppSettings, LineNotificationLog, Language, AdminUser, CartItem, Supplier } from './types';
 import { Currency } from './utils/currency';
 import { translations } from './data/translations';
-import { initialTours, initialBookings, initialReviews, initialCustomers, initialSettings } from './data/mockData';
+import { initialTours, initialBookings, initialReviews, initialCustomers, initialSettings, mockSuppliers } from './data/mockData';
 import { Compass, Sparkles, Filter, Ticket, QrCode, Phone, MessageCircle, ShieldCheck, Clock } from 'lucide-react';
 import { supabaseApi } from './lib/supabase';
 
@@ -82,6 +82,31 @@ export default function App() {
       return initialCustomers;
     }
   });
+
+  const [suppliers, setSuppliers] = useState<Supplier[]>(() => {
+    try {
+      const saved = localStorage.getItem('tst_suppliers');
+      return saved ? JSON.parse(saved) : mockSuppliers;
+    } catch {
+      return mockSuppliers;
+    }
+  });
+
+  useEffect(() => {
+    localStorage.setItem('tst_suppliers', JSON.stringify(suppliers));
+  }, [suppliers]);
+
+  const handleAddSupplier = (newSup: Supplier) => {
+    setSuppliers(prev => [newSup, ...prev]);
+  };
+
+  const handleUpdateSupplier = (id: string, supData: Partial<Supplier>) => {
+    setSuppliers(prev => prev.map(s => s.id === id ? { ...s, ...supData } : s));
+  };
+
+  const handleDeleteSupplier = (id: string) => {
+    setSuppliers(prev => prev.filter(s => s.id !== id));
+  };
 
   const [settings, setSettings] = useState<AppSettings>(() => {
     try {
@@ -372,6 +397,10 @@ export default function App() {
   // Filter & Sort Tours
   const filteredTours = tours
     .filter((t) => {
+      // Hide tour if backend has marked it as hidden (isVisible === false or isAvailable === false)
+      const isVisible = t.isVisible !== false && t.isAvailable !== false;
+      if (!isVisible) return false;
+
       const matchesCategory = selectedCategory === 'all' || t.category === selectedCategory;
       const titleStr = (t.title[currentLang] || t.title.TH).toLowerCase();
       const descStr = (t.description[currentLang] || t.description.TH).toLowerCase();
@@ -548,6 +577,48 @@ export default function App() {
       if (res && res.ok) {
         const data = await res.json().catch(() => ({}));
         if (data.version) lastServerVersionRef.current = data.version;
+      }
+    } catch (err) {
+      console.error(err);
+    }
+  };
+
+  const handleUpdateBookingSupplier = async (bookingId: string, supplierId?: string, supplierName?: string) => {
+    try {
+      lastMutationTimeRef.current = Date.now();
+      const targetSupplier = suppliers.find(s => s.id === supplierId);
+      const resolvedName = targetSupplier ? targetSupplier.name : supplierName;
+
+      const nextBookings = bookings.map(b => b.id === bookingId ? { 
+        ...b, 
+        supplierId: supplierId || undefined,
+        supplierName: resolvedName || undefined
+      } : b);
+      setBookings(nextBookings);
+      localStorage.setItem('tst_bookings', JSON.stringify(nextBookings));
+
+      // Sync to Supabase
+      supabaseApi.updateBooking(bookingId, { 
+        supplierId: supplierId || null, 
+        supplierName: resolvedName || null 
+      } as any).catch(() => {});
+      supabaseApi.saveBookingsBackup(nextBookings).catch(() => {});
+
+      // Sync to Express API
+      const res = await fetch(`/api/bookings/${bookingId}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ supplierId: supplierId || null, supplierName: resolvedName || null }),
+      }).catch(() => null);
+      if (res && res.ok) {
+        const data = await res.json().catch(() => ({}));
+        if (data.version) lastServerVersionRef.current = data.version;
+      }
+
+      if (supplierId && targetSupplier) {
+        showToast(`🏢 จัดส่งงานลูกค้าให้เอเยนต์ "[${targetSupplier.code}] ${targetSupplier.name}" เรียบร้อยแล้ว`);
+      } else {
+        showToast(`⚠️ ปลดการผูกเอเยนต์สำหรับออเดอร์นี้เรียบร้อยแล้ว`);
       }
     } catch (err) {
       console.error(err);
@@ -1005,6 +1076,7 @@ export default function App() {
           syncStatus={syncStatus}
           lastSyncedAt={lastSyncedAt}
           onUpdateBookingStatus={handleUpdateBookingStatus}
+          onUpdateBookingSupplier={handleUpdateBookingSupplier}
           onDeleteBooking={handleDeleteBooking}
           onSaveSettings={handleSaveSettings}
           onSendTestLine={handleSendTestLine}
@@ -1020,6 +1092,10 @@ export default function App() {
           onUpdateReview={handleUpdateReview}
           onReplyReview={handleReplyReview}
           onDeleteReview={handleDeleteReview}
+          suppliers={suppliers}
+          onAddSupplier={handleAddSupplier}
+          onUpdateSupplier={handleUpdateSupplier}
+          onDeleteSupplier={handleDeleteSupplier}
           onRefreshData={loadInitialData}
           onForceSync={handleForcePurgeAndSync}
         />
@@ -1043,15 +1119,16 @@ export default function App() {
               {/* Tour Catalog Section */}
               <section id="tours-catalog" className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
                 {/* Catalog Controls */}
-                <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-4 mb-8 bg-white p-4 sm:p-5 rounded-2xl border border-slate-200 shadow-xs">
+                <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-4 mb-8 bg-gradient-to-r from-sky-50/80 via-cyan-50/80 to-blue-50/80 p-4 sm:p-5 rounded-2xl border border-cyan-200/80 shadow-xs">
                   <div>
-                    <h2 className="text-xl sm:text-2xl font-extrabold text-slate-900 tracking-tight flex items-center gap-2">
+                    <h2 className="text-xl sm:text-2xl font-black text-slate-900 tracking-tight flex items-center gap-2">
+                      <Compass className="w-5 h-5 text-cyan-600 animate-spin-slow shrink-0" />
                       <span>
                         {currentLang === 'TH' ? 'โปรแกรมทัวร์แนะนำ' :
                          currentLang === 'EN' ? 'Recommended Tours' :
                          currentLang === 'ZH' ? '推荐行程' : 'Рекомендуемые туры'}
                       </span>
-                      <span className="bg-teal-50 text-teal-700 text-xs px-2.5 py-0.5 rounded-full font-bold border border-teal-200">
+                      <span className="bg-gradient-to-r from-cyan-500 to-sky-600 text-white text-xs px-2.5 py-0.5 rounded-full font-black shadow-xs">
                         {filteredTours.length}
                       </span>
                     </h2>
@@ -1140,7 +1217,7 @@ export default function App() {
               <CustomerReviewSection
                 currentLang={currentLang}
                 reviews={reviews}
-                tours={tours}
+                tours={tours.filter(t => t.isVisible !== false && t.isAvailable !== false)}
                 onAddReview={handleAddReview}
               />
             </>
@@ -1311,7 +1388,7 @@ export default function App() {
         <TripSeaAiChatbot
           currentLang={currentLang}
           currentCurrency={currentCurrency}
-          tours={tours}
+          tours={tours.filter(t => t.isVisible !== false && t.isAvailable !== false)}
           settings={settings}
         />
       </div>

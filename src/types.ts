@@ -6,6 +6,28 @@ export interface TourItinerary {
   description?: Record<Language, string>;
 }
 
+export interface Supplier {
+  id: string;
+  name: string; // ชื่อบริษัท Supplier / ผู้ประกอบการเรือ
+  code: string; // เช่น SEASTAR, RAYAPIN, PHKBOAT
+  contactPerson?: string; // ชื่อผู้ติดต่อ/เซลล์
+  phone: string; // เบอร์โทรศัพท์
+  email?: string; // อีเมล
+  lineId?: string; // ID LINE
+  address?: string; // ที่อยู่บริษัท
+  bankName?: string;
+  accountNo?: string;
+  accountName?: string;
+  bankAccount?: {
+    bankName: string;
+    accountNo: string;
+    accountName: string;
+  };
+  notes?: string;
+  isActive: boolean;
+  createdAt?: string;
+}
+
 export interface Tour {
   id: string;
   slug: string;
@@ -18,6 +40,8 @@ export interface Tour {
   priceChild: number; // Age 4-11
   costAdult?: number; // ราคาทุนเอเยนต์ผู้ใหญ่ (Net Cost)
   costChild?: number; // ราคาทุนเอเยนต์เด็ก (Net Cost)
+  supplierId?: string; // ID บริษัท Supplier ผู้ให้บริการเรือ
+  supplierName?: string; // ชื่อบริษัท Supplier
   originalPriceAdult?: number;
   originalPriceChild?: number;
   duration: Record<Language, string>;
@@ -32,6 +56,7 @@ export interface Tour {
   tags: string[];
   isFeatured?: boolean;
   isAvailable?: boolean;
+  isVisible?: boolean; // แสดงบนหน้าเว็บหรือไม่ (true = แสดง, false = ซ่อน/ไม่แสดง)
 }
 
 export interface CartItem {
@@ -57,6 +82,8 @@ export interface Booking {
   tourId: string;
   tourTitle: string;
   tourImage: string;
+  supplierId?: string;
+  supplierName?: string;
   customerName: string;
   customerEmail: string;
   customerPhone: string;

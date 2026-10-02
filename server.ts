@@ -633,6 +633,24 @@ app.post('/api/bookings/:id/upload-slip', async (req, res) => {
   res.json({ ...booking, version: syncMetadata.version });
 });
 
+app.put('/api/bookings/:id', async (req, res) => {
+  const { id } = req.params;
+  const booking = bookings.find(b => b.id === id || b.bookingRef === id);
+
+  if (!booking) {
+    return res.status(404).json({ error: 'Booking not found' });
+  }
+
+  const { supplierId, supplierName, paymentStatus, orderStatus } = req.body;
+  if (supplierId !== undefined) booking.supplierId = supplierId ? supplierId : undefined;
+  if (supplierName !== undefined) booking.supplierName = supplierName ? supplierName : undefined;
+  if (paymentStatus) booking.paymentStatus = paymentStatus;
+  if (orderStatus) booking.orderStatus = orderStatus;
+
+  await persistState('bookings');
+  res.json({ ...booking, version: syncMetadata.version });
+});
+
 app.put('/api/bookings/:id/status', async (req, res) => {
   const { id } = req.params;
   const { paymentStatus, orderStatus } = req.body;

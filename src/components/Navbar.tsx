@@ -49,16 +49,16 @@ export const Navbar: React.FC<NavbarProps> = ({
   };
 
   return (
-    <header className="sticky top-0 z-40 bg-white border-b border-slate-200 shadow-xs">
+    <header className="sticky top-0 z-40 bg-white/95 backdrop-blur-md border-b border-sky-100 shadow-sm shadow-sky-900/5">
       {/* Top Banner Bar */}
-      <div className="bg-slate-900 text-slate-300 px-3 sm:px-4 py-1.5 text-xs font-medium border-b border-slate-800">
+      <div className="bg-gradient-to-r from-sky-950 via-cyan-950 to-blue-950 text-slate-200 px-3 sm:px-4 py-1.5 text-xs font-medium border-b border-cyan-800/40">
         <div className="max-w-7xl mx-auto flex items-center justify-between gap-2">
           <div className="flex items-center gap-3">
-            <span className="inline-flex items-center gap-1.5 text-teal-400 font-bold text-[10.5px] sm:text-xs">
-              <ShieldCheck className="w-3.5 h-3.5 text-teal-400 shrink-0" />
+            <span className="inline-flex items-center gap-1.5 text-cyan-300 font-bold text-[10.5px] sm:text-xs">
+              <ShieldCheck className="w-3.5 h-3.5 text-cyan-400 shrink-0" />
               <span>{t.bestServiceGuarantee}</span>
             </span>
-            <span className="hidden sm:inline-flex items-center gap-1 text-slate-400 text-xs">
+            <span className="hidden sm:inline-flex items-center gap-1 text-sky-200/80 text-xs">
               ⚡ {t.instantConfirmation}
             </span>
           </div>
@@ -66,27 +66,27 @@ export const Navbar: React.FC<NavbarProps> = ({
           <div className="flex items-center gap-2.5 sm:gap-4 text-[11px]">
             <a
               href="tel:+66626816494"
-              className="inline-flex items-center gap-1 text-slate-300 hover:text-white transition font-medium"
+              className="inline-flex items-center gap-1 text-slate-200 hover:text-cyan-300 transition font-medium"
             >
-              <Phone className="w-3 h-3 text-teal-400" />
+              <Phone className="w-3 h-3 text-cyan-400" />
               <span>062-681-6494</span>
             </a>
-            <span className="text-slate-700">|</span>
+            <span className="text-cyan-800">|</span>
             <button
               onClick={onOpenLookup}
-              className="inline-flex items-center gap-1 text-teal-400 hover:text-teal-300 font-bold"
+              className="inline-flex items-center gap-1 text-cyan-300 hover:text-cyan-200 font-bold transition"
             >
-              <Ticket className="w-3.5 h-3.5" />
+              <Ticket className="w-3.5 h-3.5 text-cyan-400" />
               <span>{t.checkStatus}</span>
             </button>
-            <span className="text-slate-700 hidden sm:inline">|</span>
+            <span className="text-cyan-800 hidden sm:inline">|</span>
             <button
               onClick={() => {
                 sessionStorage.removeItem('pwa_prompt_dismissed');
                 window.dispatchEvent(new Event('beforeinstallprompt'));
                 window.location.hash = '#install-app';
               }}
-              className="hidden sm:inline-flex items-center gap-1 text-cyan-300 hover:text-cyan-200 font-bold bg-cyan-950/80 px-2 py-0.5 rounded-md border border-cyan-800/60 transition"
+              className="hidden sm:inline-flex items-center gap-1 text-cyan-200 hover:text-white font-bold bg-gradient-to-r from-cyan-900/80 to-blue-900/80 px-2 py-0.5 rounded-md border border-cyan-700/60 transition shadow-xs"
               title="ติดตั้งแอปพลิเคชันลงบนมือถือหรือคอมพิวเตอร์"
             >
               <Smartphone className="w-3 h-3 text-cyan-400" />
@@ -101,32 +101,32 @@ export const Navbar: React.FC<NavbarProps> = ({
         {/* Brand Logo */}
         <div
           onClick={() => handleNavClick('home')}
-          className="flex items-center gap-2 cursor-pointer group shrink-0"
+          className="flex items-center gap-2.5 cursor-pointer group shrink-0"
         >
           <img
             src={tripSeaLogo}
             alt="TRIP SEA Tour Logo"
-            className="w-9 h-9 sm:w-10 sm:h-10 rounded-lg object-cover border border-slate-300 shadow-xs group-hover:scale-105 transition"
+            className="w-9 h-9 sm:w-10 sm:h-10 rounded-xl object-cover border-2 border-cyan-400/40 shadow-sm shadow-cyan-500/20 group-hover:scale-105 transition"
             referrerPolicy="no-referrer"
           />
           <div>
             <span className="text-lg sm:text-xl font-black tracking-tight text-slate-900 flex items-center gap-1 leading-tight">
-              TRIP SEA <span className="text-teal-600">TOUR</span>
+              TRIP SEA <span className="bg-gradient-to-r from-cyan-600 via-sky-500 to-blue-600 bg-clip-text text-transparent">TOUR</span>
             </span>
-            <p className="text-[9px] sm:text-[10px] font-medium text-slate-500 hidden sm:block">
+            <p className="text-[9px] sm:text-[10px] font-extrabold text-cyan-700 hidden sm:block tracking-wider uppercase">
               PHUKET ISLAND HOPPING & PROMPTPAY QR
             </p>
           </div>
         </div>
 
         {/* Center Nav Links (Desktop) */}
-        <nav className="hidden md:flex items-center gap-1 bg-slate-100 p-1 rounded-xl border border-slate-200">
+        <nav className="hidden md:flex items-center gap-1 bg-gradient-to-r from-sky-50/90 to-cyan-50/90 p-1.5 rounded-2xl border border-sky-200/80 shadow-xs">
           <button
             onClick={() => handleNavClick('home')}
-            className={`px-4 py-1.5 rounded-lg text-xs font-bold transition flex items-center gap-1.5 ${
+            className={`px-4 py-1.5 rounded-xl text-xs font-bold transition flex items-center gap-1.5 ${
               activeView === 'home'
-                ? 'bg-white text-teal-700 shadow-sm'
-                : 'text-slate-600 hover:text-slate-900'
+                ? 'bg-gradient-to-r from-cyan-500 via-sky-500 to-blue-600 text-white shadow-md shadow-cyan-500/25'
+                : 'text-slate-700 hover:text-cyan-700 hover:bg-white/60'
             }`}
           >
             <Home className="w-3.5 h-3.5" />
@@ -134,10 +134,10 @@ export const Navbar: React.FC<NavbarProps> = ({
           </button>
           <button
             onClick={() => handleNavClick('how-to-book')}
-            className={`px-4 py-1.5 rounded-lg text-xs font-bold transition flex items-center gap-1.5 ${
+            className={`px-4 py-1.5 rounded-xl text-xs font-bold transition flex items-center gap-1.5 ${
               activeView === 'how-to-book'
-                ? 'bg-white text-teal-700 shadow-sm'
-                : 'text-slate-600 hover:text-slate-900'
+                ? 'bg-gradient-to-r from-cyan-500 via-sky-500 to-blue-600 text-white shadow-md shadow-cyan-500/25'
+                : 'text-slate-700 hover:text-cyan-700 hover:bg-white/60'
             }`}
           >
             <BookOpen className="w-3.5 h-3.5" />
@@ -145,10 +145,10 @@ export const Navbar: React.FC<NavbarProps> = ({
           </button>
           <button
             onClick={() => handleNavClick('about-me')}
-            className={`px-4 py-1.5 rounded-lg text-xs font-bold transition flex items-center gap-1.5 ${
+            className={`px-4 py-1.5 rounded-xl text-xs font-bold transition flex items-center gap-1.5 ${
               activeView === 'about-me'
-                ? 'bg-white text-teal-700 shadow-sm'
-                : 'text-slate-600 hover:text-slate-900'
+                ? 'bg-gradient-to-r from-cyan-500 via-sky-500 to-blue-600 text-white shadow-md shadow-cyan-500/25'
+                : 'text-slate-700 hover:text-cyan-700 hover:bg-white/60'
             }`}
           >
             <User className="w-3.5 h-3.5" />
@@ -161,13 +161,13 @@ export const Navbar: React.FC<NavbarProps> = ({
           {/* Cart Button */}
           <button
             onClick={onOpenCart}
-            className="relative flex items-center gap-1.5 bg-slate-900 hover:bg-slate-800 text-white px-2.5 sm:px-3.5 py-1.5 rounded-xl text-xs font-black transition shadow-xs active:scale-95 border border-slate-700"
+            className="relative flex items-center gap-1.5 bg-gradient-to-r from-cyan-600 via-sky-600 to-blue-600 hover:from-cyan-500 hover:to-blue-500 text-white px-3 sm:px-4 py-2 rounded-xl text-xs font-extrabold transition shadow-md shadow-cyan-500/25 active:scale-95 border border-cyan-400/30"
             title="ดูตะกร้าสินค้า"
           >
-            <ShoppingCart className="w-4 h-4 text-teal-400 shrink-0" />
+            <ShoppingCart className="w-4 h-4 text-cyan-200 shrink-0" />
             <span className="hidden sm:inline">{t.cart}</span>
             {cartCount > 0 && (
-              <span className="bg-teal-400 text-slate-950 font-black text-[10px] w-4.5 h-4.5 rounded-full flex items-center justify-center animate-pulse">
+              <span className="bg-amber-400 text-slate-950 font-black text-[10px] w-4.5 h-4.5 rounded-full flex items-center justify-center animate-pulse shadow-sm">
                 {cartCount}
               </span>
             )}
@@ -182,9 +182,9 @@ export const Navbar: React.FC<NavbarProps> = ({
           {/* Prominent Check Status Button for Customers (Desktop) */}
           <button
             onClick={onOpenLookup}
-            className="hidden sm:inline-flex items-center gap-1.5 bg-teal-50 hover:bg-teal-100 text-teal-800 border border-teal-200 px-3 py-1.5 rounded-xl text-xs font-bold transition shadow-xs active:scale-95"
+            className="hidden sm:inline-flex items-center gap-1.5 bg-gradient-to-r from-sky-50 to-cyan-50 hover:from-sky-100 hover:to-cyan-100 text-cyan-900 border border-cyan-200/80 px-3.5 py-2 rounded-xl text-xs font-bold transition shadow-xs active:scale-95"
           >
-            <Ticket className="w-4 h-4 text-teal-600 shrink-0" />
+            <Ticket className="w-4 h-4 text-cyan-600 shrink-0" />
             <span>เช็คตั๋ว</span>
           </button>
 

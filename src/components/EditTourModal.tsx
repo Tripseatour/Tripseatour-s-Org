@@ -1,9 +1,10 @@
 import React, { useState, useEffect } from 'react';
-import { X, Plus, Trash2, ArrowUp, ArrowDown, CheckSquare, Square, Clock, Sparkles, MapPin, DollarSign, Image as ImageIcon, Calendar, ListChecks } from 'lucide-react';
-import { Tour, TourItinerary, Language } from '../types';
+import { X, Plus, Trash2, ArrowUp, ArrowDown, CheckSquare, Square, Clock, Sparkles, MapPin, DollarSign, Image as ImageIcon, Calendar, ListChecks, Eye, EyeOff } from 'lucide-react';
+import { Tour, TourItinerary, Language, Supplier } from '../types';
 
 interface EditTourModalProps {
   tour: Tour | null; // null = adding new, object = editing existing
+  suppliers?: Supplier[];
   isOpen: boolean;
   onClose: () => void;
   onSave: (tourData: Partial<Tour>) => Promise<void> | void;
@@ -22,6 +23,7 @@ const COMMON_INCLUDES_TH = [
 
 export const EditTourModal: React.FC<EditTourModalProps> = ({
   tour,
+  suppliers = [],
   isOpen,
   onClose,
   onSave,
@@ -32,6 +34,7 @@ export const EditTourModal: React.FC<EditTourModalProps> = ({
   const [titleTH, setTitleTH] = useState('');
   const [titleEN, setTitleEN] = useState('');
   const [category, setCategory] = useState<'island' | 'sunset' | 'yacht' | 'eco' | 'sightseeing'>('island');
+  const [supplierId, setSupplierId] = useState('');
   const [durationTH, setDurationTH] = useState('');
   const [durationEN, setDurationEN] = useState('');
   const [location, setLocation] = useState('');
@@ -44,6 +47,7 @@ export const EditTourModal: React.FC<EditTourModalProps> = ({
   const [imageUrl, setImageUrl] = useState('');
   const [descTH, setDescTH] = useState('');
   const [descEN, setDescEN] = useState('');
+  const [isVisible, setIsVisible] = useState<boolean>(true);
 
   // Included Items Checklist State
   const [includedItemsTH, setIncludedItemsTH] = useState<string[]>([]);
@@ -62,6 +66,7 @@ export const EditTourModal: React.FC<EditTourModalProps> = ({
       setTitleTH(tour.title?.TH || '');
       setTitleEN(tour.title?.EN || '');
       setCategory(tour.category || 'island');
+      setSupplierId(tour.supplierId || '');
       setDurationTH(tour.duration?.TH || 'เต็มวัน (08:00 - 17:00)');
       setDurationEN(tour.duration?.EN || 'Full Day (08:00 - 17:00)');
       setLocation(tour.location || 'ภูเก็ต');
@@ -77,8 +82,10 @@ export const EditTourModal: React.FC<EditTourModalProps> = ({
       setIncludedItemsTH(tour.included?.TH || []);
       setItinerarySteps(tour.itinerary ? JSON.parse(JSON.stringify(tour.itinerary)) : []);
       setHighlightsTH(tour.highlights?.TH || []);
+      setIsVisible(tour.isVisible !== undefined ? tour.isVisible : (tour.isAvailable !== undefined ? tour.isAvailable : true));
     } else {
       // Default initial state for new tour
+      setIsVisible(true);
       setTitleTH('');
       setTitleEN('');
       setCategory('island');
@@ -204,11 +211,15 @@ export const EditTourModal: React.FC<EditTourModalProps> = ({
 
     const catLabel = categoryLabelsMap[category] || { TH: 'ทัวร์ภูเก็ต', EN: 'Phuket Tour' };
 
+    const selectedSup = suppliers.find(s => s.id === supplierId);
+
     const payload: Partial<Tour> = {
       ...(tour ? { id: tour.id, slug: tour.slug } : {}),
       title: { TH: titleTH, EN: titleEN || titleTH, ZH: titleTH, RU: titleTH },
       category,
       categoryLabel: { TH: catLabel.TH, EN: catLabel.EN, ZH: catLabel.EN, RU: catLabel.EN },
+      supplierId: supplierId || undefined,
+      supplierName: selectedSup?.name || undefined,
       description: { TH: descTH, EN: descEN || descTH, ZH: descTH, RU: descTH },
       duration: { TH: durationTH, EN: durationEN || durationTH, ZH: durationTH, RU: durationTH },
       location,
@@ -235,7 +246,9 @@ export const EditTourModal: React.FC<EditTourModalProps> = ({
       pickupAreas: ['หาดป่าตอง', 'หาดกะตะ', 'หาดกะรอน', 'ตัวเมืองภูเก็ต'],
       rating: tour?.rating || 4.9,
       reviewCount: tour?.reviewCount || 35,
-      tags: [catLabel.TH, 'ภูเก็ต', 'ดำน้ำ']
+      tags: [catLabel.TH, 'ภูเก็ต', 'ดำน้ำ'],
+      isVisible,
+      isAvailable: isVisible
     };
 
     await onSave(payload);
@@ -269,6 +282,74 @@ export const EditTourModal: React.FC<EditTourModalProps> = ({
 
         {/* Scrollable Form Body */}
         <form onSubmit={handleSubmit} className="space-y-6 text-xs overflow-y-auto pr-1 pt-4 flex-1">
+          {/* VISIBILITY STATUS SELECTOR */}
+          <div className="bg-slate-950/80 p-4 rounded-2xl border border-slate-800 space-y-3">
+            <div className="flex items-center justify-between">
+              <label className="font-bold text-white text-xs flex items-center gap-2">
+                <span className="text-base">👁️</span>
+                <span>สถานะการแสดงผลบนหน้าเว็บไซต์ (Website Visibility)</span>
+              </label>
+              <span className={`text-[11px] font-bold px-2.5 py-0.5 rounded-full border flex items-center gap-1.5 ${
+                isVisible 
+                  ? 'bg-emerald-500/20 text-emerald-300 border-emerald-500/40' 
+                  : 'bg-rose-500/20 text-rose-300 border-rose-500/40'
+              }`}>
+                {isVisible ? <Eye className="w-3.5 h-3.5 text-emerald-400" /> : <EyeOff className="w-3.5 h-3.5 text-rose-400" />}
+                <span>{isVisible ? 'เปิดแสดงบนหน้าเว็บ (Active)' : 'ซ่อนไว้ / ไม่แสดง (Hidden)'}</span>
+              </span>
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <button
+                type="button"
+                onClick={() => setIsVisible(true)}
+                className={`p-3 rounded-xl border text-left transition flex items-start gap-3 cursor-pointer ${
+                  isVisible
+                    ? 'bg-emerald-950/60 border-emerald-500 text-white shadow-lg shadow-emerald-950/40 ring-1 ring-emerald-500/50'
+                    : 'bg-slate-900/60 border-slate-800 text-slate-400 hover:border-slate-700 hover:bg-slate-900'
+                }`}
+              >
+                <div className={`w-5 h-5 rounded-full border flex items-center justify-center mt-0.5 shrink-0 ${
+                  isVisible ? 'border-emerald-400 bg-emerald-500 text-white' : 'border-slate-600'
+                }`}>
+                  {isVisible && <div className="w-2 h-2 rounded-full bg-white" />}
+                </div>
+                <div>
+                  <div className={`font-bold text-xs flex items-center gap-1.5 ${isVisible ? 'text-emerald-300' : 'text-slate-300'}`}>
+                    <span>🟢 แสดงบนเว็บไซต์ (เปิดขาย)</span>
+                  </div>
+                  <p className="text-[11px] text-slate-400 mt-1 leading-relaxed">
+                    ลูกค้าสามารถมองเห็น ค้นหา และจองทัวร์นี้ได้ตามปกติบนหน้าเว็บ
+                  </p>
+                </div>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => setIsVisible(false)}
+                className={`p-3 rounded-xl border text-left transition flex items-start gap-3 cursor-pointer ${
+                  !isVisible
+                    ? 'bg-rose-950/60 border-rose-500 text-white shadow-lg shadow-rose-950/40 ring-1 ring-rose-500/50'
+                    : 'bg-slate-900/60 border-slate-800 text-slate-400 hover:border-slate-700 hover:bg-slate-900'
+                }`}
+              >
+                <div className={`w-5 h-5 rounded-full border flex items-center justify-center mt-0.5 shrink-0 ${
+                  !isVisible ? 'border-rose-400 bg-rose-500 text-white' : 'border-slate-600'
+                }`}>
+                  {!isVisible && <div className="w-2 h-2 rounded-full bg-white" />}
+                </div>
+                <div>
+                  <div className={`font-bold text-xs flex items-center gap-1.5 ${!isVisible ? 'text-rose-300' : 'text-slate-300'}`}>
+                    <span>🔴 ซ่อนไว้ (ไม่แสดงหน้าร้าน)</span>
+                  </div>
+                  <p className="text-[11px] text-slate-400 mt-1 leading-relaxed">
+                    พักการขายชั่วคราว ลูกค้าจะไม่เห็นทัวร์นี้บนหน้าเว็บ (แอดมินยังคงเห็นและเปิดกลับมาได้เสมอ)
+                  </p>
+                </div>
+              </button>
+            </div>
+          </div>
+
           {/* SECTION 1: Basic Information */}
           <div className="bg-slate-950/60 p-4 rounded-2xl border border-slate-800 space-y-4">
             <h4 className="font-bold text-cyan-300 text-xs uppercase tracking-wider flex items-center gap-1.5">
@@ -314,6 +395,22 @@ export const EditTourModal: React.FC<EditTourModalProps> = ({
                   <option value="yacht">🛥️ เรือยอชท์คาทามารัน (Catamaran)</option>
                   <option value="eco">🐘 ปางช้าง / เชิงอนุรักษ์ (Eco & Elephant)</option>
                   <option value="sightseeing">🏙️ เที่ยวเมือง / ซิตี้ทัวร์ (Sightseeing)</option>
+                </select>
+              </div>
+
+              <div>
+                <label className="font-bold text-amber-300 block mb-1">🏢 บริษัทผู้ให้บริการ (Supplier)</label>
+                <select
+                  value={supplierId}
+                  onChange={(e) => setSupplierId(e.target.value)}
+                  className="w-full bg-slate-900 border border-amber-500/50 rounded-xl p-2.5 text-amber-200 font-bold focus:ring-2 focus:ring-amber-500"
+                >
+                  <option value="">-- ไม่ระบุ / ดำเนินการเอง --</option>
+                  {suppliers.map(s => (
+                    <option key={s.id} value={s.id}>
+                      🏢 [{s.code}] {s.name}
+                    </option>
+                  ))}
                 </select>
               </div>
 
