@@ -127,12 +127,12 @@ export const BookingLookupModal: React.FC<BookingLookupModalProps> = ({
                 </h3>
                 {searched && foundBookings.length > 0 && (
                   <span className="bg-emerald-500 text-white text-[10px] font-black px-2.5 py-0.5 rounded-full uppercase shadow-xs">
-                    พบ {foundBookings.length} ตั๋ว
+                    {t.foundTicketsCount ? t.foundTicketsCount.replace('{count}', String(foundBookings.length)) : `${foundBookings.length} Tickets`}
                   </span>
                 )}
               </div>
               <p className="text-[11px] text-slate-400">
-                ค้นหาตั๋วทัวร์ E-Ticket และตรวจสอบสถานะคำสั่งจองทั้งหมดของท่าน
+                {t.ticketLookupSummary}
               </p>
             </div>
           </div>
@@ -151,8 +151,12 @@ export const BookingLookupModal: React.FC<BookingLookupModalProps> = ({
           {/* Search Form */}
           <form onSubmit={handleSearch} className="space-y-2 bg-slate-50 p-4 rounded-2xl border border-slate-200">
             <label className="text-xs font-bold text-slate-700 block flex items-center justify-between">
-              <span>ค้นหาด้วย เบอร์โทรศัพท์, รหัสอ้างอิงการจอง (TST-...), หรือ ชื่อผู้จอง</span>
-              <span className="text-[10px] text-slate-400 font-normal">ระบบจะแสดงตั๋วทุกใบที่ตรงกับข้อมูล</span>
+              <span>{t.searchByPhoneOrRef}</span>
+              <span className="text-[10px] text-slate-400 font-normal">
+                {currentLang === 'TH' ? 'ระบบจะแสดงตั๋วทุกใบที่ตรงกับข้อมูล' :
+                 currentLang === 'ZH' ? '系统将显示与该信息匹配的所有电子确认单' :
+                 currentLang === 'RU' ? 'Система отобразит все ваучеры' : 'Shows all matching vouchers'}
+              </span>
             </label>
             <div className="flex gap-2">
               <div className="relative flex-1">
@@ -162,7 +166,9 @@ export const BookingLookupModal: React.FC<BookingLookupModalProps> = ({
                   required
                   value={searchKey}
                   onChange={(e) => setSearchKey(e.target.value)}
-                  placeholder="เช่น 081-123-4567 หรือ TST-202608-0101 หรือ สมชาย"
+                  placeholder={currentLang === 'TH' ? 'เช่น 081-123-4567 หรือ TST-202608-0101 หรือ สมชาย' :
+                               currentLang === 'ZH' ? '例如 081-123-4567 / 订单号 TST-... / 姓名' :
+                               currentLang === 'RU' ? 'Например 081-123-4567 или TST-202608-0101' : 'e.g. 081-123-4567 or TST-202608-0101 or Name'}
                   className="w-full bg-white border border-slate-300 rounded-xl pl-10 pr-4 py-2.5 text-sm font-medium text-slate-900 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-hidden shadow-xs"
                 />
               </div>
@@ -174,12 +180,12 @@ export const BookingLookupModal: React.FC<BookingLookupModalProps> = ({
                 {isSearching ? (
                   <>
                     <RefreshCw className="w-4 h-4 animate-spin" />
-                    <span>กำลังค้นหา...</span>
+                    <span>{t.searching}</span>
                   </>
                 ) : (
                   <>
                     <Search className="w-4 h-4" />
-                    <span>ค้นหาตั๋ว</span>
+                    <span>{t.searchTicketButton}</span>
                   </>
                 )}
               </button>
@@ -200,7 +206,7 @@ export const BookingLookupModal: React.FC<BookingLookupModalProps> = ({
                       </div>
                       <div>
                         <div className="text-xs font-extrabold text-blue-950 flex items-center gap-2">
-                          <span>พบรายการจองทั้งหมด {foundBookings.length} โปรแกรมทัวร์</span>
+                          <span>{t.foundBookingsTitle ? t.foundBookingsTitle.replace('{count}', String(foundBookings.length)) : `Found ${foundBookings.length} bookings`}</span>
                         </div>
                         <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-[11px] text-blue-800 font-medium mt-0.5">
                           <span className="flex items-center gap-1">
@@ -227,7 +233,7 @@ export const BookingLookupModal: React.FC<BookingLookupModalProps> = ({
                               : 'text-slate-600 hover:text-slate-900'
                           }`}
                         >
-                          ดูทีละตั๋ว (Tab View)
+                          {t.tabView}
                         </button>
                         <button
                           type="button"
@@ -238,7 +244,7 @@ export const BookingLookupModal: React.FC<BookingLookupModalProps> = ({
                               : 'text-slate-600 hover:text-slate-900'
                           }`}
                         >
-                          ดูทั้งหมด ({foundBookings.length})
+                          {t.allTicketsView} ({foundBookings.length})
                         </button>
                       </div>
                     )}
@@ -248,7 +254,9 @@ export const BookingLookupModal: React.FC<BookingLookupModalProps> = ({
                   {foundBookings.length > 1 && viewMode === 'tabs' && (
                     <div className="space-y-1.5">
                       <div className="text-[11px] font-bold text-slate-600 px-1">
-                        เลือกโปรแกรมทัวร์เพื่อเปิดดู E-Ticket Voucher:
+                        {currentLang === 'TH' ? 'เลือกโปรแกรมทัวร์เพื่อเปิดดู E-Ticket Voucher:' :
+                         currentLang === 'ZH' ? '点击选择行程查看电子确认单：' :
+                         currentLang === 'RU' ? 'Выберите тур для просмотра ваучера:' : 'Select tour to view E-Ticket Voucher:'}
                       </div>
                       <div className="flex gap-2 overflow-x-auto pb-2 scrollbar-thin">
                         {foundBookings.map((b, idx) => {
@@ -268,7 +276,9 @@ export const BookingLookupModal: React.FC<BookingLookupModalProps> = ({
                                 <span className={`text-[10px] font-black uppercase px-2 py-0.5 rounded ${
                                   isSelected ? 'bg-teal-600 text-white' : 'bg-slate-100 text-slate-700'
                                 }`}>
-                                  ตั๋วที่ {idx + 1}
+                                  {currentLang === 'TH' ? `ตั๋วที่ ${idx + 1}` :
+                                   currentLang === 'ZH' ? `第 ${idx + 1} 张` :
+                                   currentLang === 'RU' ? `Билет ${idx + 1}` : `Ticket ${idx + 1}`}
                                 </span>
                                 <span className="text-[10px] font-mono font-bold text-slate-500">
                                   {b.bookingRef}
@@ -281,7 +291,7 @@ export const BookingLookupModal: React.FC<BookingLookupModalProps> = ({
                                 <Calendar className="w-3 h-3 text-teal-600" />
                                 <span>{b.travelDate}</span>
                                 <span>•</span>
-                                <span>{b.adults + b.children} ท่าน</span>
+                                <span>{b.adults + b.children} {currentLang === 'TH' ? 'ท่าน' : currentLang === 'ZH' ? '位' : currentLang === 'RU' ? 'чел' : 'pax'}</span>
                               </div>
                             </button>
                           );
@@ -303,7 +313,7 @@ export const BookingLookupModal: React.FC<BookingLookupModalProps> = ({
                             {activeBooking.bookingRef}
                           </span>
                         </div>
-                        <TicketVoucher booking={activeBooking} settings={settings} />
+                        <TicketVoucher booking={activeBooking} settings={settings} currentLang={currentLang} />
                       </div>
                     )
                   ) : (
@@ -317,7 +327,7 @@ export const BookingLookupModal: React.FC<BookingLookupModalProps> = ({
                           <div className="flex items-center justify-between pb-2 border-b border-slate-200">
                             <div className="flex items-center gap-2">
                               <span className="bg-teal-600 text-white text-xs font-black px-2.5 py-0.5 rounded-full">
-                                รายการที่ {idx + 1}/{foundBookings.length}
+                                {currentLang === 'TH' ? `รายการที่ ${idx + 1}/${foundBookings.length}` : `Ticket ${idx + 1}/${foundBookings.length}`}
                               </span>
                               <span className="text-xs font-extrabold text-slate-900">
                                 {booking.tourTitle}
@@ -327,7 +337,7 @@ export const BookingLookupModal: React.FC<BookingLookupModalProps> = ({
                               {booking.bookingRef}
                             </span>
                           </div>
-                          <TicketVoucher booking={booking} settings={settings} />
+                          <TicketVoucher booking={booking} settings={settings} currentLang={currentLang} />
                         </div>
                       ))}
                     </div>
@@ -342,15 +352,18 @@ export const BookingLookupModal: React.FC<BookingLookupModalProps> = ({
                   </div>
                   <div>
                     <h4 className="text-sm font-extrabold text-slate-800">
-                      ไม่พบข้อมูลการจองในระบบ
+                      {t.noBookingsFoundTitle}
                     </h4>
                     <p className="text-xs text-slate-500 mt-1 max-w-md mx-auto">
-                      ไม่พบรายการที่ตรงกับ "{searchKey}" โปรดตรวจสอบเบอร์โทรศัพท์ที่ใช้จอง หรือ รหัสอ้างอิง TST-... อีกครั้ง
+                      {currentLang === 'TH' ? `ไม่พบรายการที่ตรงกับ "${searchKey}" โปรดตรวจสอบเบอร์โทรศัพท์ที่ใช้จอง หรือ รหัสอ้างอิง TST-... อีกครั้ง` :
+                       currentLang === 'ZH' ? `未找到与 "${searchKey}" 匹配的预订，请核对手机号码或预订编号 TST-...` :
+                       currentLang === 'RU' ? `Не найдено бронирование "${searchKey}". Проверьте номер телефона или номер TST-...` :
+                       `No booking matches "${searchKey}". Please verify your phone number or Booking Ref TST-...`}
                     </p>
                   </div>
                   <div className="pt-2 flex flex-wrap items-center justify-center gap-2 text-[11px] text-slate-600 font-medium">
                     <span className="bg-white border border-slate-200 px-3 py-1 rounded-lg">
-                      💡 คำแนะนำ: ลองพิมพ์เฉพาะตัวเลขเบอร์โทร เช่น 0812345678
+                      {t.searchHintPhone}
                     </span>
                   </div>
                 </div>
@@ -363,14 +376,16 @@ export const BookingLookupModal: React.FC<BookingLookupModalProps> = ({
         {/* Footer */}
         <div className="px-5 py-3 border-t border-slate-100 bg-slate-50 flex items-center justify-between shrink-0">
           <div className="text-[11px] text-slate-500">
-            หากต้องการสอบถามเพิ่มเติม โทร <span className="font-bold text-slate-700">097-924-1399 / 062-681-6494</span>
+            {currentLang === 'TH' ? 'หากต้องการสอบถามเพิ่มเติม โทร' :
+             currentLang === 'ZH' ? '如需进一步协助，请致电' :
+             currentLang === 'RU' ? 'Нужна помощь? Звоните:' : 'Need assistance? Call'} <span className="font-bold text-slate-700">097-924-1399 / 062-681-6494</span>
           </div>
           <button
             type="button"
             onClick={onClose}
             className="bg-slate-200 hover:bg-slate-300 text-slate-800 font-extrabold px-4 py-2 rounded-xl text-xs transition"
           >
-            ปิดหน้าต่าง
+            {t.closeWindow}
           </button>
         </div>
 

@@ -678,12 +678,15 @@ export const HowToBookSection: React.FC<HowToBookSectionProps> = ({
                 Flexible Date Change & Weather Guarantee
               </span>
               <h3 className="text-lg sm:text-xl font-extrabold text-white mt-1">
-                ระบบการันตีเลื่อนวันเดินทางฟรี & คืนเงินมรสุม 100%
+                {currentLang === 'TH' ? 'ระบบการันตีเลื่อนวันเดินทางฟรี & คืนเงินมรสุม 100%' :
+                 currentLang === 'ZH' ? '灵活预订保障：免费改期 & 恶劣天气100%全额退款' :
+                 currentLang === 'RU' ? 'Гарантия гибкого бронирования: бесплатный перенос и возврат' :
+                 'Flexible Booking Guarantee: Free Date Change & 100% Monsoon Refund'}
               </h3>
             </div>
           </div>
           <div className="bg-teal-500/10 border border-teal-500/30 text-teal-300 font-mono text-xs px-3 py-1.5 rounded-xl font-bold shrink-0">
-            ✓ การันตีจองปลอดภัย 100%
+            ✓ 100% Verified Safe
           </div>
         </div>
 
@@ -691,20 +694,36 @@ export const HowToBookSection: React.FC<HowToBookSectionProps> = ({
           <div className="bg-slate-800/70 p-4 rounded-2xl border border-slate-700/70 space-y-2">
             <h4 className="font-extrabold text-teal-300 flex items-center gap-1.5 text-sm">
               <CheckCircle2 className="w-4 h-4 text-teal-400" />
-              <span>การันตีคืนเงินเต็มจำนวน 100% กรณีคลื่นลมมรสุม</span>
+              <span>
+                {currentLang === 'TH' ? 'การันตีคืนเงินเต็มจำนวน 100% กรณีคลื่นลมมรสุม' :
+                 currentLang === 'ZH' ? '如遇恶劣天气/风浪风暴 100% 全额退款' :
+                 currentLang === 'RU' ? '100% возврат при непогоде и шторме' :
+                 '100% Full Refund Guarantee in case of Monsoon/Severe Weather'}
+              </span>
             </h4>
             <p className="text-slate-300 leading-relaxed text-[11px]">
-              หากกรมเจ้าท่าประกาศห้ามเรือออกจากฝั่ง หรือสภาพอากาศไม่ปลอดภัยต่อการเดินเรือ ทางบริษัท Trip Sea Tour ยินดีคืนเงินค่าทัวร์เต็มจำนวน 100% หรือปรับเลื่อนวันเดินทางให้ทันทีตามความสะดวกของคุณลูกค้า
+              {currentLang === 'TH' ? 'หากกรมเจ้าท่าประกาศห้ามเรือออกจากฝั่ง หรือสภาพอากาศไม่ปลอดภัยต่อการเดินเรือ ทางบริษัท Trip Sea Tour ยินดีคืนเงินค่าทัวร์เต็มจำนวน 100% หรือปรับเลื่อนวันเดินทางให้ทันทีตามความสะดวกของคุณลูกค้า' :
+               currentLang === 'ZH' ? '若港务局因风浪停航或海况不适宜出海，Trip Sea Tour 全额 100% 退款或按您的行程免费改期。' :
+               currentLang === 'RU' ? 'Если выход в море запрещен из-за погодных условий, мы возвращаем 100% стоимости или переносим дату.' :
+               'If the Marine Department prohibits boat departures or sea conditions are unsafe, Trip Sea Tour will promptly issue a 100% refund or reschedule without penalty.'}
             </p>
           </div>
 
           <div className="bg-slate-800/70 p-4 rounded-2xl border border-slate-700/70 space-y-2">
             <h4 className="font-extrabold text-amber-300 flex items-center gap-1.5 text-sm">
               <Clock className="w-4 h-4 text-amber-400" />
-              <span>เลื่อนวันเดินทางฟรี ล่วงหน้า 24 ชั่วโมง</span>
+              <span>
+                {currentLang === 'TH' ? 'เลื่อนวันเดินทางฟรี ล่วงหน้า 24 ชั่วโมง' :
+                 currentLang === 'ZH' ? '出发前24小时免费改期' :
+                 currentLang === 'RU' ? 'Бесплатный перенос за 24 часа' :
+                 'Free Date Change up to 24 Hours in Advance'}
+              </span>
             </h4>
             <p className="text-slate-300 leading-relaxed text-[11px]">
-              ติดภารกิจ หรือต้องการเปลี่ยนแผนเที่ยว? แจ้งทีมงานแอดมินล่วงหน้าอย่างน้อย 24 ชั่วโมงก่อนวันเดินทาง สามารถขอเลื่อนวันเดินทางได้ฟรี ไม่มีค่าธรรมเนียมใดๆ เพิ่มเติม
+              {currentLang === 'TH' ? 'ติดภารกิจ หรือต้องการเปลี่ยนแผนเที่ยว? แจ้งทีมงานแอดมินล่วงหน้าอย่างน้อย 24 ชั่วโมงก่อนวันเดินทาง สามารถขอเลื่อนวันเดินทางได้ฟรี ไม่มีค่าธรรมเนียมใดๆ เพิ่มเติม' :
+               currentLang === 'ZH' ? '临时行程有变？只需在出行前至少24小时联系我们客服，即可免费申请调整出行日期，绝无任何额外手续费。' :
+               currentLang === 'RU' ? 'Изменились планы? Сообщите нам за 24 часа до поездки, и мы бесплатно перенесем дату без штрафов.' :
+               'Need to change plans? Simply notify our support team at least 24 hours prior to travel date to reschedule for free with no penalty fees.'}
             </p>
           </div>
         </div>
@@ -716,13 +735,24 @@ export const HowToBookSection: React.FC<HowToBookSectionProps> = ({
           <div className="space-y-2 text-center lg:text-left">
             <span className="inline-flex items-center gap-1.5 text-[10px] font-extrabold uppercase tracking-wider bg-teal-50 text-teal-700 px-3 py-1 rounded-full border border-teal-200/60">
               <PhoneCall className="w-3.5 h-3.5 text-teal-600" />
-              <span>ติดต่อสอบถามข้อมูลการจอง & ช่วยเหลือ</span>
+              <span>
+                {currentLang === 'TH' ? 'ติดต่อสอบถามข้อมูลการจอง & ช่วยเหลือ' :
+                 currentLang === 'ZH' ? '咨询预订与行程客服支持' :
+                 currentLang === 'RU' ? 'Поддержка и консультация по бронированию' :
+                 'Booking Inquiries & Travel Support'}
+              </span>
             </span>
             <h3 className="text-xl sm:text-2xl font-extrabold text-slate-900">
-              มีข้อสงสัย หรือต้องการจองผ่านเจ้าหน้าที่?
+              {currentLang === 'TH' ? 'มีข้อสงสัย หรือต้องการจองผ่านเจ้าหน้าที่?' :
+               currentLang === 'ZH' ? '有任何疑问？或需要人工客服协助预订？' :
+               currentLang === 'RU' ? 'Есть вопросы или хотите забронировать через оператора?' :
+               'Have questions or prefer booking with our team?'}
             </h3>
             <p className="text-xs text-slate-500 max-w-lg leading-relaxed">
-              ทีมงาน Trip Sea Tour ยินดีให้บริการคำแนะนำจัดทริป ทัวร์เกาะ รถรับส่งสนามบิน และรับแจ้งชำระเงินทาง LINE Official หรือโทรติดต่อได้ตลอดเวลา
+              {currentLang === 'TH' ? 'ทีมงาน Trip Sea Tour ยินดีให้บริการคำแนะนำจัดทริป ทัวร์เกาะ รถรับส่งสนามบิน และรับแจ้งชำระเงินทาง LINE Official หรือโทรติดต่อได้ตลอดเวลา' :
+               currentLang === 'ZH' ? 'Trip Sea Tour 专业团队随时为您推荐精选跳岛游、帆船包船及接送服务，欢迎通过 LINE 或直接来电咨询。' :
+               currentLang === 'RU' ? 'Команда Trip Sea Tour всегда на связи, чтобы помочь с выбором тура, трансфером и деталями оплаты.' :
+               'The Trip Sea Tour team is ready to assist you with tour recommendations, yacht charters, and direct booking confirmation.'}
             </p>
           </div>
 
@@ -735,7 +765,7 @@ export const HowToBookSection: React.FC<HowToBookSectionProps> = ({
               className="w-full sm:w-auto bg-[#06C755] hover:bg-[#05b34c] text-white font-extrabold px-5 py-3.5 rounded-2xl text-xs transition shadow-md shadow-emerald-200 flex items-center justify-center gap-2"
             >
               <MessageCircle className="w-4 h-4 fill-current" />
-              <span>แอด LINE Official ({settings.lineOaId || '@056hxinu'})</span>
+              <span>LINE Official ({settings.lineOaId || '@056hxinu'})</span>
             </a>
 
             {/* Primary Phone Button */}
@@ -744,7 +774,7 @@ export const HowToBookSection: React.FC<HowToBookSectionProps> = ({
               className="w-full sm:w-auto bg-slate-900 hover:bg-slate-800 text-white font-extrabold px-5 py-3.5 rounded-2xl text-xs transition shadow-md flex items-center justify-center gap-2 font-mono"
             >
               <Smartphone className="w-4 h-4 text-teal-400" />
-              <span>โทร 062-681-6494</span>
+              <span>062-681-6494</span>
             </a>
 
             {/* Secondary Backup Phone Button */}
@@ -753,7 +783,7 @@ export const HowToBookSection: React.FC<HowToBookSectionProps> = ({
               className="w-full sm:w-auto bg-slate-100 hover:bg-slate-200 text-slate-800 font-extrabold px-5 py-3.5 rounded-2xl text-xs transition border border-slate-300 flex items-center justify-center gap-2 font-mono"
             >
               <Smartphone className="w-4 h-4 text-amber-600" />
-              <span>เบอร์สำรอง 097-924-1399</span>
+              <span>097-924-1399</span>
             </a>
           </div>
         </div>
@@ -764,23 +794,34 @@ export const HowToBookSection: React.FC<HowToBookSectionProps> = ({
         <div className="space-y-1.5 text-center sm:text-left">
           <div className="inline-flex items-center gap-1.5 bg-teal-500/20 text-teal-300 text-xs font-extrabold px-2.5 py-0.5 rounded-lg border border-teal-500/30">
             <Zap className="w-3.5 h-3.5 text-teal-400" />
-            <span>พร้อมสัมผัสทะเลภูเก็ตแล้วหรือยัง?</span>
+            <span>
+              {currentLang === 'TH' ? 'พร้อมสัมผัสทะเลภูเก็ตแล้วหรือยัง?' :
+               currentLang === 'ZH' ? '准备好探索普吉岛醉美海岛了吗？' :
+               currentLang === 'RU' ? 'Готовы отправиться в морское приключение?' :
+               'Ready to experience Phuket islands?'}
+            </span>
           </div>
           <h3 className="text-xl sm:text-2xl font-extrabold text-white">
-            เลือกโปรแกรมทัวร์ยอดนิยม แล้วเริ่มจองได้ทันที
+            {currentLang === 'TH' ? 'เลือกโปรแกรมทัวร์ยอดนิยม แล้วเริ่มจองได้ทันที' :
+             currentLang === 'ZH' ? '精选热销跳岛行程，即刻轻松预订' :
+             currentLang === 'RU' ? 'Выберите популярный тур и забронируйте онлайн' :
+             'Browse Popular Tours & Book Instantly'}
           </h3>
           <p className="text-xs text-slate-300 max-w-xl">
-            การันตีราคาดีที่สุด ประกันอุบัติเหตุทางทะเลครบวงจร และทีมงานดูแลเอาใจใส่ตลอดการเดินทาง
+            {currentLang === 'TH' ? 'การันตีราคาดีที่สุด ประกันอุบัติเหตุทางทะเลครบวงจร และทีมงานดูแลเอาใจใส่ตลอดการเดินทาง' :
+             currentLang === 'ZH' ? '全网最实在直营价格，包含全程海上保险与资深导游悉心陪伴。' :
+             currentLang === 'RU' ? 'Гарантия лучших цен, полная туристическая страховка и заботливые гиды.' :
+             'Best direct prices guaranteed with full comprehensive marine travel insurance.'}
           </p>
         </div>
 
         <div className="flex flex-col sm:flex-row items-center gap-3 shrink-0 w-full sm:w-auto">
           <button
             onClick={onExploreTours}
-            className="w-full sm:w-auto bg-teal-500 hover:bg-teal-400 text-slate-950 font-extrabold px-6 py-3.5 rounded-2xl text-xs transition shadow-lg shadow-teal-500/30 flex items-center justify-center gap-2"
+            className="w-full sm:w-auto bg-teal-500 hover:bg-teal-400 text-slate-950 font-extrabold px-6 py-3.5 rounded-2xl text-xs transition shadow-lg shadow-teal-500/30 flex items-center justify-center gap-2 cursor-pointer"
           >
             <Compass className="w-4 h-4 text-slate-950" />
-            <span>ดูรายการทัวร์ & จองทันที</span>
+            <span>{t.bookNow}</span>
           </button>
 
           <a
@@ -790,7 +831,7 @@ export const HowToBookSection: React.FC<HowToBookSectionProps> = ({
             className="w-full sm:w-auto bg-slate-800 hover:bg-slate-700 text-white font-bold px-5 py-3.5 rounded-2xl text-xs transition border border-slate-700 flex items-center justify-center gap-2"
           >
             <MessageCircle className="w-4 h-4 text-[#06C755]" />
-            <span>ปรึกษาแอดมิน LINE</span>
+            <span>LINE Official</span>
           </a>
         </div>
       </div>

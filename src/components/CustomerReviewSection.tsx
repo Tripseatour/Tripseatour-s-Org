@@ -79,7 +79,10 @@ export const CustomerReviewSection: React.FC<CustomerReviewSectionProps> = ({
     try {
       const maxAllowed = 4 - uploadedPhotos.length;
       if (maxAllowed <= 0) {
-        alert('สามารถอัปโหลดรูปภาพได้สูงสุด 4 รูปต่อหนึ่งรีวิวครับ');
+        alert(currentLang === 'TH' ? 'สามารถอัปโหลดรูปภาพได้สูงสุด 4 รูปต่อหนึ่งรีวิวครับ' :
+              currentLang === 'ZH' ? '每条评价最多可上传4张照片' :
+              currentLang === 'RU' ? 'Максимум 4 фотографии на один отзыв' :
+              'You can upload up to 4 photos per review.');
         setIsProcessingImage(false);
         return;
       }
@@ -96,7 +99,8 @@ export const CustomerReviewSection: React.FC<CustomerReviewSectionProps> = ({
       setUploadedPhotos((prev) => [...prev, ...newImages]);
     } catch (err) {
       console.error('Error processing photos:', err);
-      alert('เกิดข้อผิดพลาดในการประมวลผลรูปภาพ กรุณาลองใหม่อีกครั้ง');
+      alert(currentLang === 'TH' ? 'เกิดข้อผิดพลาดในการประมวลผลรูปภาพ กรุณาลองใหม่อีกครั้ง' :
+            'Error processing photos. Please try again.');
     } finally {
       setIsProcessingImage(false);
       if (fileInputRef.current) fileInputRef.current.value = '';
@@ -106,7 +110,8 @@ export const CustomerReviewSection: React.FC<CustomerReviewSectionProps> = ({
   const handleAddCustomUrl = () => {
     if (!customPhotoUrl.trim()) return;
     if (uploadedPhotos.length >= 4) {
-      alert('สามารถใส่รูปภาพได้สูงสุด 4 รูปต่อหนึ่งรีวิวครับ');
+      alert(currentLang === 'TH' ? 'สามารถใส่รูปภาพได้สูงสุด 4 รูปต่อหนึ่งรีวิวครับ' :
+            'You can add up to 4 photos per review.');
       return;
     }
     setUploadedPhotos((prev) => [...prev, customPhotoUrl.trim()]);
@@ -120,7 +125,10 @@ export const CustomerReviewSection: React.FC<CustomerReviewSectionProps> = ({
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (!userName.trim() || !comment.trim()) {
-      alert('กรุณากรอกชื่อและข้อความรีวิวให้ครบถ้วนครับ');
+      alert(currentLang === 'TH' ? 'กรุณากรอกชื่อและข้อความรีวิวให้ครบถ้วนครับ' :
+            currentLang === 'ZH' ? '请完整填写姓名和评价内容' :
+            currentLang === 'RU' ? 'Пожалуйста, заполните имя и текст отзыва' :
+            'Please enter both your name and review comment.');
       return;
     }
 
@@ -138,7 +146,10 @@ export const CustomerReviewSection: React.FC<CustomerReviewSectionProps> = ({
     setComment('');
     setUploadedPhotos([]);
     setCustomPhotoUrl('');
-    alert('ส่งรีวิวพร้อมรูปถ่ายเรียบร้อยแล้ว ขอบพระคุณมากครับ!');
+    alert(currentLang === 'TH' ? 'ส่งรีวิวพร้อมรูปถ่ายเรียบร้อยแล้ว ขอบพระคุณมากครับ!' :
+          currentLang === 'ZH' ? '评价与照片已成功提交，非常感谢您的分享！' :
+          currentLang === 'RU' ? 'Отзыв и фотографии успешно отправлены! Спасибо!' :
+          'Review and photos submitted successfully. Thank you!');
   };
 
   const avgRating = (reviews.reduce((acc, r) => acc + r.rating, 0) / (reviews.length || 1)).toFixed(1);
@@ -151,20 +162,27 @@ export const CustomerReviewSection: React.FC<CustomerReviewSectionProps> = ({
           <div>
             <div className="inline-flex items-center gap-1.5 bg-amber-500/10 text-amber-700 px-3 py-1 rounded-full text-xs font-bold mb-2 border border-amber-200/60">
               <Star className="w-4 h-4 fill-amber-400 text-amber-400 animate-pulse" />
-              <span>{avgRating} / 5.0 Rating จากลูกค้า {reviews.length} ท่าน</span>
+              <span>
+                {avgRating} / 5.0 • {currentLang === 'TH' ? `จากรีวิวลูกค้า ${reviews.length} ท่าน` :
+                 currentLang === 'ZH' ? `来自 ${reviews.length} 位游客真实评价` :
+                 currentLang === 'RU' ? `Рейтинг от ${reviews.length} гостей` : `from ${reviews.length} reviews`}
+              </span>
             </div>
             <h2 className="text-2xl sm:text-3xl font-extrabold text-slate-900 tracking-tight">
               {t.customerReviews}
             </h2>
             <p className="text-xs text-slate-500 mt-1">
-              เสียงจากผู้ใช้บริการจริงที่จองทัวร์และเดินทางกับ Trip Sea Tour Phuket
+              {currentLang === 'TH' ? 'เสียงจากผู้ใช้บริการจริงที่จองทัวร์และเดินทางกับ Trip Sea Tour Phuket' :
+               currentLang === 'ZH' ? '普吉携海之旅真实游客出海及环岛体验' :
+               currentLang === 'RU' ? 'Реальные впечатления гостей от экскурсий Trip Sea Tour' :
+               'Genuine feedback from travelers who sailed with Trip Sea Tour Phuket'}
             </p>
           </div>
 
           <div className="flex items-center gap-2.5">
             <button
               onClick={() => setIsWriteModalOpen(true)}
-              className="inline-flex items-center gap-2 bg-gradient-to-r from-blue-600 to-teal-600 hover:from-blue-700 hover:to-teal-700 text-white font-bold px-5 py-2.5 rounded-xl text-xs transition shadow-md shadow-blue-200 shrink-0 transform active:scale-95"
+              className="inline-flex items-center gap-2 bg-gradient-to-r from-blue-600 to-teal-600 hover:from-blue-700 hover:to-teal-700 text-white font-bold px-5 py-2.5 rounded-xl text-xs transition shadow-md shadow-blue-200 shrink-0 transform active:scale-95 cursor-pointer"
             >
               <Plus className="w-4 h-4" />
               <span>{t.writeReview}</span>
@@ -255,7 +273,7 @@ export const CustomerReviewSection: React.FC<CustomerReviewSectionProps> = ({
                   <div className="bg-teal-50/80 border border-teal-100 p-3 rounded-xl text-[11px] text-slate-700 space-y-1">
                     <div className="flex items-center justify-between">
                       <span className="font-bold text-teal-900 flex items-center gap-1">
-                        <span>💬 คำตอบจาก Trip Sea Tour</span>
+                        <span>💬 {t.adminReply}</span>
                       </span>
                       {rev.adminReplyDate && (
                         <span className="text-[10px] text-teal-600">{rev.adminReplyDate}</span>
@@ -310,14 +328,23 @@ export const CustomerReviewSection: React.FC<CustomerReviewSectionProps> = ({
               </div>
               <div>
                 <h3 className="text-lg font-black text-slate-900">{t.writeReview}</h3>
-                <p className="text-[11px] text-slate-500">แบ่งปันความประทับใจและรูปภาพจากการเดินทางกับเรา</p>
+                <p className="text-[11px] text-slate-500">
+                  {currentLang === 'TH' ? 'แบ่งปันความประทับใจและรูปภาพจากการเดินทางกับเรา' :
+                   currentLang === 'ZH' ? '分享您的出行体验与精彩照片' :
+                   currentLang === 'RU' ? 'Поделитесь впечатлениями и фото из поездки' :
+                   'Share your impressions and trip photos with us'}
+                </p>
               </div>
             </div>
 
             <form onSubmit={handleSubmit} className="space-y-4 text-xs">
               {/* Tour Selection */}
               <div>
-                <label className="font-bold text-slate-700 block mb-1">เลือกโปรแกรมทัวร์ที่ไปมา *</label>
+                <label className="font-bold text-slate-700 block mb-1">
+                  {currentLang === 'TH' ? 'เลือกโปรแกรมทัวร์ที่ไปมา *' :
+                   currentLang === 'ZH' ? '选择您参加的行程 *' :
+                   currentLang === 'RU' ? 'Выберите тур *' : 'Select Tour *'}
+                </label>
                 <select
                   value={tourId}
                   onChange={(e) => setTourId(e.target.value)}
@@ -333,11 +360,13 @@ export const CustomerReviewSection: React.FC<CustomerReviewSectionProps> = ({
 
               {/* Customer Name */}
               <div>
-                <label className="font-bold text-slate-700 block mb-1">ชื่อหรือนามแฝงของคุณ *</label>
+                <label className="font-bold text-slate-700 block mb-1">
+                  {t.fullName} *
+                </label>
                 <input
                   type="text"
                   required
-                  placeholder="เช่น คุณสมชาย, คุณแนน"
+                  placeholder={currentLang === 'TH' ? 'เช่น คุณสมชาย, คุณแนน' : currentLang === 'ZH' ? '例如 张先生, 李女士' : 'e.g. John, Elena'}
                   value={userName}
                   onChange={(e) => setUserName(e.target.value)}
                   className="w-full bg-slate-50 border border-slate-300 rounded-xl p-2.5 text-xs focus:ring-2 focus:ring-teal-500 focus:outline-none"
@@ -347,7 +376,9 @@ export const CustomerReviewSection: React.FC<CustomerReviewSectionProps> = ({
               {/* Star Rating */}
               <div>
                 <label className="font-bold text-slate-700 block mb-1">
-                  ให้คะแนนความพึงพอใจ (1-5 ดาว) *
+                  {currentLang === 'TH' ? 'ให้คะแนนความพึงพอใจ (1-5 ดาว) *' :
+                   currentLang === 'ZH' ? '为行程评分 (1-5星) *' :
+                   currentLang === 'RU' ? 'Ваша оценка (1-5 звезд) *' : 'Rating (1-5 stars) *'}
                 </label>
                 <div className="flex items-center gap-2 bg-slate-50 p-3 rounded-2xl border border-slate-200 justify-center">
                   {[1, 2, 3, 4, 5].map((star) => {
@@ -382,11 +413,18 @@ export const CustomerReviewSection: React.FC<CustomerReviewSectionProps> = ({
 
               {/* Comment Field */}
               <div>
-                <label className="font-bold text-slate-700 block mb-1">ความเห็นและความประทับใจ *</label>
+                <label className="font-bold text-slate-700 block mb-1">
+                  {currentLang === 'TH' ? 'ความเห็นและความประทับใจ *' :
+                   currentLang === 'ZH' ? '您的评价与体验分享 *' :
+                   currentLang === 'RU' ? 'Ваш отзыв *' : 'Your Review & Impressions *'}
+                </label>
                 <textarea
                   required
                   rows={3}
-                  placeholder="บรรยากาศเป็นอย่างไร เรือ ไกด์ การบริการ อาหาร หรือจุดท่องเที่ยวที่ชอบ..."
+                  placeholder={currentLang === 'TH' ? 'บรรยากาศเป็นอย่างไร เรือ ไกด์ การบริการ อาหาร หรือจุดท่องเที่ยวที่ชอบ...' :
+                   currentLang === 'ZH' ? '快艇、导游、风景、餐饮服务等感受...' :
+                   currentLang === 'RU' ? 'Поделитесь впечатлениями о гиде, лодке, обеде...' :
+                   'How was the boat, guide, service, lunch or scenery?...'}
                   value={comment}
                   onChange={(e) => setComment(e.target.value)}
                   className="w-full bg-slate-50 border border-slate-300 rounded-xl p-2.5 text-xs focus:ring-2 focus:ring-teal-500 focus:outline-none leading-relaxed"
@@ -398,7 +436,11 @@ export const CustomerReviewSection: React.FC<CustomerReviewSectionProps> = ({
                 <div className="flex items-center justify-between">
                   <label className="font-bold text-slate-800 flex items-center gap-1.5 text-xs">
                     <Camera className="w-4 h-4 text-teal-600" />
-                    <span>อัปโหลดรูปถ่ายรีวิว (สูงสุด 4 รูป)</span>
+                    <span>
+                      {currentLang === 'TH' ? 'อัปโหลดรูปถ่ายรีวิว (สูงสุด 4 รูป)' :
+                       currentLang === 'ZH' ? '上传游玩照片 (最多4张)' :
+                       currentLang === 'RU' ? 'Загрузить фото (до 4 шт)' : 'Upload Review Photos (max 4)'}
+                    </span>
                   </label>
                   <span className="text-[10px] text-slate-500 font-bold font-mono">
                     {uploadedPhotos.length}/4 รูป
@@ -437,7 +479,7 @@ export const CustomerReviewSection: React.FC<CustomerReviewSectionProps> = ({
                     {isProcessingImage ? (
                       <div className="flex items-center gap-2 text-teal-700 py-2">
                         <Loader2 className="w-5 h-5 animate-spin" />
-                        <span className="font-bold text-xs">กำลังประมวลผลรูปภาพ...</span>
+                        <span className="font-bold text-xs">{t.submittingData}</span>
                       </div>
                     ) : (
                       <>
@@ -446,10 +488,13 @@ export const CustomerReviewSection: React.FC<CustomerReviewSectionProps> = ({
                         </div>
                         <div>
                           <p className="font-bold text-slate-800 text-xs">
-                            แตะเพื่อเลือกรูป หรือ ถ่ายภาพจากมือถือ
+                            {currentLang === 'TH' ? 'แตะเพื่อเลือกรูป หรือ ถ่ายภาพจากมือถือ' :
+                             currentLang === 'ZH' ? '点击选择图片或从手机相册上传' :
+                             currentLang === 'RU' ? 'Нажмите для выбора фото' : 'Click to select photos from device'}
                           </p>
                           <p className="text-[10px] text-slate-500 mt-0.5">
-                            รองรับไฟล์ JPG, PNG, WebP (รูปจะถูกปรับความคมชัดอัตโนมัติ)
+                            {currentLang === 'TH' ? 'รองรับไฟล์ JPG, PNG, WebP (รูปจะถูกปรับความคมชัดอัตโนมัติ)' :
+                             currentLang === 'ZH' ? '支持 JPG、PNG、WebP 格式' : 'Supports JPG, PNG, WebP'}
                           </p>
                         </div>
                       </>
@@ -477,7 +522,7 @@ export const CustomerReviewSection: React.FC<CustomerReviewSectionProps> = ({
                             handleRemovePhoto(idx);
                           }}
                           className="absolute top-1 right-1 w-5 h-5 rounded-full bg-red-600 text-white flex items-center justify-center opacity-90 hover:opacity-100 hover:scale-110 transition shadow-sm"
-                          title="ลบรูปนี้"
+                          title={t.removePhoto}
                         >
                           <X className="w-3 h-3" />
                         </button>
@@ -491,7 +536,7 @@ export const CustomerReviewSection: React.FC<CustomerReviewSectionProps> = ({
                   <div className="flex gap-1.5">
                     <input
                       type="url"
-                      placeholder="หรือวางลิงก์รูปภาพ (URL)..."
+                      placeholder={currentLang === 'TH' ? 'หรือวางลิงก์รูปภาพ (URL)...' : currentLang === 'ZH' ? '或粘贴图片链接 (URL)...' : 'Or paste image URL...'}
                       value={customPhotoUrl}
                       onChange={(e) => setCustomPhotoUrl(e.target.value)}
                       onKeyDown={(e) => {
@@ -507,7 +552,7 @@ export const CustomerReviewSection: React.FC<CustomerReviewSectionProps> = ({
                       onClick={handleAddCustomUrl}
                       className="bg-slate-200 hover:bg-slate-300 text-slate-700 font-bold px-3 py-1.5 rounded-xl text-[11px] transition shrink-0"
                     >
-                      เพิ่มรูป
+                      {currentLang === 'TH' ? 'เพิ่มรูป' : currentLang === 'ZH' ? '添加' : currentLang === 'RU' ? 'Добавить' : 'Add'}
                     </button>
                   </div>
                 </div>
@@ -521,7 +566,12 @@ export const CustomerReviewSection: React.FC<CustomerReviewSectionProps> = ({
                   className="w-full bg-gradient-to-r from-blue-600 to-teal-600 hover:from-blue-700 hover:to-teal-700 text-white font-extrabold py-3.5 rounded-xl transition text-xs shadow-md shadow-teal-100 flex items-center justify-center gap-2 active:scale-[0.98] disabled:opacity-50"
                 >
                   <CheckCircle2 className="w-4 h-4" />
-                  <span>ส่งรีวิวและรูปภาพประสบการณ์ของคุณ</span>
+                  <span>
+                    {currentLang === 'TH' ? 'ส่งรีวิวและรูปภาพประสบการณ์ของคุณ' :
+                     currentLang === 'ZH' ? '提交您的真实评价与旅行照片' :
+                     currentLang === 'RU' ? 'Отправить отзыв и фотографии' :
+                     'Submit Your Review & Travel Photos'}
+                  </span>
                 </button>
               </div>
             </form>

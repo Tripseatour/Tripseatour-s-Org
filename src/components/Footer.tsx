@@ -33,7 +33,7 @@ export const Footer: React.FC<FooterProps> = ({ currentLang, settings, onNavigat
               <QrCode className="w-5 h-5 text-cyan-400 shrink-0" />
               <div>
                 <span className="font-bold text-white block">PromptPay QR Ready</span>
-                <span className="text-[11px] text-cyan-300/80">ชำระเงินตรง สะดวก ปลอดภัย 100%</span>
+                <span className="text-[11px] text-cyan-300/80">{t.promptPayDirectSafety}</span>
               </div>
             </div>
           </div>
@@ -45,17 +45,17 @@ export const Footer: React.FC<FooterProps> = ({ currentLang, settings, onNavigat
             </h4>
             <ul className="space-y-2 text-xs">
               <li>
-                <button onClick={() => onNavigate('home')} className="hover:text-cyan-300 text-left transition">
+                <button onClick={() => onNavigate('home')} className="hover:text-cyan-300 text-left transition cursor-pointer">
                   {t.home}
                 </button>
               </li>
               <li>
-                <button onClick={() => onNavigate('how-to-book')} className="hover:text-cyan-300 text-left transition">
+                <button onClick={() => onNavigate('how-to-book')} className="hover:text-cyan-300 text-left transition cursor-pointer">
                   {t.howToBook}
                 </button>
               </li>
               <li>
-                <button onClick={() => onNavigate('about-me')} className="hover:text-cyan-300 text-left transition">
+                <button onClick={() => onNavigate('about-me')} className="hover:text-cyan-300 text-left transition cursor-pointer">
                   {t.aboutMe}
                 </button>
               </li>
@@ -76,13 +76,13 @@ export const Footer: React.FC<FooterProps> = ({ currentLang, settings, onNavigat
                 <Phone className="w-4 h-4 text-cyan-400 shrink-0 mt-0.5" />
                 <div className="space-y-1">
                   <div className="text-slate-300">
-                    <span className="text-[10px] text-cyan-200/70 block">เบอร์โทรหลัก:</span>
+                    <span className="text-[10px] text-cyan-200/70 block">{t.mainPhone}</span>
                     <a href="tel:0626816494" className="font-bold text-white hover:text-cyan-300 transition font-mono">
                       062-681-6494
                     </a>
                   </div>
                   <div className="text-slate-300">
-                    <span className="text-[10px] text-cyan-200/70 block">เบอร์สำรอง:</span>
+                    <span className="text-[10px] text-cyan-200/70 block">{t.backupPhone}</span>
                     <a href="tel:0979241399" className="font-bold text-white hover:text-cyan-300 transition font-mono">
                       097-924-1399
                     </a>
@@ -102,7 +102,7 @@ export const Footer: React.FC<FooterProps> = ({ currentLang, settings, onNavigat
               {t.lineOfficial}
             </h4>
             <p className="text-xs text-slate-400">
-              ติดต่อสอบถามโปรแกรมทัวร์เพิ่มเติม หรือ ส่งสลิปโอนเงินผ่าน LINE OA ได้ตลอด 24 ชั่วโมง
+              {t.footerLineNote}
             </p>
               <a
                 href={`https://line.me/R/ti/p/${settings.lineOaId}`}
@@ -111,7 +111,7 @@ export const Footer: React.FC<FooterProps> = ({ currentLang, settings, onNavigat
                 className="inline-flex items-center justify-center gap-2 w-full bg-[#06C755] hover:bg-[#05b34c] text-white font-bold px-4 py-2.5 rounded-xl text-xs transition shadow-md shadow-emerald-950"
               >
                 <MessageCircle className="w-4 h-4" />
-                <span>แอด LINE Official ({settings.lineOaId})</span>
+                <span>{t.addOfficialLine} ({settings.lineOaId})</span>
               </a>
 
               <a
@@ -121,7 +121,7 @@ export const Footer: React.FC<FooterProps> = ({ currentLang, settings, onNavigat
                 className="inline-flex items-center justify-center gap-2 w-full bg-gradient-to-r from-[#0084FF] to-[#00C6FF] hover:opacity-95 text-white font-bold px-4 py-2.5 rounded-xl text-xs transition shadow-md shadow-blue-950/40"
               >
                 <MessageCircle className="w-4 h-4 fill-current" />
-                <span>💬 แชทผ่าน Facebook Messenger</span>
+                <span>{t.chatFacebookMessenger}</span>
               </a>
 
               {settings.facebookUrl && (
@@ -132,7 +132,7 @@ export const Footer: React.FC<FooterProps> = ({ currentLang, settings, onNavigat
                   className="inline-flex items-center justify-center gap-2 w-full bg-[#1877F2] hover:bg-[#166FE5] text-white font-bold px-4 py-2.5 rounded-xl text-xs transition shadow-md shadow-blue-950/40"
                 >
                   <Facebook className="w-4 h-4 text-blue-100 fill-current" />
-                  <span>เยี่ยมชม Facebook Page</span>
+                  <span>{t.visitFacebookPage}</span>
                 </a>
               )}
           </div>
@@ -145,8 +145,8 @@ export const Footer: React.FC<FooterProps> = ({ currentLang, settings, onNavigat
               <Phone className="w-5 h-5 animate-pulse" />
             </div>
             <div>
-              <div className="text-xs font-bold text-white">โทรสอบถาม / จองทัวร์ด่วนทางโทรศัพท์</div>
-              <div className="text-[11px] text-slate-400">ติดต่อเจ้าหน้าที่ทริปซีทัวร์ได้ตลอด 24 ชั่วโมง</div>
+              <div className="text-xs font-bold text-white">{t.phoneHotlineTitle}</div>
+              <div className="text-[11px] text-slate-400">{t.phoneHotlineSubtitle}</div>
             </div>
           </div>
 
@@ -156,7 +156,7 @@ export const Footer: React.FC<FooterProps> = ({ currentLang, settings, onNavigat
               className="flex-1 sm:flex-none inline-flex items-center justify-center gap-2 bg-blue-600 hover:bg-blue-500 text-white font-extrabold px-4 py-2.5 rounded-xl text-xs transition shadow-md shadow-blue-950 font-mono"
             >
               <Phone className="w-4 h-4 text-blue-200" />
-              <span>โทรเบอร์หลัก 062-681-6494</span>
+              <span>062-681-6494</span>
             </a>
 
             <a
@@ -164,7 +164,11 @@ export const Footer: React.FC<FooterProps> = ({ currentLang, settings, onNavigat
               className="flex-1 sm:flex-none inline-flex items-center justify-center gap-2 bg-slate-700 hover:bg-slate-600 text-white font-extrabold px-4 py-2.5 rounded-xl text-xs transition border border-slate-600 font-mono"
             >
               <Phone className="w-4 h-4 text-amber-400" />
-              <span>โทรเบอร์สำรอง 097-924-1399</span>
+              <span>
+                {currentLang === 'TH' ? 'โทรเบอร์สำรอง 097-924-1399' :
+                 currentLang === 'ZH' ? '备用电话 097-924-1399' :
+                 currentLang === 'RU' ? 'Запасной: 097-924-1399' : 'Backup: 097-924-1399'}
+              </span>
             </a>
           </div>
         </div>
@@ -182,10 +186,10 @@ export const Footer: React.FC<FooterProps> = ({ currentLang, settings, onNavigat
             <button
               onClick={() => onNavigate('admin')}
               className="inline-flex items-center gap-1.5 text-slate-500 hover:text-slate-300 transition text-[11px] font-semibold py-1 px-2 rounded hover:bg-slate-800/80 border border-slate-800"
-              title="เข้าสู่ระบบจัดการแอดมิน (Admin Only)"
+              title={currentLang === 'TH' ? 'เข้าสู่ระบบจัดการแอดมิน (Admin Only)' : 'Admin Access'}
             >
               <Lock className="w-3 h-3 text-slate-400" />
-              <span>ผู้ดูแลระบบ (Admin)</span>
+              <span>{currentLang === 'TH' ? 'ผู้ดูแลระบบ (Admin)' : 'Admin'}</span>
             </button>
           </div>
         </div>

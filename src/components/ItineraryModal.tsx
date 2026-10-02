@@ -46,7 +46,7 @@ export const ItineraryModal: React.FC<ItineraryModalProps> = ({
           <div className="absolute bottom-4 left-4 right-4 z-10 space-y-1">
             <span className="bg-cyan-500/20 text-cyan-300 border border-cyan-500/40 text-[11px] font-bold px-2.5 py-0.5 rounded-full inline-flex items-center gap-1">
               <Calendar className="w-3.5 h-3.5 text-cyan-400" />
-              <span>ตารางการเดินทางแบบละเอียด (ITINERARY)</span>
+              <span>{t.itineraryTimeline}</span>
             </span>
             <h3 className="text-base sm:text-xl font-extrabold text-white leading-snug line-clamp-1">
               {title}
@@ -81,7 +81,9 @@ export const ItineraryModal: React.FC<ItineraryModalProps> = ({
                         <span className="inline-block bg-cyan-900/80 text-cyan-300 border border-cyan-700/80 px-2.5 py-0.5 rounded-md font-mono text-[11px] font-bold">
                           ⏰ {step.time}
                         </span>
-                        <span className="text-[10px] text-slate-400">ช่วงที่ {idx + 1}</span>
+                        <span className="text-[10px] text-slate-400">
+                          {currentLang === 'TH' ? `ช่วงที่ ${idx + 1}` : currentLang === 'ZH' ? `第 ${idx + 1} 阶段` : currentLang === 'RU' ? `Этап ${idx + 1}` : `Stage ${idx + 1}`}
+                        </span>
                       </div>
                       <h4 className="font-extrabold text-sm text-white pt-1">{stepTitle}</h4>
                       {stepDesc && (
@@ -95,7 +97,11 @@ export const ItineraryModal: React.FC<ItineraryModalProps> = ({
           ) : (
             <div className="text-center py-8 text-slate-400">
               <Calendar className="w-10 h-10 mx-auto text-slate-600 mb-2" />
-              <p>ไม่มีข้อมูลตารางเวลาสำหรับทัวร์นี้</p>
+              <p>
+                {currentLang === 'TH' ? 'ไม่มีข้อมูลตารางเวลาสำหรับทัวร์นี้' :
+                 currentLang === 'ZH' ? '暂无此行程的详细时间表' :
+                 currentLang === 'RU' ? 'Расписание пока недоступно' : 'No itinerary timeline available for this tour'}
+              </p>
             </div>
           )}
 
@@ -103,10 +109,17 @@ export const ItineraryModal: React.FC<ItineraryModalProps> = ({
           <div className="bg-slate-800/60 border border-slate-700 p-3.5 rounded-2xl space-y-1">
             <span className="font-bold text-cyan-300 flex items-center gap-1.5 text-xs">
               <ShieldCheck className="w-4 h-4 text-emerald-400" />
-              <span>หมายเหตุการรับส่งโรงแรม:</span>
+              <span>
+                {currentLang === 'TH' ? 'หมายเหตุการรับส่งโรงแรม:' :
+                 currentLang === 'ZH' ? '酒店往返接送须知:' :
+                 currentLang === 'RU' ? 'Информация о трансфере:' : 'Hotel Transfer Notes:'}
+              </span>
             </span>
             <p className="text-slate-400 text-[11px] leading-relaxed">
-              * เวลาการรับส่งโรงแรมขึ้นอยู่กับโซนที่พัก รถตู้จะไปรับถึงหน้าล็อบบี้โรงแรมฟรีในเขต หาดป่าตอง, หาดกะตะ, หาดกะรอน และ ตัวเมืองภูเก็ต
+              {currentLang === 'TH' ? '* เวลาการรับส่งโรงแรมขึ้นอยู่กับโซนที่พัก รถตู้จะไปรับถึงหน้าล็อบบี้โรงแรมฟรีในเขต หาดป่าตอง, หาดกะตะ, หาดกะรอน และ ตัวเมืองภูเก็ต' :
+               currentLang === 'ZH' ? '* 酒店接送时间依据具体区域而定。芭东 (Patong)、卡塔 (Kata)、卡伦 (Karon) 及普吉镇提供免费大堂接送。' :
+               currentLang === 'RU' ? '* Время трансфера зависит от отеля. Бесплатный сбор в лобби: Патонг, Ката, Карон и Пхукет-таун.' :
+               '* Exact pickup time depends on hotel location. Free hotel lobby pickup in Patong, Kata, Karon and Phuket Town.'}
             </p>
           </div>
         </div>
@@ -114,26 +127,26 @@ export const ItineraryModal: React.FC<ItineraryModalProps> = ({
         {/* Modal Footer Controls */}
         <div className="p-4 bg-slate-950 border-t border-slate-800 flex items-center justify-between gap-3 shrink-0">
           <div>
-            <span className="text-[10px] text-slate-400 block">ราคาเริ่มต้น</span>
+            <span className="text-[10px] text-slate-400 block">{t.from}</span>
             <span className="text-lg font-black text-cyan-400">฿{tour.priceAdult.toLocaleString()}</span>
-            <span className="text-xs text-slate-400"> / ท่าน</span>
+            <span className="text-xs text-slate-400"> / {t.adult}</span>
           </div>
 
           <div className="flex items-center gap-2">
             <button
               onClick={onClose}
-              className="bg-slate-800 hover:bg-slate-700 text-slate-300 font-bold px-4 py-2.5 rounded-xl text-xs transition"
+              className="bg-slate-800 hover:bg-slate-700 text-slate-300 font-bold px-4 py-2.5 rounded-xl text-xs transition cursor-pointer"
             >
-              ปิดหน้าต่าง
+              {t.closeWindow || 'Close'}
             </button>
             <button
               onClick={() => {
                 onClose();
                 onBookNow(tour);
               }}
-              className="bg-gradient-to-r from-cyan-500 via-teal-500 to-emerald-500 hover:from-cyan-400 hover:to-emerald-400 text-slate-950 font-extrabold px-5 py-2.5 rounded-xl text-xs transition shadow-lg shadow-cyan-500/20 flex items-center gap-1.5"
+              className="bg-gradient-to-r from-cyan-500 via-teal-500 to-emerald-500 hover:from-cyan-400 hover:to-emerald-400 text-slate-950 font-extrabold px-5 py-2.5 rounded-xl text-xs transition shadow-lg shadow-cyan-500/20 flex items-center gap-1.5 cursor-pointer"
             >
-              <span>จองทัวร์นี้ทันที</span>
+              <span>{t.bookNow}</span>
               <ArrowRight className="w-4 h-4" />
             </button>
           </div>

@@ -85,7 +85,10 @@ export const TicketVoucher: React.FC<TicketVoucherProps> = ({
       setTimeout(() => setDownloadSuccess(false), 4000);
     } catch (err) {
       console.error('Failed to generate ticket image:', err);
-      alert('ไม่สามารถบันทึกรูปตั๋วได้ กรุณาลองใหม่อีกครั้ง');
+      alert(currentLang === 'TH' ? 'ไม่สามารถบันทึกรูปตั๋วได้ กรุณาลองใหม่อีกครั้ง' :
+            currentLang === 'ZH' ? '生成确认单图片失败，请重试' :
+            currentLang === 'RU' ? 'Не удалось сохранить ваучер, попробуйте снова' :
+            'Could not save ticket image. Please try again.');
     } finally {
       setIsDownloading(false);
     }
@@ -344,11 +347,14 @@ export const TicketVoucher: React.FC<TicketVoucherProps> = ({
           className="w-full sm:w-auto bg-teal-700 hover:bg-teal-800 text-white font-bold py-3 px-6 rounded-xl text-xs sm:text-sm transition shadow-lg shadow-teal-900/30 flex items-center justify-center gap-2 disabled:opacity-50"
         >
           {isDownloading ? (
-            <span>กำลังสร้างรูปตั๋ว...</span>
+            <span>{currentLang === 'TH' ? 'กำลังสร้างรูปตั๋ว...' : currentLang === 'ZH' ? '正在生成确认单...' : currentLang === 'RU' ? 'Создание ваучера...' : 'Generating voucher...'}</span>
           ) : (
             <>
               <Download className="w-4 h-4" />
-              <span>บันทึกรูปตั๋วลงเครื่อง (A5 แนวนอน PNG)</span>
+              <span>{currentLang === 'TH' ? 'บันทึกรูปตั๋วลงเครื่อง (A5 แนวนอน PNG)' :
+                     currentLang === 'ZH' ? '保存电子确认函到手机 (PNG)' :
+                     currentLang === 'RU' ? 'Сохранить ваучер на устройство (PNG)' :
+                     'Save E-Ticket Image (PNG)'}</span>
             </>
           )}
         </button>
@@ -357,7 +363,10 @@ export const TicketVoucher: React.FC<TicketVoucherProps> = ({
       {/* Status Banner */}
       {downloadSuccess && (
         <div className="bg-emerald-50 border border-emerald-300 text-emerald-800 p-3 rounded-xl text-xs text-center font-bold animate-in fade-in">
-          ✅ บันทึกรูปตั๋ว E-Ticket ขนาด A5 แนวนอนลงเครื่องเรียบร้อยแล้ว! (E-Ticket-{booking.bookingRef}.png)
+          {currentLang === 'TH' ? `✅ บันทึกรูปตั๋ว E-Ticket ลงเครื่องเรียบร้อยแล้ว! (E-Ticket-${booking.bookingRef}.png)` :
+           currentLang === 'ZH' ? `✅ 已成功保存电子确认函至您的设备！(E-Ticket-${booking.bookingRef}.png)` :
+           currentLang === 'RU' ? `✅ Ваучер успешно сохранен! (E-Ticket-${booking.bookingRef}.png)` :
+           `✅ E-Ticket voucher image saved! (E-Ticket-${booking.bookingRef}.png)`}
         </div>
       )}
     </div>

@@ -131,10 +131,10 @@ export const TourCard: React.FC<TourCardProps> = ({
           {/* Itinerary Schedule Quick Button */}
           <button
             onClick={() => onViewItinerary ? onViewItinerary(tour) : onSelectTour(tour)}
-            className="w-full bg-gradient-to-r from-sky-50 to-cyan-50 hover:from-sky-100 hover:to-cyan-100 text-cyan-950 font-bold py-2 px-3 rounded-xl text-xs transition border border-cyan-200/80 flex items-center justify-center gap-1.5 shadow-xs active:scale-98"
+            className="w-full bg-gradient-to-r from-sky-50 to-cyan-50 hover:from-sky-100 hover:to-cyan-100 text-cyan-950 font-bold py-2 px-3 rounded-xl text-xs transition border border-cyan-200/80 flex items-center justify-center gap-1.5 shadow-xs active:scale-98 cursor-pointer"
           >
             <Calendar className="w-3.5 h-3.5 text-cyan-600 shrink-0" />
-            <span>📅 คลิกดูตารางการเดินทาง (Itinerary Timeline)</span>
+            <span>{t.viewItineraryTimeline || '📅 View Itinerary'}</span>
           </button>
 
           <div className="grid grid-cols-2 gap-2">

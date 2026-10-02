@@ -31,7 +31,13 @@ export const HeroSection: React.FC<HeroSectionProps> = ({
     { id: 'sightseeing', label: t.sightseeing, icon: Compass },
   ];
 
-  const quickTags = ['พีพี (Phi Phi)', 'เจมส์บอนด์ (James Bond)', 'สิมิลัน (Similan)', 'เรือยอชท์คาทามารัน'];
+  const quickTags = currentLang === 'TH' 
+    ? ['พีพี (Phi Phi)', 'เจมส์บอนด์ (James Bond)', 'สิมิลัน (Similan)', 'เรือยอชท์คาทามารัน']
+    : currentLang === 'ZH'
+    ? ['皮皮岛 (Phi Phi)', '007岛 (James Bond)', '斯米兰 (Similan)', '双体日落帆船']
+    : currentLang === 'RU'
+    ? ['Пхи-Пхи (Phi Phi)', 'Джеймс Бонд', 'Симиланы', 'Закатная яхта']
+    : ['Phi Phi Islands', 'James Bond Island', 'Similan Islands', 'Sunset Catamaran'];
 
   return (
     <div className="relative bg-gradient-to-b from-sky-950 via-cyan-950 to-slate-900 text-white overflow-hidden pb-14 pt-8 sm:pt-14 border-b border-cyan-800/40">
@@ -53,13 +59,21 @@ export const HeroSection: React.FC<HeroSectionProps> = ({
         {/* Main Title & Tagline */}
         <div className="inline-flex items-center gap-2 bg-gradient-to-r from-cyan-500/20 to-sky-500/20 border border-cyan-400/30 text-cyan-200 px-3.5 py-1.5 rounded-full text-xs font-bold mb-4 shadow-sm backdrop-blur-md">
           <Sparkles className="w-4 h-4 text-cyan-300" />
-          <span>เที่ยวเกาะภูเก็ต ล่องเรือยอชท์ ราคาตรง ไม่ผ่านเอเจ้นท์</span>
+          <span>{t.heroDirectBadge}</span>
         </div>
 
         <h1 className="text-3xl sm:text-5xl lg:text-6xl font-black tracking-tight text-white mb-4 leading-tight">
           {currentLang === 'TH' ? (
             <>
               จองทัวร์เที่ยวเกาะ <span className="bg-gradient-to-r from-cyan-300 via-sky-200 to-teal-300 bg-clip-text text-transparent">ทะเลภูเก็ต</span>
+            </>
+          ) : currentLang === 'ZH' ? (
+            <>
+              预订海岛一日游 <span className="bg-gradient-to-r from-cyan-300 via-sky-200 to-teal-300 bg-clip-text text-transparent">普吉直营</span>
+            </>
+          ) : currentLang === 'RU' ? (
+            <>
+              Морские Экскурсии <span className="bg-gradient-to-r from-cyan-300 via-sky-200 to-teal-300 bg-clip-text text-transparent">Пхукет</span>
             </>
           ) : (
             <>
@@ -86,16 +100,16 @@ export const HeroSection: React.FC<HeroSectionProps> = ({
             </div>
             <button
               onClick={onExploreClick}
-              className="w-full sm:w-auto bg-gradient-to-r from-cyan-500 via-sky-500 to-blue-600 hover:from-cyan-400 hover:to-blue-500 text-white font-extrabold px-6 py-3 rounded-xl text-sm transition shadow-lg shadow-cyan-500/30 shrink-0 flex items-center justify-center gap-2 active:scale-95"
+              className="w-full sm:w-auto bg-gradient-to-r from-cyan-500 via-sky-500 to-blue-600 hover:from-cyan-400 hover:to-blue-500 text-white font-extrabold px-6 py-3 rounded-xl text-sm transition shadow-lg shadow-cyan-500/30 shrink-0 flex items-center justify-center gap-2 active:scale-95 cursor-pointer"
             >
               <Search className="w-4 h-4" />
-              <span>{t.searchPlaceholder.slice(0, 8)}...</span>
+              <span>{t.searchTourButton || 'Search'}</span>
             </button>
           </div>
 
           {/* Quick Tag Pills */}
           <div className="mt-3 flex flex-wrap items-center justify-center gap-1.5 text-xs text-slate-300">
-            <span className="font-semibold text-cyan-300 mr-1">คำค้นฮิต:</span>
+            <span className="font-semibold text-cyan-300 mr-1">{t.popularSearch}</span>
             {quickTags.map((tag) => (
               <button
                 key={tag}

@@ -265,17 +265,25 @@ export const BookingModal: React.FC<BookingModalProps> = ({
         <div className="bg-slate-100 px-5 py-2.5 border-b border-slate-200 flex items-center justify-between text-xs font-semibold text-slate-500 shrink-0">
           <div className={`flex items-center gap-1.5 ${step >= 1 ? 'text-blue-600 font-bold' : ''}`}>
             <span className={`w-5 h-5 rounded-full flex items-center justify-center text-[10px] ${step >= 1 ? 'bg-blue-600 text-white' : 'bg-slate-300'}`}>1</span>
-            <span>วันที่ & จำนวน</span>
+            <span>
+              {currentLang === 'TH' ? 'วันที่ & จำนวน' :
+               currentLang === 'ZH' ? '日期与人数' :
+               currentLang === 'RU' ? 'Дата и гости' : 'Date & Guests'}
+            </span>
           </div>
           <span className="text-slate-300">→</span>
           <div className={`flex items-center gap-1.5 ${step >= 2 ? 'text-blue-600 font-bold' : ''}`}>
             <span className={`w-5 h-5 rounded-full flex items-center justify-center text-[10px] ${step >= 2 ? 'bg-blue-600 text-white' : 'bg-slate-300'}`}>2</span>
-            <span>ผู้ติดต่อ</span>
+            <span>{t.contactInfo}</span>
           </div>
           <span className="text-slate-300">→</span>
           <div className={`flex items-center gap-1.5 ${step >= 3 ? 'text-blue-600 font-bold' : ''}`}>
             <span className={`w-5 h-5 rounded-full flex items-center justify-center text-[10px] ${step >= 3 ? 'bg-blue-600 text-white' : 'bg-slate-300'}`}>3</span>
-            <span>สแกนจ่าย</span>
+            <span>
+              {currentLang === 'TH' ? 'สแกนจ่าย' :
+               currentLang === 'ZH' ? '扫码支付' :
+               currentLang === 'RU' ? 'Оплата' : 'Payment'}
+            </span>
           </div>
         </div>
 
@@ -377,12 +385,15 @@ export const BookingModal: React.FC<BookingModalProps> = ({
                   <label className="font-bold text-slate-800 text-xs block mb-1 flex items-center gap-1.5">
                     <MapPin className="w-4 h-4 text-cyan-600" />
                     <span>{t.pickupHotel}</span>
-                    <span className="text-rose-600 font-extrabold">* (จำเป็นต้องระบุ)</span>
+                    <span className="text-rose-600 font-extrabold">* {t.requiredField}</span>
                   </label>
                   <input
                     type="text"
                     required
-                    placeholder="เช่น โรงแรม Hilton Phuket Arcadia, Patong Beach (จำเป็นต้องระบุ)"
+                    placeholder={currentLang === 'TH' ? 'เช่น โรงแรม Hilton Phuket Arcadia, Patong Beach (จำเป็นต้องระบุ)' :
+                     currentLang === 'ZH' ? '例如 芭东希尔顿度假酒店 (必填)' :
+                     currentLang === 'RU' ? 'Например Hilton Patong (обязательно)' :
+                     'e.g. Hilton Phuket Arcadia Resort, Patong (Required)'}
                     value={pickupHotel}
                     onChange={(e) => setPickupHotel(e.target.value)}
                     className={`w-full bg-slate-50 border rounded-xl px-3.5 py-2.5 text-sm focus:ring-2 focus:ring-cyan-500 focus:outline-none ${
@@ -413,7 +424,7 @@ export const BookingModal: React.FC<BookingModalProps> = ({
                     </label>
                     <input
                       type="text"
-                      placeholder="เช่น Room 304 (ถ้าทราบ)"
+                      placeholder={currentLang === 'TH' ? 'เช่น Room 304 (ถ้าทราบ)' : currentLang === 'ZH' ? '例如 304房 (选填)' : 'e.g. Room 304 (optional)'}
                       value={roomNumber}
                       onChange={(e) => setRoomNumber(e.target.value)}
                       className="w-full bg-slate-50 border border-slate-300 text-slate-900 rounded-xl px-3 py-2 text-xs focus:ring-2 focus:ring-cyan-500"
@@ -429,7 +440,12 @@ export const BookingModal: React.FC<BookingModalProps> = ({
             <div className="space-y-4 animate-in fade-in">
               <div className="bg-slate-50 border border-slate-200 p-3 rounded-xl text-xs text-slate-600 flex items-center gap-2">
                 <ShieldCheck className="w-4 h-4 text-emerald-600 shrink-0" />
-                <span>ข้อมูลผู้ติดต่อจะถูกบันทึกไว้สำหรับออกตั๋ว Voucher และยืนยันเวลารถรับส่ง</span>
+                <span>
+                  {currentLang === 'TH' ? 'ข้อมูลผู้ติดต่อจะถูกบันทึกไว้สำหรับออกตั๋ว Voucher และยืนยันเวลารถรับส่ง' :
+                   currentLang === 'ZH' ? '联系人信息用于出具电子确认单 (Voucher) 及司机接送联系' :
+                   currentLang === 'RU' ? 'Данные нужны для оформления ваучера и связи с водителем трансфера' :
+                   'Contact details will be used for your official voucher and pickup driver coordination.'}
+                </span>
               </div>
 
               <div>
@@ -440,7 +456,7 @@ export const BookingModal: React.FC<BookingModalProps> = ({
                 <input
                   type="text"
                   required
-                  placeholder="เช่น คุณสมชาย ใจดี หรือ Mr.John Carter"
+                  placeholder={currentLang === 'TH' ? 'เช่น คุณสมชาย ใจดี หรือ Mr.John Carter' : currentLang === 'ZH' ? '例如 张伟 / Mr. John Smith' : 'e.g. Mr. John Smith'}
                   value={customerName}
                   onChange={(e) => setCustomerName(e.target.value)}
                   className="w-full bg-slate-50 border border-slate-300 text-slate-900 rounded-xl px-3.5 py-2.5 text-sm focus:ring-2 focus:ring-cyan-500"
@@ -485,7 +501,7 @@ export const BookingModal: React.FC<BookingModalProps> = ({
                   </label>
                   <input
                     type="text"
-                    placeholder="เช่น @line_id หรือ เบอร์โทร"
+                    placeholder={currentLang === 'TH' ? 'เช่น @line_id หรือ เบอร์โทร' : currentLang === 'ZH' ? '例如 微信号 / WhatsApp / 手机号' : 'e.g. WhatsApp / LINE ID / Mobile'}
                     value={customerLineId}
                     onChange={(e) => setCustomerLineId(e.target.value)}
                     className="w-full bg-slate-50 border border-slate-300 text-slate-900 rounded-xl px-3.5 py-2 text-xs focus:ring-2 focus:ring-cyan-500"
@@ -498,7 +514,7 @@ export const BookingModal: React.FC<BookingModalProps> = ({
                   </label>
                   <input
                     type="text"
-                    placeholder="เช่น ทานอาหารมังสวิรัติ, ขอคาร์ซีท"
+                    placeholder={currentLang === 'TH' ? 'เช่น ทานอาหารมังสวิรัติ, ขอคาร์ซีท' : currentLang === 'ZH' ? '例如 素食、儿童安全座椅等' : 'e.g. Vegetarian, baby car seat request'}
                     value={specialRequests}
                     onChange={(e) => setSpecialRequests(e.target.value)}
                     className="w-full bg-slate-50 border border-slate-300 text-slate-900 rounded-xl px-3.5 py-2 text-xs focus:ring-2 focus:ring-cyan-500"
@@ -519,10 +535,12 @@ export const BookingModal: React.FC<BookingModalProps> = ({
                     <div className="bg-white text-[#003B5C] px-2.5 py-0.5 rounded-md font-black text-xs tracking-wider uppercase shadow-2xs">
                       PROMPTPAY
                     </div>
-                    <span className="text-xs font-bold text-slate-200">| พร้อมเพย์ Official</span>
+                    <span className="text-xs font-bold text-slate-200">
+                      | {currentLang === 'TH' ? 'พร้อมเพย์ Official' : currentLang === 'ZH' ? '泰国 PromptPay 官方支付' : 'PromptPay Official'}
+                    </span>
                   </div>
                   <p className="text-[11px] text-slate-300 font-medium">
-                    สแกน QR Code ด้วยแอปพลิเคชันทุกธนาคารเพื่อชำระเงิน
+                    {t.scanToPay}
                   </p>
                 </div>
 
@@ -555,16 +573,16 @@ export const BookingModal: React.FC<BookingModalProps> = ({
                         </span>
                       </div>
                       <span className="text-[10px] text-slate-400 block mt-1">
-                        (ผู้ใหญ่ {adults} ท่าน x ฿{tour.priceAdult.toLocaleString()} {children > 0 ? `+ เด็ก ${children} ท่าน x ฿${tour.priceChild.toLocaleString()}` : ''})
+                        ({t.adult} {adults} x ฿{tour.priceAdult.toLocaleString()} {children > 0 ? `+ ${t.child} ${children} x ฿${tour.priceChild.toLocaleString()}` : ''})
                       </span>
                     </div>
 
                     <div className="pt-2.5 border-t border-slate-700/70 text-xs text-slate-300 space-y-1">
                       <p className="font-bold text-white">
-                        ชื่อบัญชี: <span className="text-teal-300">{(settings.promptPayName && !settings.promptPayName.includes('บริษัท')) ? settings.promptPayName : 'พรทิพย์ แดงทัด'}</span>
+                        {t.accountName}: <span className="text-teal-300">{(settings.promptPayName && !settings.promptPayName.includes('บริษัท')) ? settings.promptPayName : 'พรทิพย์ แดงทัด'}</span>
                       </p>
                       <div className="flex items-center justify-center gap-2 text-slate-300 text-[11px] pt-0.5">
-                        <span>เลขพร้อมเพย์: <b className="text-white font-mono text-xs">{settings.promptPayId}</b></span>
+                        <span>{t.promptPayNumber}: <b className="text-white font-mono text-xs">{settings.promptPayId}</b></span>
                       </div>
                     </div>
                   </div>
@@ -588,13 +606,17 @@ export const BookingModal: React.FC<BookingModalProps> = ({
                       </div>
                       <div className="text-xs text-emerald-700 font-bold flex items-center justify-center gap-1">
                         <CheckCircle2 className="w-4 h-4" />
-                        <span>แนบสลิปโอนเงินเรียบร้อยแล้ว</span>
+                        <span>
+                          {currentLang === 'TH' ? 'แนบสลิปโอนเงินเรียบร้อยแล้ว' :
+                           currentLang === 'ZH' ? '支付凭证已成功上传' :
+                           currentLang === 'RU' ? 'Чек успешно прикреплен' : 'Payment slip attached successfully'}
+                        </span>
                       </div>
                       <button
                         onClick={() => setSlipFile(null)}
-                        className="text-[11px] text-red-600 hover:underline"
+                        className="text-[11px] text-red-600 hover:underline cursor-pointer"
                       >
-                        เปลี่ยนรูปสลิป
+                        {currentLang === 'TH' ? 'เปลี่ยนรูปสลิป' : currentLang === 'ZH' ? '更换图片' : currentLang === 'RU' ? 'Изменить чек' : 'Change photo'}
                       </button>
                     </div>
                   ) : (
@@ -625,12 +647,15 @@ export const BookingModal: React.FC<BookingModalProps> = ({
                   {t.bookingSuccess}
                 </span>
                 <p className="text-xs text-slate-500 max-w-md mx-auto mt-1">
-                  ระบบได้ออกตั๋ว E-Ticket เรียบร้อยแล้ว ท่านสามารถกดบันทึกรูปตั๋วลงมือถือได้ทันที
+                  {currentLang === 'TH' ? 'ระบบได้ออกตั๋ว E-Ticket เรียบร้อยแล้ว ท่านสามารถกดบันทึกรูปตั๋วลงมือถือได้ทันที' :
+                   currentLang === 'ZH' ? '系统已成功出具电子确认单 (E-Ticket)，您可以立即保存确认函图片至手机。' :
+                   currentLang === 'RU' ? 'Электронный ваучер готов! Вы можете сохранить его на мобильное устройство.' :
+                   'Your E-Ticket voucher is ready! You can save the ticket image to your device.'}
                 </p>
               </div>
 
               {/* Digital Ticket Voucher Component */}
-              <TicketVoucher booking={completedBooking} settings={settings} />
+              <TicketVoucher booking={completedBooking} settings={settings} currentLang={currentLang} />
             </div>
           )}
         </div>
@@ -640,9 +665,9 @@ export const BookingModal: React.FC<BookingModalProps> = ({
           {step > 1 && step < 4 ? (
             <button
               onClick={() => setStep((step - 1) as 1 | 2 | 3)}
-              className="bg-slate-200 hover:bg-slate-300 text-slate-700 font-bold px-4 py-2.5 rounded-xl text-xs transition"
+              className="bg-slate-200 hover:bg-slate-300 text-slate-700 font-bold px-4 py-2.5 rounded-xl text-xs transition cursor-pointer"
             >
-              ย้อนกลับ
+              {t.back}
             </button>
           ) : (
             <div />
@@ -652,14 +677,14 @@ export const BookingModal: React.FC<BookingModalProps> = ({
             <button
               onClick={() => {
                 if (!pickupHotel || !pickupHotel.trim()) {
-                  alert('โรงแรมที่พักห้ามเป็นค่าว่าง: กรุณากรอกชื่อโรงแรม/ที่พัก เพื่อใช้สำหรับการจัดรถรับ-ส่ง');
+                  alert(currentLang === 'TH' ? 'โรงแรมที่พักห้ามเป็นค่าว่าง: กรุณากรอกชื่อโรงแรม/ที่พัก เพื่อใช้สำหรับการจัดรถรับ-ส่ง' : 'Hotel name is required for pickup.');
                   return;
                 }
                 setStep(2);
               }}
-              className="bg-blue-600 hover:bg-blue-700 text-white font-bold px-6 py-2.5 rounded-xl text-xs transition shadow-md shadow-blue-200 flex items-center gap-1.5"
+              className="bg-blue-600 hover:bg-blue-700 text-white font-bold px-6 py-2.5 rounded-xl text-xs transition shadow-md shadow-blue-200 flex items-center gap-1.5 cursor-pointer"
             >
-              <span>ถัดไป: ข้อมูลผู้ติดต่อ</span>
+              <span>{t.next}: {t.contactInfo}</span>
               <ArrowRight className="w-4 h-4" />
             </button>
           )}
@@ -668,14 +693,14 @@ export const BookingModal: React.FC<BookingModalProps> = ({
             <button
               onClick={() => {
                 if (!customerName || !customerPhone) {
-                  alert('กรุณากรอกชื่อ-นามสกุล และ เบอร์โทรศัพท์');
+                  alert(currentLang === 'TH' ? 'กรุณากรอกชื่อ-นามสกุล และ เบอร์โทรศัพท์' : 'Please provide your full name and phone number.');
                   return;
                 }
                 setStep(3);
               }}
-              className="bg-blue-600 hover:bg-blue-700 text-white font-bold px-6 py-2.5 rounded-xl text-xs transition shadow-md shadow-blue-200 flex items-center gap-1.5"
+              className="bg-blue-600 hover:bg-blue-700 text-white font-bold px-6 py-2.5 rounded-xl text-xs transition shadow-md shadow-blue-200 flex items-center gap-1.5 cursor-pointer"
             >
-              <span>ถัดไป: สแกนจ่าย PromptPay</span>
+              <span>{t.next}: PromptPay QR</span>
               <ArrowRight className="w-4 h-4" />
             </button>
           )}
@@ -684,12 +709,12 @@ export const BookingModal: React.FC<BookingModalProps> = ({
             <button
               onClick={handleSubmitBooking}
               disabled={isSubmitting}
-              className="bg-blue-600 hover:bg-blue-700 text-white font-bold px-6 py-2.5 rounded-xl text-xs transition shadow-md shadow-blue-200 flex items-center gap-2"
+              className="bg-blue-600 hover:bg-blue-700 text-white font-bold px-6 py-2.5 rounded-xl text-xs transition shadow-md shadow-blue-200 flex items-center gap-2 cursor-pointer"
             >
               {isSubmitting ? (
                 <>
                   <Loader2 className="w-4 h-4 animate-spin" />
-                  <span>กำลังส่งข้อมูล...</span>
+                  <span>{t.submittingData}</span>
                 </>
               ) : (
                 <>
@@ -703,9 +728,9 @@ export const BookingModal: React.FC<BookingModalProps> = ({
           {step === 4 && (
             <button
               onClick={onClose}
-              className="bg-slate-900 hover:bg-slate-800 text-white font-bold px-8 py-2.5 rounded-xl text-xs transition w-full"
+              className="bg-slate-900 hover:bg-slate-800 text-white font-bold px-8 py-2.5 rounded-xl text-xs transition w-full cursor-pointer"
             >
-              เสร็จสิ้น / ปิดหน้านี้
+              {t.finishClose}
             </button>
           )}
         </div>

@@ -15,6 +15,7 @@ import { AdminAuthModal } from './components/AdminAuthModal';
 import { TripSeaAiChatbot } from './components/TripSeaAiChatbot';
 import { CartModal } from './components/CartModal';
 import { PwaInstallPrompt } from './components/PwaInstallPrompt';
+import { LanguageSelectionModal } from './components/LanguageSelectionModal';
 
 import { Tour, Booking, Review, Customer, AppSettings, LineNotificationLog, Language, AdminUser, CartItem, Supplier } from './types';
 import { Currency } from './utils/currency';
@@ -24,9 +25,31 @@ import { Compass, Sparkles, Filter, Ticket, QrCode, Phone, MessageCircle, Shield
 import { supabaseApi } from './lib/supabase';
 
 export default function App() {
-  const [currentLang, setCurrentLang] = useState<Language>('TH');
-  const [currentCurrency, setCurrentCurrency] = useState<Currency>('THB');
+  const [currentLang, setCurrentLang] = useState<Language>(() => {
+    try {
+      const saved = localStorage.getItem('tst_current_lang') as Language;
+      if (saved && ['TH', 'EN', 'ZH', 'RU'].includes(saved)) return saved;
+    } catch {}
+    return 'TH';
+  });
+  const [currentCurrency, setCurrentCurrency] = useState<Currency>(() => {
+    try {
+      const saved = localStorage.getItem('tst_current_currency') as Currency;
+      if (saved) return saved;
+    } catch {}
+    return 'THB';
+  });
   const [activeView, setActiveView] = useState<'home' | 'how-to-book' | 'about-me' | 'admin'>('home');
+
+  // Welcome Language Selection Modal (Pops up automatically when entering website)
+  const [isLanguageModalOpen, setIsLanguageModalOpen] = useState<boolean>(() => {
+    try {
+      const hasChosenSession = sessionStorage.getItem('tst_language_prompted_session');
+      return !hasChosenSession;
+    } catch {
+      return true;
+    }
+  });
 
   // Admin Security Auth State (Google Account or PIN)
   const [isAdminAuthenticated, setIsAdminAuthenticated] = useState<boolean>(() => {
@@ -1050,9 +1073,19 @@ export default function App() {
       <div className="no-print">
         <Navbar
           currentLang={currentLang}
-          onLanguageChange={setCurrentLang}
+          onLanguageChange={(lang) => {
+            setCurrentLang(lang);
+            try {
+              localStorage.setItem('tst_current_lang', lang);
+            } catch {}
+          }}
           currentCurrency={currentCurrency}
-          onCurrencyChange={setCurrentCurrency}
+          onCurrencyChange={(curr) => {
+            setCurrentCurrency(curr);
+            try {
+              localStorage.setItem('tst_current_currency', curr);
+            } catch {}
+          }}
           onNavigate={handleNavigate}
           activeView={activeView}
           onOpenLookup={() => setIsLookupOpen(true)}
@@ -1060,6 +1093,7 @@ export default function App() {
           onOpenCart={() => setIsCartOpen(true)}
           promptPayId={settings.promptPayId}
           isAdminAuthenticated={isAdminAuthenticated}
+          onOpenLanguageModal={() => setIsLanguageModalOpen(true)}
         />
       </div>
 
@@ -1133,7 +1167,7 @@ export default function App() {
                       </span>
                     </h2>
                     <p className="text-xs text-slate-500 mt-0.5">
-                      โปรแกรมท่องเที่ยวภูเก็ต ยืนยันตรง ชำระผ่าน พร้อมเพย์ QR Code
+                      {t.recommendedCatalogSubtitle}
                     </p>
                   </div>
 
@@ -1201,13 +1235,13 @@ export default function App() {
                 ) : (
                   <div className="bg-white border border-slate-200 rounded-3xl p-12 text-center max-w-md mx-auto shadow-sm">
                     <Compass className="w-12 h-12 text-slate-300 mx-auto mb-3 animate-spin-slow" />
-                    <h3 className="font-extrabold text-slate-800 text-base">ไม่พบโปรแกรมทัวร์ที่ค้นหา</h3>
-                    <p className="text-xs text-slate-500 mt-1 mb-4">โปรดลองเปลี่ยนคำค้นหา หรือ เลือกดูทุกหมวดหมู่</p>
+                    <h3 className="font-extrabold text-slate-800 text-base">{t.noToursFound}</h3>
+                    <p className="text-xs text-slate-500 mt-1 mb-4">{t.tryDifferentFilter}</p>
                     <button
                       onClick={() => { setSearchQuery(''); setSelectedCategory('all'); setSelectedDuration('all'); }}
                       className="bg-teal-600 hover:bg-teal-700 text-white font-bold px-4 py-2 rounded-xl text-xs transition shadow-md shadow-teal-200"
                     >
-                      ล้างตัวกรองทั้งหมด
+                      {t.clearAllFilters}
                     </button>
                   </div>
                 )}
@@ -1320,8 +1354,15 @@ export default function App() {
               <div className="bg-gradient-to-br from-slate-900 via-slate-800 to-slate-950 text-white rounded-3xl p-6 sm:p-8 shadow-xl border border-slate-800 space-y-6">
                 <div className="flex flex-col sm:flex-row items-center justify-between gap-4 border-b border-slate-800 pb-4">
                   <div>
-                    <h3 className="font-extrabold text-lg text-white">ช่องทางติดต่อเรา (Contact Us)</h3>
-                    <p className="text-xs text-slate-400">สอบถามรายละเอียด เพิ่มเพื่อน LINE OA หรือโทรติดต่อทีมงานโดยตรง</p>
+                    <h3 className="font-extrabold text-lg text-white">
+                      {currentLang === 'TH' ? 'ช่องทางติดต่อเรา' : currentLang === 'ZH' ? '联系我们' : currentLang === 'RU' ? 'Связаться с нами' : 'Contact Us'}
+                    </h3>
+                    <p className="text-xs text-slate-400">
+                      {currentLang === 'TH' ? 'สอบถามรายละเอียด เพิ่มเพื่อน LINE OA หรือโทรติดต่อทีมงานโดยตรง' :
+                       currentLang === 'ZH' ? '咨询行程详情、添加 LINE 官方客服或直接致电我们' :
+                       currentLang === 'RU' ? 'Свяжитесь с нами через LINE или по телефону в любое время' :
+                       'Inquire about tours, add LINE Official, or call our team directly'}
+                    </p>
                   </div>
                   <a
                     href={`https://line.me/R/ti/p/${settings.lineOaId}`}
@@ -1330,7 +1371,7 @@ export default function App() {
                     className="inline-flex items-center gap-2 bg-[#06C755] hover:bg-[#05b34c] text-white font-extrabold px-5 py-2.5 rounded-xl text-xs transition shadow-md shrink-0"
                   >
                     <MessageCircle className="w-4 h-4 fill-current" />
-                    <span>แอด LINE Official ({settings.lineOaId || '@056hxinu'})</span>
+                    <span>{t.addOfficialLine} ({settings.lineOaId || '@056hxinu'})</span>
                   </a>
                 </div>
 
@@ -1344,7 +1385,7 @@ export default function App() {
                       <Phone className="w-5 h-5" />
                     </div>
                     <div>
-                      <div className="text-[10px] text-slate-400 font-bold">เบอร์โทรศัพท์หลัก (Primary Phone)</div>
+                      <div className="text-[10px] text-slate-400 font-bold">{t.mainPhone}</div>
                       <div className="text-sm font-extrabold text-white font-mono group-hover:text-teal-300 transition">062-681-6494</div>
                     </div>
                   </a>
@@ -1358,7 +1399,7 @@ export default function App() {
                       <Phone className="w-5 h-5" />
                     </div>
                     <div>
-                      <div className="text-[10px] text-slate-400 font-bold">เบอร์โทรศัพท์สำรอง (Backup Phone)</div>
+                      <div className="text-[10px] text-slate-400 font-bold">{t.backupPhone}</div>
                       <div className="text-sm font-extrabold text-white font-mono group-hover:text-amber-300 transition">097-924-1399</div>
                     </div>
                   </a>
@@ -1376,10 +1417,12 @@ export default function App() {
           target="_blank"
           rel="noopener noreferrer"
           className="bg-gradient-to-r from-[#0084FF] via-[#0099FF] to-[#00C6FF] hover:opacity-95 text-white px-3.5 py-2.5 rounded-full shadow-2xl flex items-center gap-2 transition transform hover:scale-105 active:scale-95 group border border-blue-300/40"
-          title="แชทผ่าน Facebook Messenger ด่วน"
+          title={t.chatFacebookMessenger}
         >
           <MessageCircle className="w-5 h-5 fill-current text-white shrink-0" />
-          <span className="hidden sm:inline text-xs font-bold tracking-tight">แชท Facebook Messenger</span>
+          <span className="hidden sm:inline text-xs font-bold tracking-tight">
+            {currentLang === 'TH' ? 'แชท Messenger' : currentLang === 'ZH' ? '在线客服' : currentLang === 'RU' ? 'Чат в Messenger' : 'Chat Messenger'}
+          </span>
         </a>
       </div>
 
@@ -1417,7 +1460,7 @@ export default function App() {
               <div className="text-[11px] text-teal-300 font-extrabold flex items-center gap-1">
                 <span>{t.myCart}</span>
                 <span className="bg-teal-500/20 text-teal-300 text-[10px] px-1.5 py-0.2 rounded-md">
-                  {cart.length} ทัวร์
+                  {cart.length} {currentLang === 'TH' ? 'ทัวร์' : currentLang === 'ZH' ? '项' : currentLang === 'RU' ? 'экскурсий' : 'tours'}
                 </span>
               </div>
               <div className="text-xs font-black text-white">
@@ -1489,6 +1532,43 @@ export default function App() {
           bookings={bookings}
         />
       )}
+
+      {/* Language Selection Modal (Auto pops up on first entrance, switchable anytime) */}
+      <LanguageSelectionModal
+        isOpen={isLanguageModalOpen}
+        currentLang={currentLang}
+        currentCurrency={currentCurrency}
+        onSelectLanguage={(lang, currency) => {
+          setCurrentLang(lang);
+          try {
+            sessionStorage.setItem('tst_language_prompted_session', 'true');
+            localStorage.setItem('tst_current_lang', lang);
+            localStorage.setItem('tst_language_selected', 'true');
+            if (currency) {
+              setCurrentCurrency(currency);
+              localStorage.setItem('tst_current_currency', currency);
+            }
+          } catch {}
+          setIsLanguageModalOpen(false);
+          const langNames: Record<Language, string> = {
+            TH: 'ไทย',
+            EN: 'English',
+            ZH: '中文',
+            RU: 'Русский'
+          };
+          const msg = lang === 'TH' ? `🌐 เปลี่ยนภาษาเป็น ${langNames[lang]} เรียบร้อยแล้ว`
+            : lang === 'ZH' ? `🌐 已切换语言为 ${langNames[lang]}`
+            : lang === 'RU' ? `🌐 Язык переключен на ${langNames[lang]}`
+            : `🌐 Language set to ${langNames[lang]}`;
+          showToast(msg);
+        }}
+        onClose={() => {
+          try {
+            sessionStorage.setItem('tst_language_prompted_session', 'true');
+          } catch {}
+          setIsLanguageModalOpen(false);
+        }}
+      />
 
       {/* PWA Install Prompt Banner & Guide */}
       <PwaInstallPrompt currentLang={currentLang} />

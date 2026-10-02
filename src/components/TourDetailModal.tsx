@@ -111,20 +111,20 @@ export const TourDetailModal: React.FC<TourDetailModalProps> = ({
               <ShieldCheck className="w-5 h-5 text-emerald-600 shrink-0" />
               <div>
                 <span className="text-[11px] text-slate-400 block">{t.pickupIncluded}</span>
-                <span className="font-bold text-emerald-700 text-xs">โซนหลักภูเก็ต ฟรี!</span>
+                <span className="font-bold text-emerald-700 text-xs">{t.hotelFreeZone}</span>
               </div>
             </div>
           </div>
 
           {/* Description */}
           <div>
-            <h3 className="font-bold text-slate-900 text-base mb-2">รายละเอียดโปรแกรมทัวร์</h3>
+            <h3 className="font-bold text-slate-900 text-base mb-2">{t.tourDescriptionHeader}</h3>
             <p className="text-slate-600 leading-relaxed">{description}</p>
           </div>
 
           {/* Highlights */}
           <div className="bg-cyan-50/50 border border-cyan-100 p-4 rounded-2xl">
-            <h4 className="font-bold text-cyan-900 text-sm mb-2.5">จุดเด่นไฮไลท์ที่ไม่ควรพลาด</h4>
+            <h4 className="font-bold text-cyan-900 text-sm mb-2.5">{t.tourHighlightsHeader}</h4>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
               {highlights.map((hl, idx) => (
                 <div key={idx} className="flex items-center gap-2 text-xs font-semibold text-cyan-800">
@@ -189,7 +189,7 @@ export const TourDetailModal: React.FC<TourDetailModalProps> = ({
 
           {/* Pickup Zones */}
           <div className="bg-slate-50 border border-slate-200 p-4 rounded-2xl space-y-1.5">
-            <h4 className="font-bold text-slate-900 text-xs">โซนโรงแรมที่มีบริการรถรับ-ส่งฟรี:</h4>
+            <h4 className="font-bold text-slate-900 text-xs">{t.pickupZoneFreeTitle}</h4>
             <div className="flex flex-wrap gap-1.5">
               {tour.pickupAreas.map((zone) => (
                 <span key={zone} className="bg-white border border-slate-200 text-slate-700 text-[11px] font-medium px-2.5 py-1 rounded-lg">
@@ -202,7 +202,7 @@ export const TourDetailModal: React.FC<TourDetailModalProps> = ({
           {/* Tour Reviews inside modal */}
           {tourReviews.length > 0 && (
             <div>
-              <h3 className="font-bold text-slate-900 text-base mb-3">รีวิวจากผู้ใช้บริการจริง ({tourReviews.length})</h3>
+              <h3 className="font-bold text-slate-900 text-base mb-3">{t.realUserReviews} ({tourReviews.length})</h3>
               <div className="space-y-3">
                 {tourReviews.map((rev) => (
                   <div key={rev.id} className="bg-slate-50 p-3.5 rounded-2xl border border-slate-200/80">
@@ -225,7 +225,7 @@ export const TourDetailModal: React.FC<TourDetailModalProps> = ({
                     <p className="text-xs text-slate-600">{rev.comment}</p>
                     {rev.adminReply && (
                       <div className="mt-2 bg-white p-2 rounded-xl text-[11px] border border-cyan-100 text-slate-700">
-                        <span className="font-bold text-cyan-700">ตอบกลับจากแอดมิน:</span> {rev.adminReply}
+                        <span className="font-bold text-cyan-700">{t.adminReply}</span> {rev.adminReply}
                       </div>
                     )}
                   </div>
@@ -244,7 +244,7 @@ export const TourDetailModal: React.FC<TourDetailModalProps> = ({
                 ฿{tour.priceAdult.toLocaleString()}
               </span>
               <span className="text-xs text-slate-300">/ {t.adult}</span>
-              <span className="text-xs text-slate-400 ml-2">(เด็ก ฿{tour.priceChild.toLocaleString()})</span>
+              <span className="text-xs text-slate-400 ml-2">({t.child} ฿{tour.priceChild.toLocaleString()})</span>
             </div>
           </div>
 
