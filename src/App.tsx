@@ -21,6 +21,7 @@ import { Tour, Booking, Review, Customer, AppSettings, LineNotificationLog, Lang
 import { Currency } from './utils/currency';
 import { translations } from './data/translations';
 import { initialTours, initialBookings, initialReviews, initialCustomers, initialSettings, mockSuppliers } from './data/mockData';
+import { normalizeTours } from './utils/tourNormalizer';
 import { Compass, Sparkles, Filter, Ticket, QrCode, Phone, MessageCircle, ShieldCheck, Clock } from 'lucide-react';
 import { supabaseApi } from './lib/supabase';
 
@@ -73,7 +74,7 @@ export default function App() {
   const [tours, setTours] = useState<Tour[]>(() => {
     try {
       const saved = localStorage.getItem('tst_tours');
-      return saved ? JSON.parse(saved) : initialTours;
+      return saved ? normalizeTours(JSON.parse(saved)) : initialTours;
     } catch {
       return initialTours;
     }
@@ -340,8 +341,9 @@ export default function App() {
 
       // Update state & replace localStorage cache authoritatively
       if (serverTours && Array.isArray(serverTours)) {
-        setTours(serverTours);
-        localStorage.setItem('tst_tours', JSON.stringify(serverTours));
+        const normalized = normalizeTours(serverTours);
+        setTours(normalized);
+        localStorage.setItem('tst_tours', JSON.stringify(normalized));
       }
       if (serverBookings && Array.isArray(serverBookings)) {
         setBookings(serverBookings);

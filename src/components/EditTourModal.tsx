@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { X, Plus, Trash2, ArrowUp, ArrowDown, CheckSquare, Square, Clock, Sparkles, MapPin, DollarSign, Image as ImageIcon, Calendar, ListChecks, Eye, EyeOff } from 'lucide-react';
 import { Tour, TourItinerary, Language, Supplier } from '../types';
+import { normalizeTours } from '../utils/tourNormalizer';
 
 interface EditTourModalProps {
   tour: Tour | null; // null = adding new, object = editing existing
@@ -33,10 +34,14 @@ export const EditTourModal: React.FC<EditTourModalProps> = ({
   // Tour Form State
   const [titleTH, setTitleTH] = useState('');
   const [titleEN, setTitleEN] = useState('');
+  const [titleZH, setTitleZH] = useState('');
+  const [titleRU, setTitleRU] = useState('');
   const [category, setCategory] = useState<'island' | 'sunset' | 'yacht' | 'eco' | 'sightseeing'>('island');
   const [supplierId, setSupplierId] = useState('');
   const [durationTH, setDurationTH] = useState('');
   const [durationEN, setDurationEN] = useState('');
+  const [durationZH, setDurationZH] = useState('');
+  const [durationRU, setDurationRU] = useState('');
   const [location, setLocation] = useState('');
   const [priceAdult, setPriceAdult] = useState(1500);
   const [priceChild, setPriceChild] = useState(1000);
@@ -47,7 +52,11 @@ export const EditTourModal: React.FC<EditTourModalProps> = ({
   const [imageUrl, setImageUrl] = useState('');
   const [descTH, setDescTH] = useState('');
   const [descEN, setDescEN] = useState('');
+  const [descZH, setDescZH] = useState('');
+  const [descRU, setDescRU] = useState('');
   const [isVisible, setIsVisible] = useState<boolean>(true);
+  const [activeLangTab, setActiveLangTab] = useState<'TH' | 'EN' | 'ZH' | 'RU'>('TH');
+  const [isTranslating, setIsTranslating] = useState<boolean>(false);
 
   // Included Items Checklist State
   const [includedItemsTH, setIncludedItemsTH] = useState<string[]>([]);
@@ -65,6 +74,8 @@ export const EditTourModal: React.FC<EditTourModalProps> = ({
     if (tour) {
       setTitleTH(tour.title?.TH || '');
       setTitleEN(tour.title?.EN || '');
+      setTitleZH(tour.title?.ZH || '');
+      setTitleRU(tour.title?.RU || '');
       setCategory(tour.category || 'island');
       setSupplierId(tour.supplierId || '');
       setDurationTH(tour.duration?.TH || 'เต็มวัน (08:00 - 17:00)');
@@ -79,6 +90,8 @@ export const EditTourModal: React.FC<EditTourModalProps> = ({
       setImageUrl(tour.images && tour.images[0] ? tour.images[0] : '');
       setDescTH(tour.description?.TH || '');
       setDescEN(tour.description?.EN || '');
+      setDescZH(tour.description?.ZH || '');
+      setDescRU(tour.description?.RU || '');
       setIncludedItemsTH(tour.included?.TH || []);
       setItinerarySteps(tour.itinerary ? JSON.parse(JSON.stringify(tour.itinerary)) : []);
       setHighlightsTH(tour.highlights?.TH || []);
@@ -88,6 +101,8 @@ export const EditTourModal: React.FC<EditTourModalProps> = ({
       setIsVisible(true);
       setTitleTH('');
       setTitleEN('');
+      setTitleZH('');
+      setTitleRU('');
       setCategory('island');
       setDurationTH('เต็มวัน (08:00 - 17:00)');
       setDurationEN('Full Day (08:00 - 17:00)');
@@ -99,6 +114,8 @@ export const EditTourModal: React.FC<EditTourModalProps> = ({
       setImageUrl('https://images.unsplash.com/photo-1537996194471-e657df975ab4?auto=format&fit=crop&q=80&w=1000');
       setDescTH('สัมผัสความงดงามของท้องทะเลอันดามัน พร้อมกิจกรรมดำน้ำและบริการระดับพรีเมียม');
       setDescEN('Experience the beauty of the Andaman sea with snorkeling and premium service.');
+      setDescZH('');
+      setDescRU('');
       setIncludedItemsTH([
         COMMON_INCLUDES_TH[0],
         COMMON_INCLUDES_TH[1],
@@ -135,13 +152,13 @@ export const EditTourModal: React.FC<EditTourModalProps> = ({
 
   if (!isOpen) return null;
 
-  // Category map labels
-  const categoryLabelsMap: Record<string, { TH: string; EN: string }> = {
-    island: { TH: 'ทัวร์เกาะ', EN: 'Island Tour' },
-    sunset: { TH: 'ล่องเรือยอชท์', EN: 'Sunset Yacht' },
-    yacht: { TH: 'เรือยอชท์คาทามารัน', EN: 'Yacht Catamaran' },
-    eco: { TH: 'ปางช้าง / เชิงอนุรักษ์', EN: 'Eco & Elephant' },
-    sightseeing: { TH: 'เที่ยวเมือง / ซิตี้ทัวร์', EN: 'City Sightseeing' }
+  // Category map labels in all 4 languages
+  const categoryLabelsMap: Record<string, { TH: string; EN: string; ZH: string; RU: string }> = {
+    island: { TH: 'ทัวร์เกาะ', EN: 'Island Tour', ZH: '海岛一日游', RU: 'Островной тур' },
+    sunset: { TH: 'ล่องเรือยอชท์ชมพระอาทิตย์ตก', EN: 'Sunset Yacht', ZH: '日落帆船', RU: 'Закатная яхта' },
+    yacht: { TH: 'เรือยอชท์คาทามารัน', EN: 'Yacht Catamaran', ZH: '双体帆船游艇', RU: 'Яхта-Катамаран' },
+    eco: { TH: 'ปางช้าง / เชิงอนุรักษ์', EN: 'Eco & Elephant', ZH: '大象保护区', RU: 'Заповедник Слонов' },
+    sightseeing: { TH: 'เที่ยวเมือง / ซิตี้ทัวร์', EN: 'City Sightseeing', ZH: '环岛观光', RU: 'Обзорный тур' }
   };
 
   // Toggle included item
@@ -205,23 +222,94 @@ export const EditTourModal: React.FC<EditTourModalProps> = ({
     setItinerarySteps(updated);
   };
 
+  // AI Auto-Translate to EN, ZH, RU
+  const handleAutoTranslate = async () => {
+    if (!titleTH.trim()) {
+      alert('กรุณากรอกชื่อโปรแกรมทัวร์ (ภาษาไทย) ก่อนกดแปลภาษา');
+      return;
+    }
+
+    setIsTranslating(true);
+    try {
+      const res = await fetch('/api/translate-tour', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          titleTH,
+          descTH,
+          durationTH,
+          highlightsTH,
+          category
+        })
+      });
+
+      if (res.ok) {
+        const data = await res.json();
+        if (data.titleEN) setTitleEN(data.titleEN);
+        if (data.titleZH) setTitleZH(data.titleZH);
+        if (data.titleRU) setTitleRU(data.titleRU);
+        if (data.descEN) setDescEN(data.descEN);
+        if (data.descZH) setDescZH(data.descZH);
+        if (data.descRU) setDescRU(data.descRU);
+        if (data.durationEN) setDurationEN(data.durationEN);
+        if (data.durationZH) setDurationZH(data.durationZH);
+        if (data.durationRU) setDurationRU(data.durationRU);
+      } else {
+        // Fallback translation
+        if (!titleEN) setTitleEN(titleTH);
+        if (!titleZH) setTitleZH(titleTH);
+        if (!titleRU) setTitleRU(titleTH);
+        if (!descEN) setDescEN(descTH);
+        if (!descZH) setDescZH(descTH);
+        if (!descRU) setDescRU(descTH);
+      }
+    } catch (err) {
+      console.error('Translation error:', err);
+      if (!titleEN) setTitleEN(titleTH);
+      if (!titleZH) setTitleZH(titleTH);
+      if (!titleRU) setTitleRU(titleTH);
+    } finally {
+      setIsTranslating(false);
+    }
+  };
+
   // Save submit handler
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
 
-    const catLabel = categoryLabelsMap[category] || { TH: 'ทัวร์ภูเก็ต', EN: 'Phuket Tour' };
+    const catLabel = categoryLabelsMap[category] || { TH: 'ทัวร์ภูเก็ต', EN: 'Phuket Tour', ZH: '普吉行程', RU: 'Тур на Пхукете' };
 
     const selectedSup = suppliers.find(s => s.id === supplierId);
 
-    const payload: Partial<Tour> = {
+    const rawTour: Partial<Tour> = {
       ...(tour ? { id: tour.id, slug: tour.slug } : {}),
-      title: { TH: titleTH, EN: titleEN || titleTH, ZH: titleTH, RU: titleTH },
+      title: {
+        TH: titleTH,
+        EN: titleEN || titleTH,
+        ZH: titleZH || titleEN || titleTH,
+        RU: titleRU || titleEN || titleTH
+      },
       category,
-      categoryLabel: { TH: catLabel.TH, EN: catLabel.EN, ZH: catLabel.EN, RU: catLabel.EN },
+      categoryLabel: {
+        TH: catLabel.TH,
+        EN: catLabel.EN,
+        ZH: catLabel.ZH,
+        RU: catLabel.RU
+      },
       supplierId: supplierId || undefined,
       supplierName: selectedSup?.name || undefined,
-      description: { TH: descTH, EN: descEN || descTH, ZH: descTH, RU: descTH },
-      duration: { TH: durationTH, EN: durationEN || durationTH, ZH: durationTH, RU: durationTH },
+      description: {
+        TH: descTH,
+        EN: descEN || descTH,
+        ZH: descZH || descEN || descTH,
+        RU: descRU || descEN || descTH
+      },
+      duration: {
+        TH: durationTH,
+        EN: durationEN || durationTH,
+        ZH: durationZH || durationEN || durationTH,
+        RU: durationRU || durationEN || durationTH
+      },
       location,
       priceAdult: Number(priceAdult),
       priceChild: Number(priceChild),
@@ -240,16 +328,19 @@ export const EditTourModal: React.FC<EditTourModalProps> = ({
       highlights: {
         TH: highlightsTH.length ? highlightsTH : [titleTH],
         EN: highlightsTH.length ? highlightsTH : [titleEN || titleTH],
-        ZH: highlightsTH,
-        RU: highlightsTH
+        ZH: highlightsTH.length ? highlightsTH : [titleZH || titleEN || titleTH],
+        RU: highlightsTH.length ? highlightsTH : [titleRU || titleEN || titleTH]
       },
-      pickupAreas: ['หาดป่าตอง', 'หาดกะตะ', 'หาดกะรอน', 'ตัวเมืองภูเก็ต'],
+      pickupAreas: ['Patong', 'Kata', 'Karon', 'Phuket Town', 'Rawai', 'Chalong', 'Kamala'],
       rating: tour?.rating || 4.9,
       reviewCount: tour?.reviewCount || 35,
       tags: [catLabel.TH, 'ภูเก็ต', 'ดำน้ำ'],
       isVisible,
       isAvailable: isVisible
     };
+
+    const normalizedList = normalizeTours([rawTour as Tour]);
+    const payload = normalizedList[0] || rawTour;
 
     await onSave(payload);
     onClose();
@@ -350,39 +441,154 @@ export const EditTourModal: React.FC<EditTourModalProps> = ({
             </div>
           </div>
 
-          {/* SECTION 1: Basic Information */}
+          {/* SECTION 1: Basic Information & Multilingual Content */}
           <div className="bg-slate-950/60 p-4 rounded-2xl border border-slate-800 space-y-4">
-            <h4 className="font-bold text-cyan-300 text-xs uppercase tracking-wider flex items-center gap-1.5">
-              <Calendar className="w-4 h-4 text-cyan-400" />
-              <span>1. ข้อมูลทั่วไปของโปรแกรมทัวร์</span>
-            </h4>
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <h4 className="font-bold text-cyan-300 text-xs uppercase tracking-wider flex items-center gap-1.5">
+                <Calendar className="w-4 h-4 text-cyan-400" />
+                <span>1. ข้อมูลทั่วไปและหลายภาษา (4 ภาษา: TH, EN, ZH, RU)</span>
+              </h4>
 
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-              <div>
-                <label className="font-bold text-slate-300 block mb-1">ชื่อโปรแกรมทัวร์ (ภาษาไทย) *</label>
-                <input
-                  type="text"
-                  required
-                  placeholder="เช่น ทัวร์เกาะพีพี อ่าวมาหยา สปีดโบ๊ท"
-                  value={titleTH}
-                  onChange={(e) => setTitleTH(e.target.value)}
-                  className="w-full bg-slate-900 border border-slate-700 rounded-xl p-2.5 text-white focus:ring-2 focus:ring-cyan-500"
-                />
-              </div>
-
-              <div>
-                <label className="font-bold text-slate-300 block mb-1">ชื่อโปรแกรมทัวร์ (ภาษาอังกฤษ)</label>
-                <input
-                  type="text"
-                  placeholder="e.g. Phi Phi Island Speedboat Day Tour"
-                  value={titleEN}
-                  onChange={(e) => setTitleEN(e.target.value)}
-                  className="w-full bg-slate-900 border border-slate-700 rounded-xl p-2.5 text-white focus:ring-2 focus:ring-cyan-500"
-                />
-              </div>
+              <button
+                type="button"
+                onClick={handleAutoTranslate}
+                disabled={isTranslating || !titleTH.trim()}
+                className="bg-gradient-to-r from-cyan-500 via-sky-500 to-blue-600 hover:from-cyan-400 hover:to-blue-500 text-white font-extrabold px-3.5 py-1.5 rounded-xl text-xs transition shadow-md shadow-cyan-500/20 flex items-center gap-1.5 active:scale-95 disabled:opacity-50 cursor-pointer"
+                title="คลิกเพื่อให้ AI แปลชื่อ รายละเอียด และระยะเวลาเป็นอังกฤษ จีน และรัสเซียอัตโนมัติ"
+              >
+                <Sparkles className={`w-3.5 h-3.5 ${isTranslating ? 'animate-spin text-amber-300' : 'text-cyan-200'}`} />
+                <span>{isTranslating ? 'กำลังแปลภาษาด้วย AI...' : '✨ แปลภาษาอัตโนมัติ 4 ภาษา (Auto-Translate)'}</span>
+              </button>
             </div>
 
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+            {/* Language Tabs Selector */}
+            <div className="flex flex-wrap items-center gap-1.5 bg-slate-900/90 p-1.5 rounded-xl border border-slate-800">
+              {[
+                { id: 'TH', label: '🇹🇭 ภาษาไทย (TH)', filled: Boolean(titleTH) },
+                { id: 'EN', label: '🇬🇧 English (EN)', filled: Boolean(titleEN) },
+                { id: 'ZH', label: '🇨🇳 中文 (ZH)', filled: Boolean(titleZH) },
+                { id: 'RU', label: '🇷🇺 Русский (RU)', filled: Boolean(titleRU) },
+              ].map((tab) => (
+                <button
+                  key={tab.id}
+                  type="button"
+                  onClick={() => setActiveLangTab(tab.id as any)}
+                  className={`px-3 py-1.5 rounded-lg text-xs font-bold transition flex items-center gap-1.5 cursor-pointer ${
+                    activeLangTab === tab.id
+                      ? 'bg-gradient-to-r from-cyan-500 to-sky-500 text-slate-950 shadow-md font-black'
+                      : 'text-slate-400 hover:text-white hover:bg-slate-800'
+                  }`}
+                >
+                  <span>{tab.label}</span>
+                  {tab.filled && <span className="w-1.5 h-1.5 rounded-full bg-emerald-400" />}
+                </button>
+              ))}
+            </div>
+
+            {/* Dynamic Language Content Inputs */}
+            {activeLangTab === 'TH' && (
+              <div className="space-y-3 animate-in fade-in">
+                <div>
+                  <label className="font-bold text-slate-300 block mb-1">ชื่อโปรแกรมทัวร์ (ภาษาไทย) *</label>
+                  <input
+                    type="text"
+                    required
+                    placeholder="เช่น ทัวร์เกาะพีพี อ่าวมาหยา สปีดโบ๊ท"
+                    value={titleTH}
+                    onChange={(e) => setTitleTH(e.target.value)}
+                    className="w-full bg-slate-900 border border-slate-700 rounded-xl p-2.5 text-white focus:ring-2 focus:ring-cyan-500"
+                  />
+                </div>
+                <div>
+                  <label className="font-bold text-slate-300 block mb-1">รายละเอียดทัวร์สังเขป (ภาษาไทย)</label>
+                  <textarea
+                    rows={2}
+                    value={descTH}
+                    onChange={(e) => setDescTH(e.target.value)}
+                    placeholder="คำอธิบายสั้นๆ ไฮไลท์การท่องเที่ยว..."
+                    className="w-full bg-slate-900 border border-slate-700 rounded-xl p-2.5 text-white"
+                  />
+                </div>
+              </div>
+            )}
+
+            {activeLangTab === 'EN' && (
+              <div className="space-y-3 animate-in fade-in">
+                <div>
+                  <label className="font-bold text-slate-300 block mb-1">Tour Title (English)</label>
+                  <input
+                    type="text"
+                    placeholder="e.g. Phi Phi Island Speedboat Day Tour"
+                    value={titleEN}
+                    onChange={(e) => setTitleEN(e.target.value)}
+                    className="w-full bg-slate-900 border border-slate-700 rounded-xl p-2.5 text-white focus:ring-2 focus:ring-cyan-500"
+                  />
+                </div>
+                <div>
+                  <label className="font-bold text-slate-300 block mb-1">Tour Description (English)</label>
+                  <textarea
+                    rows={2}
+                    value={descEN}
+                    onChange={(e) => setDescEN(e.target.value)}
+                    placeholder="Brief description of the tour highlights..."
+                    className="w-full bg-slate-900 border border-slate-700 rounded-xl p-2.5 text-white"
+                  />
+                </div>
+              </div>
+            )}
+
+            {activeLangTab === 'ZH' && (
+              <div className="space-y-3 animate-in fade-in">
+                <div>
+                  <label className="font-bold text-slate-300 block mb-1">行程名称 (中文简体)</label>
+                  <input
+                    type="text"
+                    placeholder="例如 皮皮岛玛雅湾快艇一日游"
+                    value={titleZH}
+                    onChange={(e) => setTitleZH(e.target.value)}
+                    className="w-full bg-slate-900 border border-slate-700 rounded-xl p-2.5 text-white focus:ring-2 focus:ring-cyan-500"
+                  />
+                </div>
+                <div>
+                  <label className="font-bold text-slate-300 block mb-1">行程简介 (中文简体)</label>
+                  <textarea
+                    rows={2}
+                    value={descZH}
+                    onChange={(e) => setDescZH(e.target.value)}
+                    placeholder="简要行程亮点介绍..."
+                    className="w-full bg-slate-900 border border-slate-700 rounded-xl p-2.5 text-white"
+                  />
+                </div>
+              </div>
+            )}
+
+            {activeLangTab === 'RU' && (
+              <div className="space-y-3 animate-in fade-in">
+                <div>
+                  <label className="font-bold text-slate-300 block mb-1">Название тура (Русский)</label>
+                  <input
+                    type="text"
+                    placeholder="Например: Тур на острова Пхи-Пхи на скоростном катере"
+                    value={titleRU}
+                    onChange={(e) => setTitleRU(e.target.value)}
+                    className="w-full bg-slate-900 border border-slate-700 rounded-xl p-2.5 text-white focus:ring-2 focus:ring-cyan-500"
+                  />
+                </div>
+                <div>
+                  <label className="font-bold text-slate-300 block mb-1">Описание тура (Русский)</label>
+                  <textarea
+                    rows={2}
+                    value={descRU}
+                    onChange={(e) => setDescRU(e.target.value)}
+                    placeholder="Краткое описание достопримечательностей..."
+                    className="w-full bg-slate-900 border border-slate-700 rounded-xl p-2.5 text-white"
+                  />
+                </div>
+              </div>
+            )}
+
+            {/* Category, Supplier, Duration & Location */}
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 pt-2 border-t border-slate-800">
               <div>
                 <label className="font-bold text-slate-300 block mb-1">หมวดหมู่โปรแกรมทัวร์ *</label>
                 <select
@@ -415,7 +621,7 @@ export const EditTourModal: React.FC<EditTourModalProps> = ({
               </div>
 
               <div>
-                <label className="font-bold text-slate-300 block mb-1">ระยะเวลาเดินทาง (ไทย)</label>
+                <label className="font-bold text-slate-300 block mb-1">ระยะเวลาเดินทาง (Duration)</label>
                 <input
                   type="text"
                   placeholder="เช่น เต็มวัน (08:00 - 17:00)"
@@ -425,8 +631,8 @@ export const EditTourModal: React.FC<EditTourModalProps> = ({
                 />
               </div>
 
-              <div>
-                <label className="font-bold text-slate-300 block mb-1">สถานที่ท่องเที่ยวหลัก</label>
+              <div className="sm:col-span-3">
+                <label className="font-bold text-slate-300 block mb-1">สถานที่ท่องเที่ยวหลัก (Location)</label>
                 <input
                   type="text"
                   placeholder="เช่น ภูเก็ต / เกาะพีพี / อ่าวพังงา"

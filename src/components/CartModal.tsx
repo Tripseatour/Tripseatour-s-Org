@@ -558,15 +558,15 @@ export const CartModal: React.FC<CartModalProps> = ({
                           />
                           <div>
                             <span className="text-[10px] font-extrabold text-teal-700 bg-teal-50 border border-teal-200 px-2 py-0.5 rounded-md">
-                              ทริปที่ {index + 1}: {tour.categoryLabel[currentLang] || tour.categoryLabel.TH}
+                              {currentLang === 'TH' ? `ทริปที่ ${index + 1}` : currentLang === 'ZH' ? `行程 #${index + 1}` : currentLang === 'RU' ? `Тур #${index + 1}` : `Trip #${index + 1}`}: {tour.categoryLabel[currentLang] || tour.categoryLabel.TH}
                             </span>
                             <h4 className="font-black text-slate-900 text-sm sm:text-base line-clamp-1 mt-1">
                               {title}
                             </h4>
                             <div className="text-xs text-slate-500 flex items-center gap-2 mt-0.5">
-                              <span>ผู้ใหญ่: ฿{tour.priceAdult.toLocaleString()}</span>
+                              <span>{t.adult}: ฿{tour.priceAdult.toLocaleString()}</span>
                               <span>•</span>
-                              <span>เด็ก: ฿{tour.priceChild.toLocaleString()}</span>
+                              <span>{t.child}: ฿{tour.priceChild.toLocaleString()}</span>
                             </div>
                           </div>
                         </div>
@@ -575,7 +575,7 @@ export const CartModal: React.FC<CartModalProps> = ({
                         <button
                           onClick={() => onRemoveFromCart(item.id)}
                           className="p-1.5 rounded-lg text-slate-400 hover:text-rose-600 hover:bg-rose-50 transition"
-                          title="ลบออกจากตะกร้า"
+                          title={currentLang === 'TH' ? 'ลบออกจากตะกร้า' : currentLang === 'ZH' ? '从购物车移除' : currentLang === 'RU' ? 'Удалить из корзины' : 'Remove from cart'}
                         >
                           <Trash2 className="w-4 h-4" />
                         </button>

@@ -3,6 +3,7 @@ import path from 'path';
 import { createClient } from '@supabase/supabase-js';
 import { GoogleGenAI } from '@google/genai';
 import { initialTours, initialBookings, initialReviews, initialCustomers, initialSettings } from './src/data/mockData';
+import { normalizeTours } from './src/utils/tourNormalizer';
 import { Tour, Booking, Review, Customer, AppSettings, LineNotificationLog, SalesStats, AdminUser } from './src/types';
 
 const app = express();
@@ -111,8 +112,10 @@ async function loadStateFromSupabase() {
     const { data: kvTours } = await supabase.from('app_store').select('value').eq('key', 'tours').maybeSingle();
     if (kvTours && kvTours.value !== undefined && kvTours.value !== null) {
       try {
-        tours = JSON.parse(kvTours.value);
+        tours = normalizeTours(JSON.parse(kvTours.value));
       } catch (e) {}
+    } else {
+      tours = normalizeTours(initialTours);
     }
   } catch (e) {
     console.warn('Could not load tours from Supabase:', e);
@@ -485,7 +488,7 @@ app.get('/api/sync-status', (req, res) => {
 });
 // --- Tours ---
 app.get('/api/tours', (req, res) => {
-  res.json(tours);
+  res.json(normalizeTours(tours));
 });
 
 app.post('/api/tours', async (req, res) => {
@@ -495,8 +498,9 @@ app.post('/api/tours', async (req, res) => {
     slug: req.body.slug || `tour-${Date.now()}`
   };
   tours.unshift(newTour);
+  tours = normalizeTours(tours);
   await persistState('tours');
-  res.json({ ...newTour, version: syncMetadata.version });
+  res.json({ ...tours[0], version: syncMetadata.version });
 });
 
 app.put('/api/tours/:id', async (req, res) => {
@@ -504,6 +508,7 @@ app.put('/api/tours/:id', async (req, res) => {
   const index = tours.findIndex(t => t.id === id);
   if (index !== -1) {
     tours[index] = { ...tours[index], ...req.body };
+    tours = normalizeTours(tours);
     await persistState('tours');
     res.json({ ...tours[index], version: syncMetadata.version });
   } else {
@@ -516,6 +521,83 @@ app.delete('/api/tours/:id', async (req, res) => {
   tours = tours.filter(t => t.id !== id);
   await persistState('tours');
   res.json({ success: true, id, version: syncMetadata.version });
+});
+
+// AI Automatic Tour Translation endpoint for Admin
+app.post('/api/translate-tour', async (req, res) => {
+  try {
+    const { titleTH, descTH, durationTH, highlightsTH, category } = req.body;
+    if (!titleTH) {
+      return res.status(400).json({ error: 'titleTH is required' });
+    }
+
+    let result = {
+      titleEN: '',
+      titleZH: '',
+      titleRU: '',
+      descEN: '',
+      descZH: '',
+      descRU: '',
+      durationEN: '08:00 AM - 05:00 PM (Full Day)',
+      durationZH: '08:00 - 17:00 (全天)',
+      durationRU: '08:00 - 17:00 (Полный день)',
+      highlightsEN: [] as string[],
+      highlightsZH: [] as string[],
+      highlightsRU: [] as string[]
+    };
+
+    try {
+      const prompt = `You are a professional travel localization assistant for Trip Sea Tour Phuket.
+Translate this Thai tour listing into English (EN), Simplified Chinese (ZH), and Russian (RU).
+Make the translations attractive, natural, and accurate for tourism websites.
+
+Thai Data:
+- Tour Title: "${titleTH}"
+- Description: "${descTH || ''}"
+- Duration: "${durationTH || 'เต็มวัน (08:00 - 17:00)'}"
+- Highlights: ${JSON.stringify(highlightsTH || [])}
+- Category: "${category || 'island'}"
+
+Return ONLY valid JSON in this exact structure without markdown formatting or backticks:
+{
+  "titleEN": "English title",
+  "titleZH": "Chinese title (Simplified)",
+  "titleRU": "Russian title",
+  "descEN": "English description",
+  "descZH": "Chinese description",
+  "descRU": "Russian description",
+  "durationEN": "English duration",
+  "durationZH": "Chinese duration",
+  "durationRU": "Russian duration",
+  "highlightsEN": ["Highlight 1", "Highlight 2"],
+  "highlightsZH": ["亮点 1", "亮点 2"],
+  "highlightsRU": ["Пункт 1", "Пункт 2"]
+}`;
+
+      const aiResponse = await ai.models.generateContent({
+        model: 'gemini-2.5-flash',
+        contents: prompt,
+      });
+
+      const responseText = aiResponse.text || '';
+      const cleanJson = responseText.replace(/```json\s*|```/g, '').trim();
+      const parsed = JSON.parse(cleanJson);
+      result = { ...result, ...parsed };
+    } catch (aiErr) {
+      console.warn('AI translation failed, using fallback translation format:', aiErr);
+      result.titleEN = titleTH;
+      result.titleZH = titleTH;
+      result.titleRU = titleTH;
+      result.descEN = descTH || '';
+      result.descZH = descTH || '';
+      result.descRU = descTH || '';
+    }
+
+    res.json(result);
+  } catch (err: any) {
+    console.error('Translation route error:', err);
+    res.status(500).json({ error: err?.message || 'Translation error' });
+  }
 });
 
 // --- Bookings ---
