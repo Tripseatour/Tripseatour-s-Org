@@ -316,15 +316,27 @@ export const BookingModal: React.FC<BookingModalProps> = ({
                     </span>
                   </span>
 
-                  <a
-                    href={`https://line.me/R/ti/p/${settings.lineOaId || '@056hxinu'}`}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="inline-flex items-center gap-2 bg-[#06C755] hover:bg-[#05b34c] text-white font-black px-4 py-2 rounded-xl text-xs transition shadow-md shadow-emerald-900/20 active:scale-95 cursor-pointer"
-                  >
-                    <MessageCircle className="w-4 h-4 fill-white text-white" />
-                    <span>{t.addlineToCheckSeats}</span>
-                  </a>
+                  <div className="flex flex-wrap items-center gap-2">
+                    <a
+                      href={`https://line.me/R/ti/p/${settings.lineOaId || '@056hxinu'}`}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="inline-flex items-center gap-1.5 bg-[#06C755] hover:bg-[#05b34c] text-white font-black px-3.5 py-2 rounded-xl text-xs transition shadow-md active:scale-95 cursor-pointer"
+                    >
+                      <MessageCircle className="w-4 h-4 fill-white text-white" />
+                      <span>{t.addlineToCheckSeats}</span>
+                    </a>
+
+                    <a
+                      href={settings.facebookMessengerUrl || 'https://m.me/tripseatoursphuket'}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="inline-flex items-center gap-1.5 bg-gradient-to-r from-[#0084FF] to-[#00C6FF] hover:opacity-95 text-white font-black px-3.5 py-2 rounded-xl text-xs transition shadow-md active:scale-95 cursor-pointer"
+                    >
+                      <MessageCircle className="w-4 h-4 fill-white text-white" />
+                      <span>{t.chatFacebookToCheckSeats}</span>
+                    </a>
+                  </div>
                 </div>
               </div>
 
@@ -587,15 +599,27 @@ export const BookingModal: React.FC<BookingModalProps> = ({
                     </span>
                   </span>
 
-                  <a
-                    href={`https://line.me/R/ti/p/${settings.lineOaId || '@056hxinu'}`}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="inline-flex items-center gap-2 bg-[#06C755] hover:bg-[#05b34c] text-white font-black px-4 py-2 rounded-xl text-xs transition shadow-md shadow-emerald-900/20 active:scale-95 cursor-pointer"
-                  >
-                    <MessageCircle className="w-4 h-4 fill-white text-white" />
-                    <span>{t.addlineToCheckSeats}</span>
-                  </a>
+                  <div className="flex flex-wrap items-center gap-2">
+                    <a
+                      href={`https://line.me/R/ti/p/${settings.lineOaId || '@056hxinu'}`}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="inline-flex items-center gap-1.5 bg-[#06C755] hover:bg-[#05b34c] text-white font-black px-3.5 py-2 rounded-xl text-xs transition shadow-md active:scale-95 cursor-pointer"
+                    >
+                      <MessageCircle className="w-4 h-4 fill-white text-white" />
+                      <span>{t.addlineToCheckSeats}</span>
+                    </a>
+
+                    <a
+                      href={settings.facebookMessengerUrl || 'https://m.me/tripseatoursphuket'}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="inline-flex items-center gap-1.5 bg-gradient-to-r from-[#0084FF] to-[#00C6FF] hover:opacity-95 text-white font-black px-3.5 py-2 rounded-xl text-xs transition shadow-md active:scale-95 cursor-pointer"
+                    >
+                      <MessageCircle className="w-4 h-4 fill-white text-white" />
+                      <span>{t.chatFacebookToCheckSeats}</span>
+                    </a>
+                  </div>
                 </div>
               </div>
 

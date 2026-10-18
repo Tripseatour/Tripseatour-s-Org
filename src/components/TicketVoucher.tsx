@@ -7,11 +7,13 @@ import tripSeaLogo from '../assets/images/trip_sea_tour_logo_1786613886795.jpg';
 interface TicketVoucherProps {
   booking: Booking;
   settings?: AppSettings;
+  currentLang?: string;
 }
 
 export const TicketVoucher: React.FC<TicketVoucherProps> = ({
   booking,
   settings,
+  currentLang = 'TH',
 }) => {
   const ticketRef = useRef<HTMLDivElement>(null);
   const [isDownloading, setIsDownloading] = useState(false);

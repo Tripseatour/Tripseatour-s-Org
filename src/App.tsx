@@ -1220,9 +1220,9 @@ export default function App() {
                 {/* Tour Cards Grid */}
                 {filteredTours.length > 0 ? (
                   <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                    {filteredTours.map((tour) => (
+                    {filteredTours.map((tour, idx) => (
                       <TourCard
-                        key={tour.id}
+                        key={tour.id ? `${tour.id}-${idx}` : `tour-${idx}`}
                         tour={tour}
                         currentLang={currentLang}
                         currentCurrency={currentCurrency}

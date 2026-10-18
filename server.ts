@@ -526,12 +526,12 @@ app.delete('/api/tours/:id', async (req, res) => {
 // AI Automatic Tour Translation endpoint for Admin
 app.post('/api/translate-tour', async (req, res) => {
   try {
-    const { titleTH, descTH, durationTH, highlightsTH, category } = req.body;
+    const { titleTH, descTH, durationTH, highlightsTH, category, itinerarySteps } = req.body;
     if (!titleTH) {
       return res.status(400).json({ error: 'titleTH is required' });
     }
 
-    let result = {
+    let result: any = {
       titleEN: '',
       titleZH: '',
       titleRU: '',
@@ -543,7 +543,8 @@ app.post('/api/translate-tour', async (req, res) => {
       durationRU: '08:00 - 17:00 (Полный день)',
       highlightsEN: [] as string[],
       highlightsZH: [] as string[],
-      highlightsRU: [] as string[]
+      highlightsRU: [] as string[],
+      translatedItinerary: undefined as any
     };
 
     try {
@@ -557,6 +558,7 @@ Thai Data:
 - Duration: "${durationTH || 'เต็มวัน (08:00 - 17:00)'}"
 - Highlights: ${JSON.stringify(highlightsTH || [])}
 - Category: "${category || 'island'}"
+- Itinerary Steps: ${JSON.stringify(itinerarySteps || [])}
 
 Return ONLY valid JSON in this exact structure without markdown formatting or backticks:
 {
@@ -571,11 +573,18 @@ Return ONLY valid JSON in this exact structure without markdown formatting or ba
   "durationRU": "Russian duration",
   "highlightsEN": ["Highlight 1", "Highlight 2"],
   "highlightsZH": ["亮点 1", "亮点 2"],
-  "highlightsRU": ["Пункт 1", "Пункт 2"]
+  "highlightsRU": ["Пункт 1", "Пункт 2"],
+  "translatedItinerary": [
+    {
+      "time": "07:30 - 08:30",
+      "title": { "TH": "...", "EN": "...", "ZH": "...", "RU": "..." },
+      "description": { "TH": "...", "EN": "...", "ZH": "...", "RU": "..." }
+    }
+  ]
 }`;
 
       const aiResponse = await ai.models.generateContent({
-        model: 'gemini-2.5-flash',
+        model: 'gemini-3.8-flash',
         contents: prompt,
       });
 
@@ -1027,7 +1036,7 @@ app.post('/api/ai/reply-review', async (req, res) => {
 
     if (process.env.GEMINI_API_KEY) {
       const response = await ai.models.generateContent({
-        model: 'gemini-3.7-flash',
+        model: 'gemini-3.8-flash',
         contents: `You are the official management team of "Trip Sea Tour Phuket" (ทริปซีทัวร์ ภูเก็ต - TAT License 33/11100).
 Generate a warm, professional, polite, and personalized Thai reply to this customer review:
 Customer Name: ${customerName || 'ลูกค้าท่านสำคัญ'}
@@ -1228,7 +1237,7 @@ YOUR INSTRUCTIONS:
 - Recommend specific tour packages with exact prices when requested.`;
 
       const response = await ai.models.generateContent({
-        model: 'gemini-2.5-flash',
+        model: 'gemini-3.8-flash',
         contents: `${systemInstruction}\n\nUser Question: ${message}`,
       });
 

@@ -19,7 +19,8 @@ import {
   Zap,
   Info
 } from 'lucide-react';
-import { AppSettings } from '../types';
+import { AppSettings, Language } from '../types';
+import { translations } from '../data/translations';
 import {
   Search,
   FileSearch,
@@ -41,6 +42,7 @@ export const HowToBookSection: React.FC<HowToBookSectionProps> = ({
   onExploreTours,
   onOpenLookup
 }) => {
+  const t = translations[currentLang as Language] || translations.TH;
   const [activeStepTab, setActiveStepTab] = useState<number | null>(null);
 
   const stepsData = [

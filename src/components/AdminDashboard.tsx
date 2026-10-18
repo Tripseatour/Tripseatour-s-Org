@@ -1402,8 +1402,8 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                           innerRadius={45}
                           paddingAngle={5}
                         >
-                          {(stats?.categoryBreakdown || []).map((_, index) => (
-                            <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
+                          {(stats?.categoryBreakdown || []).map((cat, index) => (
+                            <Cell key={`cell-${cat?.category || index}-${index}`} fill={COLORS[index % COLORS.length]} />
                           ))}
                         </Pie>
                         <Tooltip contentStyle={{ backgroundColor: '#0f172a', borderColor: '#334155', borderRadius: '12px', color: '#fff' }} />
@@ -1413,7 +1413,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
 
                   <div className="flex flex-wrap justify-center gap-3 text-xs text-slate-300 pt-2 border-t border-slate-700/50">
                     {(stats?.categoryBreakdown || []).map((cat, idx) => (
-                      <span key={idx} className="flex items-center gap-1.5 font-medium">
+                      <span key={`cat-legend-${cat?.category || idx}-${idx}`} className="flex items-center gap-1.5 font-medium">
                         <span className="w-3 h-3 rounded-full" style={{ backgroundColor: COLORS[idx % COLORS.length] }}></span>
                         <span>{cat.category}: <strong className="text-white">{cat.count} รายการ</strong></span>
                       </span>
@@ -1452,7 +1452,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-slate-700/50 font-medium text-slate-200">
-                      {analytics.tourBreakdownList.map((item) => {
+                      {analytics.tourBreakdownList.map((item, idx) => {
                         const t = item.tour;
                         const costAdult = t.costAdult !== undefined ? t.costAdult : Math.round(t.priceAdult * 0.65);
                         const costChild = t.costChild !== undefined ? t.costChild : Math.round(t.priceChild * 0.65);
@@ -1460,7 +1460,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                         const profitChild = t.priceChild - costChild;
 
                         return (
-                          <tr key={t.id} className="hover:bg-slate-700/30 transition">
+                          <tr key={t?.id ? `cost-tr-${t.id}-${idx}` : `cost-tr-${idx}`} className="hover:bg-slate-700/30 transition">
                             <td className="p-3.5">
                               <div className="flex items-center gap-3">
                                 {t.images && t.images[0] ? (
@@ -1911,8 +1911,8 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                   >
                     <option value="all" className="bg-slate-900 text-white">🏢 เอเยนต์ทั้งหมด ({bookings.length})</option>
                     <option value="unassigned" className="bg-slate-900 text-amber-300">⚠️ ยังไม่ระบุเอเยนต์ ({bookings.filter(b => !b.supplierId).length})</option>
-                    {suppliers.map(s => (
-                      <option key={s.id} value={s.id} className="bg-slate-900 text-white">
+                    {suppliers.map((s, sIdx) => (
+                      <option key={`sup-opt-${s.id || sIdx}-${sIdx}`} value={s.id} className="bg-slate-900 text-white">
                         🏢 [{s.code}] {s.name} ({bookings.filter(b => b.supplierId === s.id).length})
                       </option>
                     ))}
@@ -1938,8 +1938,8 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-slate-700/50">
-                    {filteredBookings.map((b) => (
-                      <tr key={b.id} className="hover:bg-slate-700/30 transition">
+                    {filteredBookings.map((b, idx) => (
+                      <tr key={b.id ? `order-tr-${b.id}-${idx}` : `order-tr-${idx}`} className="hover:bg-slate-700/30 transition">
                         <td className="p-3.5">
                           <span className="font-mono font-extrabold text-teal-300 block text-sm">
                             {b.bookingRef}
@@ -2027,8 +2027,8 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                               }`}
                             >
                               <option value="" className="bg-slate-900 text-slate-400">-- เลือกเอเยนต์ / รอส่งงาน --</option>
-                              {suppliers.map(s => (
-                                <option key={s.id} value={s.id} className="bg-slate-900 text-white font-bold">
+                              {suppliers.map((s, sIdx) => (
+                                <option key={`order-sup-opt-${s.id || sIdx}-${sIdx}`} value={s.id} className="bg-slate-900 text-white font-bold">
                                   [{s.code}] {s.name}
                                 </option>
                               ))}
@@ -2372,13 +2372,13 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                   </div>
                 ) : (
                   <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
-                    {filteredAdminTours.map((tr) => {
+                    {filteredAdminTours.map((tr, idx) => {
                       const isVis = isTourVisible(tr);
                       const isToggling = togglingTourId === tr.id;
 
                       return (
                         <div
-                          key={tr.id}
+                          key={tr.id ? `admin-tour-${tr.id}-${idx}` : `admin-tour-${idx}`}
                           className={`border rounded-2xl overflow-hidden shadow-lg flex flex-col justify-between transition-all duration-300 ${
                             isVis
                               ? 'bg-slate-800/90 border-slate-700 hover:border-slate-600'
@@ -2581,8 +2581,8 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-slate-700/50">
-                      {customers.map((c) => (
-                        <tr key={c.id} className="hover:bg-slate-700/30 transition">
+                      {customers.map((c, idx) => (
+                        <tr key={c.id ? `cust-tr-${c.id}-${idx}` : `cust-tr-${idx}`} className="hover:bg-slate-700/30 transition">
                           <td className="p-3.5 font-bold text-white">{c.name}</td>
                           <td className="p-3.5 space-y-1">
                             <div className="text-slate-300 flex items-center gap-1">
@@ -2691,7 +2691,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                   if (reviewFilter === 'approved') return r.isApproved !== false;
                   return true;
                 })
-                .map((rev) => {
+                .map((rev, idx) => {
                   const tour = tours.find(t => t.id === rev.tourId);
                   const isApproved = rev.isApproved !== false;
                   const isAiThinking = aiGeneratingMap[rev.id] || false;
@@ -2699,7 +2699,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
 
                   return (
                     <div
-                      key={rev.id}
+                      key={rev.id ? `rev-card-${rev.id}-${idx}` : `rev-card-${idx}`}
                       className={`bg-slate-800/90 border rounded-2xl p-5 shadow-lg space-y-4 transition ${
                         isApproved ? 'border-slate-700' : 'border-amber-500/40 bg-amber-950/10'
                       }`}
@@ -2969,7 +2969,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                     const isSuper = email === 'asmr9941@gmail.com' || idx === 0;
                     return (
                       <div
-                        key={email}
+                        key={`admin-email-${email}-${idx}`}
                         className="bg-slate-900 border border-slate-700 p-3.5 rounded-xl flex items-center justify-between gap-3"
                       >
                         <div className="flex items-center gap-3">
@@ -3440,8 +3440,8 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                           <span className="text-[10px] text-slate-400">คลิกเลือกเพื่อใช้งาน</span>
                         </div>
                         <div className="space-y-1.5 max-h-32 overflow-y-auto">
-                          {detectedGroups.map((g) => (
-                            <div key={g.groupId} className="flex items-center justify-between bg-slate-950 p-2 rounded-lg text-xs">
+                          {detectedGroups.map((g, idx) => (
+                            <div key={g.groupId ? `group-item-${g.groupId}-${idx}` : `group-item-${idx}`} className="flex items-center justify-between bg-slate-950 p-2 rounded-lg text-xs">
                               <span className="font-mono text-[11px] text-slate-300 truncate max-w-[180px]">{g.groupId}</span>
                               <div className="flex items-center gap-1">
                                 <button
@@ -3516,8 +3516,8 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                     ประวัติการส่งการแจ้งเตือน (Live Alert Feed)
                   </h4>
                   <div className="space-y-2 max-h-64 overflow-y-auto pr-1">
-                    {lineLogs.map((log) => (
-                      <div key={log.id} className="bg-slate-900 p-3 rounded-xl border border-slate-700 text-xs space-y-1">
+                    {lineLogs.map((log, idx) => (
+                      <div key={log.id ? `log-item-${log.id}-${idx}` : `log-item-${idx}`} className="bg-slate-900 p-3 rounded-xl border border-slate-700 text-xs space-y-1">
                         <div className="flex justify-between text-[10px] text-slate-400">
                           <span className="font-mono text-teal-400">{log.bookingRef}</span>
                           <span>{new Date(log.timestamp).toLocaleTimeString('th-TH')}</span>
@@ -3591,8 +3591,8 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                   className="w-full bg-slate-950 border border-slate-700 rounded-xl p-2.5 text-xs font-bold text-white focus:ring-2 focus:ring-teal-500"
                 >
                   <option value="all">📅 แสดงวันเดินทางทั้งหมด ({bookings.length} รายการ)</option>
-                  {Array.from(new Set(bookings.map((b) => b.travelDate))).map((d) => (
-                    <option key={d} value={d}>
+                  {Array.from(new Set(bookings.map((b) => b.travelDate))).map((d, dIdx) => (
+                    <option key={`manifest-date-${d}-${dIdx}`} value={d}>
                       📅 {d} ({bookings.filter((b) => b.travelDate === d).length} บุ๊คกิ้ง)
                     </option>
                   ))}
@@ -3608,8 +3608,8 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                   className="w-full bg-slate-950 border border-slate-700 rounded-xl p-2.5 text-xs font-bold text-white focus:ring-2 focus:ring-teal-500"
                 >
                   <option value="all">📍 แสดงโปรแกรมทัวร์ทั้งหมด</option>
-                  {tours.map((t) => (
-                    <option key={t.id} value={t.id}>
+                  {tours.map((t, tIdx) => (
+                    <option key={`manifest-tour-${t.id}-${tIdx}`} value={t.id}>
                       📍 {t.title.TH}
                     </option>
                   ))}
@@ -3626,8 +3626,8 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                 >
                   <option value="all" className="bg-slate-900 text-white">🏢 เอเยนต์ทั้งหมด</option>
                   <option value="unassigned" className="bg-slate-900 text-amber-300">⚠️ ยังไม่ระบุเอเยนต์</option>
-                  {suppliers.map((s) => (
-                    <option key={s.id} value={s.id} className="bg-slate-900 text-white">
+                  {suppliers.map((s, sIdx) => (
+                    <option key={`manifest-sup-${s.id}-${sIdx}`} value={s.id} className="bg-slate-900 text-white">
                       🏢 [{s.code}] {s.name}
                     </option>
                   ))}
@@ -3733,7 +3733,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                             filteredList.map((bk, idx) => {
                               const tour = tours.find((t) => t.id === bk.tourId);
                               return (
-                                <tr key={bk.id} className="hover:bg-slate-800/40 transition">
+                                <tr key={bk.id ? `manifest-row-${bk.id}-${idx}` : `manifest-row-${idx}`} className="hover:bg-slate-800/40 transition">
                                   <td className="p-3.5 pl-4 font-mono font-bold text-slate-500">{idx + 1}</td>
                                   <td className="p-3.5 font-mono font-bold text-teal-400">#{bk.bookingRef}</td>
                                   <td className="p-3.5 font-extrabold text-white">
@@ -3927,11 +3927,11 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
 
                 return (
                   <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                    {filteredSuppliers.map(sup => {
+                    {filteredSuppliers.map((sup, sIdx) => {
                       const associatedTours = tours.filter(t => t.supplierId === sup.id);
                       return (
                         <div
-                          key={sup.id}
+                          key={sup.id ? `sup-card-${sup.id}-${sIdx}` : `sup-card-${sIdx}`}
                           className={`bg-slate-950/80 border rounded-3xl p-5 shadow-xl transition relative flex flex-col justify-between space-y-4 ${
                             sup.isActive !== false ? 'border-amber-500/30 hover:border-amber-500/60' : 'border-slate-800 opacity-60'
                           }`}
@@ -4031,8 +4031,8 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                             </div>
                             {associatedTours.length > 0 ? (
                               <div className="flex flex-wrap gap-1">
-                                {associatedTours.slice(0, 3).map(t => (
-                                  <span key={t.id} className="text-[10px] bg-slate-900 text-cyan-300 px-2 py-0.5 rounded-md border border-slate-800 truncate max-w-[160px]">
+                                {associatedTours.slice(0, 3).map((t, tIdx) => (
+                                  <span key={t.id ? `assoc-tour-${t.id}-${tIdx}` : `assoc-tour-${tIdx}`} className="text-[10px] bg-slate-900 text-cyan-300 px-2 py-0.5 rounded-md border border-slate-800 truncate max-w-[160px]">
                                     {t.title.TH}
                                   </span>
                                 ))}
@@ -4547,7 +4547,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                     .map((bk, idx) => {
                       const tour = tours.find((t) => t.id === bk.tourId);
                       return (
-                        <tr key={bk.id} className="hover:bg-slate-50">
+                        <tr key={bk.id ? `print-row-${bk.id}-${idx}` : `print-row-${idx}`} className="hover:bg-slate-50">
                           <td className="p-2.5 font-mono">{idx + 1}</td>
                           <td className="p-2.5 font-mono font-bold text-teal-700">#{bk.bookingRef}</td>
                           <td className="p-2.5 font-bold">{bk.customerName}</td>

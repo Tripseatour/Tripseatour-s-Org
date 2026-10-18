@@ -239,7 +239,8 @@ export const EditTourModal: React.FC<EditTourModalProps> = ({
           descTH,
           durationTH,
           highlightsTH,
-          category
+          category,
+          itinerarySteps
         })
       });
 
@@ -254,6 +255,9 @@ export const EditTourModal: React.FC<EditTourModalProps> = ({
         if (data.durationEN) setDurationEN(data.durationEN);
         if (data.durationZH) setDurationZH(data.durationZH);
         if (data.durationRU) setDurationRU(data.durationRU);
+        if (data.translatedItinerary && Array.isArray(data.translatedItinerary)) {
+          setItinerarySteps(data.translatedItinerary);
+        }
       } else {
         // Fallback translation
         if (!titleEN) setTitleEN(titleTH);
@@ -508,6 +512,25 @@ export const EditTourModal: React.FC<EditTourModalProps> = ({
                     placeholder="คำอธิบายสั้นๆ ไฮไลท์การท่องเที่ยว..."
                     className="w-full bg-slate-900 border border-slate-700 rounded-xl p-2.5 text-white"
                   />
+                </div>
+
+                <div className="pt-2 border-t border-slate-800">
+                  <button
+                    type="button"
+                    onClick={handleAutoTranslate}
+                    disabled={isTranslating || !titleTH.trim()}
+                    className="w-full bg-gradient-to-r from-cyan-600 via-teal-600 to-emerald-600 hover:from-cyan-500 hover:to-emerald-500 text-white font-extrabold px-4 py-2.5 rounded-xl text-xs transition shadow-lg shadow-cyan-950/40 flex items-center justify-center gap-2 cursor-pointer active:scale-98 disabled:opacity-50"
+                  >
+                    <Sparkles className={`w-4 h-4 ${isTranslating ? 'animate-spin text-amber-300' : 'text-cyan-200'}`} />
+                    <span>
+                      {isTranslating
+                        ? '🤖 กำลังให้ AI แปลเป็นภาษาอังกฤษ จีน และรัสเซียให้อัตโนมัติ...'
+                        : '✨ กดแปลเป็นภาษาอื่นๆ อัตโนมัติ (แปลชื่อ รายละเอียด และกำหนดการเป็น EN / ZH / RU)'}
+                    </span>
+                  </button>
+                  <p className="text-[10.5px] text-slate-400 mt-1 text-center">
+                    💡 เพียงกรอกข้อมูลภาษาไทย แล้วกดปุ่มนี้ ระบบจะใช้ AI แปลและเติมช่องภาษาอังกฤษ จีน และรัสเซียให้อัตโนมัติทันที
+                  </p>
                 </div>
               </div>
             )}
