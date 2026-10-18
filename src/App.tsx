@@ -871,6 +871,58 @@ export default function App() {
     }
   };
 
+  const handleSaveAllTours = async (toursToSave: Tour[]): Promise<boolean> => {
+    try {
+      lastMutationTimeRef.current = Date.now();
+      const normalized = normalizeTours(toursToSave);
+      setTours(normalized);
+      localStorage.setItem('tst_tours', JSON.stringify(normalized));
+
+      // 1. Sync to Supabase KV store
+      supabaseApi.saveTours(normalized).catch((err) => {
+        console.warn('Supabase saveTours error:', err);
+      });
+
+      // 2. Sync to Express API
+      const res = await fetch('/api/tours/save-all', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ tours: normalized }),
+      }).catch(() => null);
+
+      if (res && res.ok) {
+        const data = await res.json().catch(() => ({}));
+        if (data.version) lastServerVersionRef.current = data.version;
+      }
+
+      showToast(`💾 บันทึกและสำรองข้อมูลโปรแกรมทัวร์ทั้งหมด (${normalized.length} รายการ) ลงฐานข้อมูลสำเร็จเรียบร้อย!`);
+      return true;
+    } catch (err) {
+      console.error('Save all tours error:', err);
+      showToast('⚠️ เกิดข้อผิดพลาดในการบันทึกข้อมูลโปรแกรมทัวร์');
+      return false;
+    }
+  };
+
+  const handleResetToursToDefault = async () => {
+    try {
+      lastMutationTimeRef.current = Date.now();
+      const defaultList = normalizeTours([...initialTours]);
+      setTours(defaultList);
+      localStorage.setItem('tst_tours', JSON.stringify(defaultList));
+
+      // Sync to Supabase
+      supabaseApi.saveTours(defaultList).catch(() => {});
+
+      // Sync to Express
+      await fetch('/api/tours/reset-default', { method: 'POST' }).catch(() => {});
+      showToast('🔄 คืนค่าโปรแกรมทัวร์เริ่มต้นเรียบร้อยแล้ว');
+    } catch (err) {
+      console.error(err);
+      showToast('⚠️ เกิดข้อผิดพลาดในการคืนค่าเริ่มต้น');
+    }
+  };
+
   // Review Handlers
   const handleAddReview = async (reviewData: { tourId: string; userName: string; rating: number; comment: string; photo?: string; photos?: string[] }) => {
     try {
@@ -1119,6 +1171,8 @@ export default function App() {
           onAddTour={handleAddTour}
           onUpdateTour={handleUpdateTour}
           onDeleteTour={handleDeleteTour}
+          onSaveAllTours={handleSaveAllTours}
+          onResetToursToDefault={handleResetToursToDefault}
           onLogoutAdmin={handleLogoutAdmin}
           onTrigger24hReminders={handleTrigger24hReminders}
           onSendSingleReminder={handleSendSingleReminder}

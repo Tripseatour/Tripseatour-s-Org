@@ -523,6 +523,46 @@ app.delete('/api/tours/:id', async (req, res) => {
   res.json({ success: true, id, version: syncMetadata.version });
 });
 
+// Save all tours in batch / overwrite all tours
+app.post('/api/tours/save-all', async (req, res) => {
+  try {
+    const incomingTours = req.body?.tours || req.body;
+    if (!Array.isArray(incomingTours)) {
+      return res.status(400).json({ error: 'tours payload must be an array' });
+    }
+    tours = normalizeTours(incomingTours);
+    await persistState('tours');
+    res.json({
+      success: true,
+      count: tours.length,
+      tours,
+      version: syncMetadata.version,
+      lastUpdatedAt: syncMetadata.lastUpdatedAt.tours
+    });
+  } catch (err: any) {
+    console.error('Save all tours error:', err);
+    res.status(500).json({ error: err?.message || 'Failed to save all tours' });
+  }
+});
+
+// Reset tours to default initial tours
+app.post('/api/tours/reset-default', async (req, res) => {
+  try {
+    tours = normalizeTours([...initialTours]);
+    await persistState('tours');
+    res.json({
+      success: true,
+      count: tours.length,
+      tours,
+      version: syncMetadata.version,
+      lastUpdatedAt: syncMetadata.lastUpdatedAt.tours
+    });
+  } catch (err: any) {
+    console.error('Reset tours error:', err);
+    res.status(500).json({ error: err?.message || 'Failed to reset tours' });
+  }
+});
+
 // AI Automatic Tour Translation endpoint for Admin
 app.post('/api/translate-tour', async (req, res) => {
   try {

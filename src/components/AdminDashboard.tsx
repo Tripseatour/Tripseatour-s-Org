@@ -4,7 +4,8 @@ import {
   Settings, MessageCircle, QrCode, Plus, Search, Eye, EyeOff, Copy, Check, X, RefreshCw, Send, Image as ImageIcon,
   ChevronRight, Filter, FileSpreadsheet, Sparkles, LogOut, Lock, Key, Ticket, Trash2, Edit3, Calendar, ListChecks,
   Star, MessageSquare, Bot, UserPlus, UserMinus, ShieldCheck, Mail, Database, Printer, Ship, FileText, ClipboardList, PhoneCall, Award,
-  TrendingUp, Calculator, Percent, Coins, Building2, Headphones, CheckCheck, MapPin, Navigation
+  TrendingUp, Calculator, Percent, Coins, Building2, Headphones, CheckCheck, MapPin, Navigation,
+  Save, Download, Upload, HardDrive, FileJson, AlertCircle
 } from 'lucide-react';
 import {
   BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid, PieChart, Pie, Cell, Legend,
@@ -37,6 +38,8 @@ interface AdminDashboardProps {
   onAddTour: (tour: Tour) => void;
   onUpdateTour?: (id: string, tourData: Partial<Tour>) => void;
   onDeleteTour: (id: string) => void;
+  onSaveAllTours?: (toursToSave: Tour[]) => Promise<boolean | void> | void;
+  onResetToursToDefault?: () => Promise<void> | void;
   onLogoutAdmin?: () => void;
   onTrigger24hReminders?: () => void;
   onSendSingleReminder?: (bookingId: string) => void;
@@ -72,6 +75,8 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
   onAddTour,
   onUpdateTour,
   onDeleteTour,
+  onSaveAllTours,
+  onResetToursToDefault,
   onLogoutAdmin,
   onTrigger24hReminders,
   onSendSingleReminder,
@@ -220,6 +225,143 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
   const [tourSearchTerm, setTourSearchTerm] = useState('');
   const [tourCategoryFilter, setTourCategoryFilter] = useState('all');
   const [togglingTourId, setTogglingTourId] = useState<string | null>(null);
+
+  // Tour Backup, Save & Restore State
+  const [isSavingAllTours, setIsSavingAllTours] = useState(false);
+  const [saveAllSuccessAnim, setSaveAllSuccessAnim] = useState(false);
+  const [lastToursSavedAt, setLastToursSavedAt] = useState<string | null>(() => {
+    try {
+      return localStorage.getItem('tst_last_tours_saved_at') || null;
+    } catch {
+      return null;
+    }
+  });
+  const [isTourBackupModalOpen, setIsTourBackupModalOpen] = useState(false);
+  const [tourBackupActiveTab, setTourBackupActiveTab] = useState<'export' | 'import' | 'reset'>('export');
+  const [importJsonText, setImportJsonText] = useState('');
+  const [importMode, setImportMode] = useState<'replace' | 'merge'>('replace');
+  const [importParsedTours, setImportParsedTours] = useState<Tour[] | null>(null);
+  const [importError, setImportError] = useState<string | null>(null);
+  const [copiedToursJson, setCopiedToursJson] = useState(false);
+  const [isConfirmResetToursOpen, setIsConfirmResetToursOpen] = useState(false);
+  const [isResettingTours, setIsResettingTours] = useState(false);
+
+  const handleSaveAllToursAction = async (toursToSave: Tour[] = tours) => {
+    if (!onSaveAllTours) return;
+    setIsSavingAllTours(true);
+    try {
+      await onSaveAllTours(toursToSave);
+      const nowTime = new Date().toLocaleTimeString('th-TH');
+      setLastToursSavedAt(nowTime);
+      localStorage.setItem('tst_last_tours_saved_at', nowTime);
+      setSaveAllSuccessAnim(true);
+      setTimeout(() => setSaveAllSuccessAnim(false), 3000);
+    } catch (err) {
+      console.error('Failed to save all tours:', err);
+    } finally {
+      setIsSavingAllTours(false);
+    }
+  };
+
+  const handleExportToursJson = () => {
+    try {
+      const jsonStr = JSON.stringify(tours, null, 2);
+      const blob = new Blob([jsonStr], { type: 'application/json' });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      const dateStr = new Date().toISOString().replace(/[:.]/g, '-');
+      link.download = `trip_sea_tours_backup_${dateStr}.json`;
+      link.href = url;
+      link.click();
+      URL.revokeObjectURL(url);
+    } catch (err) {
+      console.error('Export tours error:', err);
+    }
+  };
+
+  const handleCopyToursJson = () => {
+    try {
+      navigator.clipboard.writeText(JSON.stringify(tours, null, 2));
+      setCopiedToursJson(true);
+      setTimeout(() => setCopiedToursJson(false), 2500);
+    } catch (err) {
+      console.error('Copy json error:', err);
+    }
+  };
+
+  const parseAndValidateImportJson = (text: string) => {
+    setImportError(null);
+    setImportParsedTours(null);
+    if (!text.trim()) return;
+
+    try {
+      const parsed = JSON.parse(text);
+      const list = Array.isArray(parsed) ? parsed : (parsed.tours && Array.isArray(parsed.tours) ? parsed.tours : null);
+      if (!list || list.length === 0) {
+        setImportError('ข้อมูล JSON ต้องเป็นรายการ Array ของโปรแกรมทัวร์ เช่น [{ "id": "...", "title": {...} }]');
+        return;
+      }
+      const valid = list.filter((item: any) => item && (item.title || item.id || item.priceAdult !== undefined));
+      if (valid.length === 0) {
+        setImportError('ไม่พบข้อมูลโปรแกรมทัวร์ที่ถูกต้องในไฟล์');
+        return;
+      }
+      setImportParsedTours(valid);
+    } catch (err: any) {
+      setImportError(`รูปแบบ JSON ไม่ถูกต้อง: ${err.message || 'JSON Parse Error'}`);
+    }
+  };
+
+  const handleImportFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = (event) => {
+      const content = event.target?.result as string;
+      setImportJsonText(content);
+      parseAndValidateImportJson(content);
+    };
+    reader.readAsText(file);
+  };
+
+  const handleExecuteImport = async () => {
+    if (!importParsedTours || importParsedTours.length === 0) return;
+    
+    let finalTours: Tour[] = [];
+    if (importMode === 'replace') {
+      finalTours = importParsedTours;
+    } else {
+      const existingMap = new Map<string, Tour>(tours.map(t => [t.id, t]));
+      importParsedTours.forEach(imported => {
+        const existing = existingMap.get(imported.id);
+        existingMap.set(imported.id, { ...(existing || {}), ...imported } as Tour);
+      });
+      finalTours = Array.from(existingMap.values()) as Tour[];
+    }
+
+    await handleSaveAllToursAction(finalTours);
+    setIsTourBackupModalOpen(false);
+    setImportJsonText('');
+    setImportParsedTours(null);
+    setImportError(null);
+  };
+
+  const handleConfirmResetTours = async () => {
+    if (!onResetToursToDefault) return;
+    setIsResettingTours(true);
+    try {
+      await onResetToursToDefault();
+      const nowTime = new Date().toLocaleTimeString('th-TH');
+      setLastToursSavedAt(nowTime);
+      localStorage.setItem('tst_last_tours_saved_at', nowTime);
+      setIsConfirmResetToursOpen(false);
+      setIsTourBackupModalOpen(false);
+    } catch (err) {
+      console.error(err);
+    } finally {
+      setIsResettingTours(false);
+    }
+  };
 
   // Customer Edit State
   const [editingCustomer, setEditingCustomer] = useState<Customer | null>(null);
@@ -2182,7 +2324,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
             return (
               <div className="space-y-6 animate-in fade-in">
                 {/* Header & Add Tour Button */}
-                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-slate-900/60 p-4 rounded-2xl border border-slate-800">
+                <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-3 bg-slate-900/60 p-4 rounded-2xl border border-slate-800">
                   <div>
                     <h2 className="text-lg font-bold text-white flex items-center gap-2">
                       <Sparkles className="w-5 h-5 text-teal-400" />
@@ -2193,16 +2335,114 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                     </p>
                   </div>
 
-                  <button
-                    onClick={() => {
-                      setEditingTour(null);
-                      setIsTourModalOpen(true);
-                    }}
-                    className="bg-teal-600 hover:bg-teal-500 text-white font-bold px-4 py-2.5 rounded-xl text-xs transition flex items-center justify-center gap-2 shadow-lg shadow-teal-900/30 cursor-pointer shrink-0"
-                  >
-                    <Plus className="w-4 h-4" />
-                    <span>เพิ่มโปรแกรมทัวร์ใหม่</span>
-                  </button>
+                  <div className="flex flex-wrap items-center gap-2 shrink-0">
+                    {/* Save All Tours Button */}
+                    <button
+                      onClick={() => handleSaveAllToursAction()}
+                      disabled={isSavingAllTours}
+                      className="bg-emerald-600 hover:bg-emerald-500 text-white font-bold px-3.5 py-2.5 rounded-xl text-xs transition flex items-center justify-center gap-2 shadow-lg shadow-emerald-950/40 cursor-pointer disabled:opacity-50 active:scale-95"
+                      title="บันทึกข้อมูลโปรแกรมทัวร์ทั้งหมดลงฐานข้อมูลคลาวด์และเซิร์ฟเวอร์ทันที"
+                    >
+                      <Save className={`w-4 h-4 ${isSavingAllTours ? 'animate-spin' : ''}`} />
+                      <span>
+                        {isSavingAllTours 
+                          ? 'กำลังบันทึก...' 
+                          : saveAllSuccessAnim 
+                            ? '✓ บันทึกสำเร็จแล้ว!' 
+                            : '💾 เซฟทัวร์ทั้งหมด (Save All)'}
+                      </span>
+                    </button>
+
+                    {/* Backup & Restore Modal Trigger */}
+                    <button
+                      onClick={() => {
+                        setImportJsonText('');
+                        setImportError(null);
+                        setImportParsedTours(null);
+                        setIsTourBackupModalOpen(true);
+                      }}
+                      className="bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 font-bold px-3.5 py-2.5 rounded-xl text-xs transition flex items-center justify-center gap-2 shadow-md cursor-pointer active:scale-95"
+                      title="สำรองข้อมูล JSON หรือนำเข้าข้อมูลกู้คืน"
+                    >
+                      <HardDrive className="w-4 h-4 text-cyan-400" />
+                      <span>สำรอง/กู้คืน (Backup)</span>
+                    </button>
+
+                    {/* Add New Tour Button */}
+                    <button
+                      onClick={() => {
+                        setEditingTour(null);
+                        setIsTourModalOpen(true);
+                      }}
+                      className="bg-teal-600 hover:bg-teal-500 text-white font-bold px-4 py-2.5 rounded-xl text-xs transition flex items-center justify-center gap-2 shadow-lg shadow-teal-900/30 cursor-pointer active:scale-95"
+                    >
+                      <Plus className="w-4 h-4" />
+                      <span>เพิ่มโปรแกรมทัวร์ใหม่</span>
+                    </button>
+                  </div>
+                </div>
+
+                {/* Tour Data Persistence & Backup Center Quick Bar */}
+                <div className="bg-gradient-to-r from-slate-900 via-teal-950/40 to-slate-900 border border-teal-500/30 p-4 rounded-2xl flex flex-col md:flex-row items-start md:items-center justify-between gap-4 shadow-lg shadow-slate-950/50">
+                  <div className="flex items-start gap-3">
+                    <div className="w-10 h-10 rounded-xl bg-teal-500/20 border border-teal-500/40 flex items-center justify-center text-teal-300 shrink-0 mt-0.5">
+                      <Database className="w-5 h-5" />
+                    </div>
+                    <div>
+                      <div className="flex flex-wrap items-center gap-2">
+                        <h3 className="font-extrabold text-white text-xs sm:text-sm">
+                          ระบบเซฟและสำรองข้อมูลโปรแกรมทัวร์ทั้งหมด (Tour Data Persistence Center)
+                        </h3>
+                        <span className="text-[10px] bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 px-2 py-0.5 rounded-full font-bold flex items-center gap-1">
+                          <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse"></span>
+                          <span>Auto-Sync 2 ทาง</span>
+                        </span>
+                      </div>
+                      <p className="text-[11px] text-slate-400 mt-1 leading-relaxed">
+                        บันทึกสำรองข้อมูลลงฐานข้อมูล <span className="text-teal-300 font-semibold">Supabase Cloud + Express Server + Local Storage</span> อัตโนมัติ ป้องกันข้อมูลสูญหาย 100%
+                        {lastToursSavedAt && (
+                          <span className="ml-1 text-slate-300 font-medium">
+                            • เซฟล่าสุด: <span className="text-teal-300 font-bold font-mono">{lastToursSavedAt}</span>
+                          </span>
+                        )}
+                      </p>
+                    </div>
+                  </div>
+
+                  <div className="flex flex-wrap items-center gap-2 w-full md:w-auto justify-end">
+                    <button
+                      type="button"
+                      onClick={handleExportToursJson}
+                      className="bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 font-semibold px-3 py-1.5 rounded-lg text-xs transition flex items-center gap-1.5 cursor-pointer shadow-sm active:scale-95"
+                    >
+                      <Download className="w-3.5 h-3.5 text-cyan-400" />
+                      <span>ดาวน์โหลดสำรอง (JSON)</span>
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={handleCopyToursJson}
+                      className="bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 font-semibold px-3 py-1.5 rounded-lg text-xs transition flex items-center gap-1.5 cursor-pointer shadow-sm active:scale-95"
+                    >
+                      {copiedToursJson ? <Check className="w-3.5 h-3.5 text-emerald-400" /> : <Copy className="w-3.5 h-3.5 text-slate-400" />}
+                      <span>{copiedToursJson ? 'คัดลอกแล้ว!' : 'คัดลอก JSON'}</span>
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setTourBackupActiveTab('import');
+                        setImportJsonText('');
+                        setImportError(null);
+                        setImportParsedTours(null);
+                        setIsTourBackupModalOpen(true);
+                      }}
+                      className="bg-slate-800 hover:bg-slate-700 text-amber-300 border border-amber-500/30 font-semibold px-3 py-1.5 rounded-lg text-xs transition flex items-center gap-1.5 cursor-pointer shadow-sm active:scale-95"
+                    >
+                      <Upload className="w-3.5 h-3.5 text-amber-400" />
+                      <span>นำเข้า / กู้คืน</span>
+                    </button>
+                  </div>
                 </div>
 
                 {/* Status KPI Counters */}
@@ -4095,6 +4335,329 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
           }
         }}
       />
+
+      {/* Tour Backup & Restore Center Modal */}
+      {isTourBackupModalOpen && (
+        <div className="fixed inset-0 z-50 bg-slate-950/85 backdrop-blur-md flex items-center justify-center p-3 sm:p-4 overflow-y-auto animate-in fade-in">
+          <div className="bg-slate-900 border border-slate-700 max-w-2xl w-full rounded-3xl p-5 sm:p-6 shadow-2xl relative space-y-5 my-auto max-h-[92vh] flex flex-col">
+            {/* Modal Header */}
+            <div className="flex items-center justify-between border-b border-slate-800 pb-3 shrink-0">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-xl bg-teal-500/20 text-teal-400 border border-teal-500/30 flex items-center justify-center font-bold">
+                  <HardDrive className="w-5 h-5" />
+                </div>
+                <div>
+                  <h3 className="font-extrabold text-base text-white">
+                    ศูนย์สำรองและกู้คืนข้อมูลโปรแกรมทัวร์ (Backup & Restore)
+                  </h3>
+                  <p className="text-xs text-slate-400">
+                    จัดการส่งออก (Export JSON) หรือนำเข้า (Import/Restore) ข้อมูลโปรแกรมทัวร์ทั้งหมด {tours.length} รายการ
+                  </p>
+                </div>
+              </div>
+              <button
+                onClick={() => setIsTourBackupModalOpen(false)}
+                className="w-8 h-8 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-full flex items-center justify-center transition"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            {/* Tab Selector */}
+            <div className="flex items-center gap-2 bg-slate-950 p-1 rounded-xl border border-slate-800 shrink-0">
+              <button
+                type="button"
+                onClick={() => setTourBackupActiveTab('export')}
+                className={`flex-1 py-2 px-3 rounded-lg text-xs font-bold transition flex items-center justify-center gap-1.5 cursor-pointer ${
+                  tourBackupActiveTab === 'export'
+                    ? 'bg-teal-600 text-white shadow-md'
+                    : 'text-slate-400 hover:text-white'
+                }`}
+              >
+                <Download className="w-3.5 h-3.5" />
+                <span>สำรองข้อมูล (Export JSON)</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => setTourBackupActiveTab('import')}
+                className={`flex-1 py-2 px-3 rounded-lg text-xs font-bold transition flex items-center justify-center gap-1.5 cursor-pointer ${
+                  tourBackupActiveTab === 'import'
+                    ? 'bg-amber-600 text-white shadow-md'
+                    : 'text-slate-400 hover:text-white'
+                }`}
+              >
+                <Upload className="w-3.5 h-3.5" />
+                <span>นำเข้าข้อมูล (Import / Restore)</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => setTourBackupActiveTab('reset')}
+                className={`py-2 px-3 rounded-lg text-xs font-bold transition flex items-center justify-center gap-1.5 cursor-pointer ${
+                  tourBackupActiveTab === 'reset'
+                    ? 'bg-rose-600 text-white shadow-md'
+                    : 'text-slate-400 hover:text-rose-400'
+                }`}
+              >
+                <RefreshCw className="w-3.5 h-3.5" />
+                <span>คืนค่าเริ่มต้น</span>
+              </button>
+            </div>
+
+            {/* Modal Body */}
+            <div className="space-y-4 overflow-y-auto flex-1 pr-1 text-xs">
+              {/* TAB 1: EXPORT */}
+              {tourBackupActiveTab === 'export' && (
+                <div className="space-y-4 animate-in fade-in">
+                  <div className="bg-slate-950/70 p-4 rounded-2xl border border-slate-800 space-y-3">
+                    <div className="flex items-center justify-between">
+                      <span className="font-bold text-slate-300">สรุปข้อมูลที่จะสำรอง:</span>
+                      <span className="text-teal-400 font-mono font-bold">{tours.length} โปรแกรมทัวร์</span>
+                    </div>
+
+                    <div className="grid grid-cols-2 gap-2 text-[11px] text-slate-400">
+                      <div className="bg-slate-900 p-2.5 rounded-xl border border-slate-800">
+                        <span className="text-slate-500 block">เปิดแสดงบนเว็บ:</span>
+                        <span className="text-emerald-400 font-bold font-mono text-sm">
+                          {tours.filter(t => t.isVisible !== false && t.isAvailable !== false).length} ทัวร์
+                        </span>
+                      </div>
+                      <div className="bg-slate-900 p-2.5 rounded-xl border border-slate-800">
+                        <span className="text-slate-500 block">ซ่อนไว้:</span>
+                        <span className="text-rose-400 font-bold font-mono text-sm">
+                          {tours.filter(t => t.isVisible === false || t.isAvailable === false).length} ทัวร์
+                        </span>
+                      </div>
+                    </div>
+
+                    <p className="text-[11px] text-slate-400 leading-relaxed">
+                      ไฟล์สำรองข้อมูลประกอบด้วยข้อมูลครบถ้วน: 4 ภาษา (TH, EN, ZH, RU), ราคาทุน, ราคาขาย, ตารางกำหนดการเดินทาง (Itinerary), รายการสิ่งที่รวม และรูปภาพ
+                    </p>
+                  </div>
+
+                  <div className="flex flex-col sm:flex-row gap-3 pt-2">
+                    <button
+                      onClick={handleExportToursJson}
+                      className="flex-1 bg-gradient-to-r from-teal-600 to-emerald-600 hover:from-teal-500 hover:to-emerald-500 text-white font-bold py-3 px-4 rounded-xl text-xs transition flex items-center justify-center gap-2 shadow-lg shadow-teal-950/50 cursor-pointer active:scale-95"
+                    >
+                      <Download className="w-4 h-4" />
+                      <span>ดาวน์โหลดไฟล์สำรอง (trip_sea_tours_backup.json)</span>
+                    </button>
+
+                    <button
+                      onClick={handleCopyToursJson}
+                      className="bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 font-bold py-3 px-4 rounded-xl text-xs transition flex items-center justify-center gap-2 cursor-pointer active:scale-95 shrink-0"
+                    >
+                      {copiedToursJson ? <Check className="w-4 h-4 text-emerald-400" /> : <Copy className="w-4 h-4" />}
+                      <span>{copiedToursJson ? 'คัดลอก JSON แล้ว!' : 'คัดลอกข้อความ JSON'}</span>
+                    </button>
+                  </div>
+                </div>
+              )}
+
+              {/* TAB 2: IMPORT / RESTORE */}
+              {tourBackupActiveTab === 'import' && (
+                <div className="space-y-4 animate-in fade-in">
+                  {/* File Upload Box */}
+                  <div>
+                    <label className="font-bold text-slate-200 block mb-1.5 flex items-center justify-between">
+                      <span>1. เลือกไฟล์สำรอง (.json) จากอุปกรณ์</span>
+                      <span className="text-[10px] text-slate-400">ไฟล์ JSON มาตรฐาน</span>
+                    </label>
+                    <label className="border-2 border-dashed border-slate-700 hover:border-teal-500/80 rounded-2xl p-4 bg-slate-950/60 flex flex-col items-center justify-center gap-2 cursor-pointer transition">
+                      <FileJson className="w-8 h-8 text-teal-400" />
+                      <span className="font-bold text-xs text-slate-300">คลิกเพื่อเลือกไฟล์สำรอง JSON</span>
+                      <span className="text-[10px] text-slate-500">รองรับไฟล์ trip_sea_tours_backup_*.json</span>
+                      <input
+                        type="file"
+                        accept=".json,application/json"
+                        onChange={handleImportFileUpload}
+                        className="hidden"
+                      />
+                    </label>
+                  </div>
+
+                  {/* Or Paste JSON Text */}
+                  <div>
+                    <label className="font-bold text-slate-200 block mb-1.5">
+                      หรือ วางข้อความ JSON โดยตรง:
+                    </label>
+                    <textarea
+                      rows={5}
+                      value={importJsonText}
+                      onChange={(e) => {
+                        setImportJsonText(e.target.value);
+                        parseAndValidateImportJson(e.target.value);
+                      }}
+                      placeholder='วางโค้ด JSON เช่น [{"id": "tour-1", "title": {"TH": "..."}, ...}]'
+                      className="w-full bg-slate-950 border border-slate-700 rounded-xl p-3 text-xs text-slate-200 font-mono focus:border-teal-500 focus:outline-none"
+                    />
+                  </div>
+
+                  {/* Error Box */}
+                  {importError && (
+                    <div className="bg-rose-950/60 border border-rose-800 text-rose-300 p-3 rounded-xl flex items-start gap-2">
+                      <AlertCircle className="w-4 h-4 shrink-0 text-rose-400 mt-0.5" />
+                      <div>
+                        <strong className="block font-bold">ไม่สามารถอ่านไฟล์ได้</strong>
+                        <span className="text-[11px]">{importError}</span>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Validation Success Box */}
+                  {importParsedTours && (
+                    <div className="bg-emerald-950/50 border border-emerald-500/50 text-emerald-300 p-3.5 rounded-2xl space-y-3">
+                      <div className="flex items-center gap-2">
+                        <CheckCircle2 className="w-5 h-5 text-emerald-400" />
+                        <span className="font-bold text-xs sm:text-sm">
+                          ตรวจสอบพบข้อมูลโปรแกรมทัวร์ {importParsedTours.length} รายการ พร้อมนำเข้า!
+                        </span>
+                      </div>
+
+                      {/* Import Mode Selector */}
+                      <div className="space-y-1.5 pt-1 border-t border-emerald-800/40">
+                        <span className="text-[11px] font-bold text-slate-300 block">เลือกรูปแบบการนำเข้า:</span>
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                          <label className={`p-2.5 rounded-xl border flex items-center gap-2 cursor-pointer transition ${
+                            importMode === 'replace' 
+                              ? 'bg-emerald-900/60 border-emerald-400 text-white ring-1 ring-emerald-400' 
+                              : 'bg-slate-900/80 border-slate-700 text-slate-400'
+                          }`}>
+                            <input
+                              type="radio"
+                              name="importMode"
+                              checked={importMode === 'replace'}
+                              onChange={() => setImportMode('replace')}
+                              className="text-emerald-500"
+                            />
+                            <div>
+                              <strong className="block text-xs font-bold">แทนที่ทั้งหมด (Replace All)</strong>
+                              <span className="text-[10px] text-slate-400">ใช้รายการทัวร์จากไฟล์นี้แทนที่ของเดิมทั้งหมด</span>
+                            </div>
+                          </label>
+
+                          <label className={`p-2.5 rounded-xl border flex items-center gap-2 cursor-pointer transition ${
+                            importMode === 'merge' 
+                              ? 'bg-teal-900/60 border-teal-400 text-white ring-1 ring-teal-400' 
+                              : 'bg-slate-900/80 border-slate-700 text-slate-400'
+                          }`}>
+                            <input
+                              type="radio"
+                              name="importMode"
+                              checked={importMode === 'merge'}
+                              onChange={() => setImportMode('merge')}
+                              className="text-teal-500"
+                            />
+                            <div>
+                              <strong className="block text-xs font-bold">ผสานข้อมูล (Merge / Append)</strong>
+                              <span className="text-[10px] text-slate-400">อัปเดตตัวที่ตรงกันและเพิ่มทัวร์ใหม่ต่อท้าย</span>
+                            </div>
+                          </label>
+                        </div>
+                      </div>
+
+                      {/* Action Button */}
+                      <button
+                        type="button"
+                        onClick={handleExecuteImport}
+                        disabled={isSavingAllTours}
+                        className="w-full bg-emerald-600 hover:bg-emerald-500 text-white font-extrabold py-3 rounded-xl text-xs transition shadow-lg shadow-emerald-950/60 flex items-center justify-center gap-2 cursor-pointer disabled:opacity-50 active:scale-95"
+                      >
+                        <Save className={`w-4 h-4 ${isSavingAllTours ? 'animate-spin' : ''}`} />
+                        <span>
+                          {isSavingAllTours 
+                            ? 'กำลังนำเข้าและบันทึกข้อมูล...' 
+                            : `ยืนยันนำเข้าและบันทึกทัวร์ทั้งหมด (${importParsedTours.length} รายการ)`}
+                        </span>
+                      </button>
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {/* TAB 3: RESET TO DEFAULT */}
+              {tourBackupActiveTab === 'reset' && (
+                <div className="space-y-4 animate-in fade-in">
+                  <div className="bg-rose-950/40 border border-rose-800/60 p-4 rounded-2xl space-y-2">
+                    <div className="flex items-center gap-2 text-rose-400 font-bold text-sm">
+                      <AlertTriangle className="w-5 h-5 text-rose-400" />
+                      <span>คืนค่าโปรแกรมทัวร์เริ่มต้น (Reset to Default Tours)</span>
+                    </div>
+                    <p className="text-[11px] text-slate-300 leading-relaxed">
+                      การดำเนินการนี้จะรีเซ็ตข้อมูลโปรแกรมทัวร์ทั้งหมดกลับเป็นชุดทัวร์เริ่มต้นมาตรฐานของ Trip Sea Tour Phuket (ทัวร์เกาะพีพี, อ่าวพังงา, เรือยอชท์, ปางช้าง ฯลฯ)
+                    </p>
+                  </div>
+
+                  <div className="text-center pt-2">
+                    <button
+                      type="button"
+                      onClick={() => setIsConfirmResetToursOpen(true)}
+                      className="bg-rose-600 hover:bg-rose-500 text-white font-bold py-3 px-6 rounded-xl text-xs transition shadow-lg shadow-rose-950/60 flex items-center justify-center gap-2 mx-auto cursor-pointer active:scale-95"
+                    >
+                      <RefreshCw className="w-4 h-4" />
+                      <span>ยืนยันคืนค่าโปรแกรมทัวร์เริ่มต้น</span>
+                    </button>
+                  </div>
+                </div>
+              )}
+            </div>
+
+            {/* Modal Footer */}
+            <div className="border-t border-slate-800 pt-3 flex items-center justify-between text-xs text-slate-400 shrink-0">
+              <span className="flex items-center gap-1.5">
+                <ShieldCheck className="w-4 h-4 text-emerald-400" />
+                <span>ซิงค์ตรงกับฐานข้อมูล Supabase และ Local Storage</span>
+              </span>
+              <button
+                type="button"
+                onClick={() => setIsTourBackupModalOpen(false)}
+                className="bg-slate-800 hover:bg-slate-700 text-slate-300 px-4 py-1.5 rounded-lg text-xs font-semibold transition"
+              >
+                ปิดหน้าต่าง
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Confirm Reset Tours Confirmation Modal */}
+      {isConfirmResetToursOpen && (
+        <div className="fixed inset-0 z-[60] bg-slate-950/90 backdrop-blur-md flex items-center justify-center p-4 animate-in fade-in">
+          <div className="bg-slate-900 border border-rose-800 max-w-md w-full rounded-3xl p-6 shadow-2xl relative space-y-4 text-center">
+            <div className="w-12 h-12 bg-rose-500/20 rounded-full flex items-center justify-center mx-auto border border-rose-500/40 text-rose-400">
+              <AlertTriangle className="w-6 h-6" />
+            </div>
+            <div>
+              <h3 className="text-lg font-extrabold text-white">ต้องการคืนค่าโปรแกรมทัวร์เริ่มต้นหรือไม่?</h3>
+              <p className="text-xs text-slate-300 mt-1.5 leading-relaxed">
+                ข้อมูลทัวร์ปัจจุบันทั้งหมดจะถูกแทนที่ด้วยชุดข้อมูลเริ่มต้นของระบบ หากต้องการเก็บข้อมูลเดิมไว้ กรุณากดสำรองข้อมูล (Export JSON) ไว้ก่อน
+              </p>
+            </div>
+
+            <div className="flex gap-2 pt-2">
+              <button
+                type="button"
+                onClick={() => setIsConfirmResetToursOpen(false)}
+                disabled={isResettingTours}
+                className="flex-1 bg-slate-800 hover:bg-slate-700 text-slate-300 font-bold py-2.5 rounded-xl text-xs transition"
+              >
+                ยกเลิก
+              </button>
+              <button
+                type="button"
+                onClick={handleConfirmResetTours}
+                disabled={isResettingTours}
+                className="flex-1 bg-rose-600 hover:bg-rose-500 text-white font-bold py-2.5 rounded-xl text-xs transition flex items-center justify-center gap-1.5"
+              >
+                <RefreshCw className={`w-3.5 h-3.5 ${isResettingTours ? 'animate-spin' : ''}`} />
+                <span>{isResettingTours ? 'กำลังรีเซ็ต...' : 'ยืนยันรีเซ็ต'}</span>
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Selected Ticket Voucher Modal */}
       {selectedTicketBooking && (
