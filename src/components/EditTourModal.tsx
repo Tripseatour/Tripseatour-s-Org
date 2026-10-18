@@ -1,5 +1,10 @@
-import React, { useState, useEffect } from 'react';
-import { X, Plus, Trash2, ArrowUp, ArrowDown, CheckSquare, Square, Clock, Sparkles, MapPin, DollarSign, Image as ImageIcon, Calendar, ListChecks, Eye, EyeOff } from 'lucide-react';
+import React, { useState, useEffect, useRef } from 'react';
+import { 
+  X, Plus, Trash2, ArrowUp, ArrowDown, CheckSquare, Square, Clock, Sparkles, 
+  MapPin, DollarSign, Image as ImageIcon, Calendar, ListChecks, Eye, EyeOff,
+  Upload, FileImage, CheckCircle2, AlertCircle, RefreshCw, FileText, Camera, 
+  ScanLine, Loader2, ArrowRight
+} from 'lucide-react';
 import { Tour, TourItinerary, Language, Supplier } from '../types';
 import { normalizeTours } from '../utils/tourNormalizer';
 
@@ -9,6 +14,7 @@ interface EditTourModalProps {
   isOpen: boolean;
   onClose: () => void;
   onSave: (tourData: Partial<Tour>) => Promise<void> | void;
+  initialAiScanMode?: boolean;
 }
 
 const COMMON_INCLUDES_TH = [
@@ -28,6 +34,7 @@ export const EditTourModal: React.FC<EditTourModalProps> = ({
   isOpen,
   onClose,
   onSave,
+  initialAiScanMode = false,
 }) => {
   const isEditing = Boolean(tour);
 
@@ -69,8 +76,26 @@ export const EditTourModal: React.FC<EditTourModalProps> = ({
   const [highlightsTH, setHighlightsTH] = useState<string[]>([]);
   const [customHighlightInput, setCustomHighlightInput] = useState('');
 
+  // AI Image Scanner State
+  const [aiImagePreview, setAiImagePreview] = useState<string | null>(null);
+  const [aiImageFile, setAiImageFile] = useState<File | null>(null);
+  const [isAiScanning, setIsAiScanning] = useState<boolean>(false);
+  const [aiScanSuccess, setAiScanSuccess] = useState<boolean>(false);
+  const [aiScanSummary, setAiScanSummary] = useState<string | null>(null);
+  const [aiScanError, setAiScanError] = useState<string | null>(null);
+  const [useImageAsCover, setUseImageAsCover] = useState<boolean>(true);
+  const [isDraggingImage, setIsDraggingImage] = useState<boolean>(false);
+  const [isAiSectionCollapsed, setIsAiSectionCollapsed] = useState<boolean>(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
   // Load existing tour data if editing
   useEffect(() => {
+    setAiImagePreview(null);
+    setAiImageFile(null);
+    setAiScanSuccess(false);
+    setAiScanSummary(null);
+    setAiScanError(null);
+
     if (tour) {
       setTitleTH(tour.title?.TH || '');
       setTitleEN(tour.title?.EN || '');
@@ -96,6 +121,7 @@ export const EditTourModal: React.FC<EditTourModalProps> = ({
       setItinerarySteps(tour.itinerary ? JSON.parse(JSON.stringify(tour.itinerary)) : []);
       setHighlightsTH(tour.highlights?.TH || []);
       setIsVisible(tour.isVisible !== undefined ? tour.isVisible : (tour.isAvailable !== undefined ? tour.isAvailable : true));
+      setIsAiSectionCollapsed(!initialAiScanMode);
     } else {
       // Default initial state for new tour
       setIsVisible(true);
@@ -147,8 +173,9 @@ export const EditTourModal: React.FC<EditTourModalProps> = ({
         }
       ]);
       setHighlightsTH(['ดำน้ำชมปะการังน้ำใส', 'ชมหาดทรายขาวละเอียด', 'รับประทานอาหารอร่อยริมทะเล']);
+      setIsAiSectionCollapsed(false);
     }
-  }, [tour, isOpen]);
+  }, [tour, isOpen, initialAiScanMode]);
 
   if (!isOpen) return null;
 
@@ -274,6 +301,162 @@ export const EditTourModal: React.FC<EditTourModalProps> = ({
       if (!titleRU) setTitleRU(titleTH);
     } finally {
       setIsTranslating(false);
+    }
+  };
+
+  // Image Selection and Reading Handlers
+  const handleImageSelect = (file: File) => {
+    if (!file.type.startsWith('image/')) {
+      setAiScanError('กรุณาเลือกไฟล์รูปภาพที่ถูกต้อง (เช่น JPG, PNG, WEBP)');
+      return;
+    }
+    setAiImageFile(file);
+    setAiScanError(null);
+    setAiScanSuccess(false);
+    setAiScanSummary(null);
+
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      const result = e.target?.result as string;
+      setAiImagePreview(result);
+    };
+    reader.readAsDataURL(file);
+  };
+
+  const handleDrop = (e: React.DragEvent) => {
+    e.preventDefault();
+    setIsDraggingImage(false);
+    if (e.dataTransfer.files && e.dataTransfer.files.length > 0) {
+      handleImageSelect(e.dataTransfer.files[0]);
+    }
+  };
+
+  const handlePaste = (e: React.ClipboardEvent) => {
+    if (e.clipboardData.items) {
+      for (let i = 0; i < e.clipboardData.items.length; i++) {
+        const item = e.clipboardData.items[i];
+        if (item.type.indexOf('image') !== -1) {
+          const file = item.getAsFile();
+          if (file) {
+            handleImageSelect(file);
+            break;
+          }
+        }
+      }
+    }
+  };
+
+  // AI Scan Tour Image & Auto Fill
+  const handleScanTourImage = async () => {
+    if (!aiImagePreview) {
+      setAiScanError('กรุณาอัปโหลดรูปภาพโบรชัวร์หรือรายละเอียดโปรแกรมทัวร์ก่อน');
+      return;
+    }
+
+    setIsAiScanning(true);
+    setAiScanError(null);
+    setAiScanSuccess(false);
+    setAiScanSummary(null);
+
+    try {
+      const res = await fetch('/api/extract-tour-from-image', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          imageBase64: aiImagePreview,
+          mimeType: aiImageFile?.type || 'image/jpeg',
+        }),
+      });
+
+      if (!res.ok) {
+        const errJson = await res.json().catch(() => ({}));
+        throw new Error(errJson.error || 'ไม่สามารถวิเคราะห์ข้อมูลจากรูปภาพได้');
+      }
+
+      const resData = await res.json();
+      const extracted = resData.data;
+
+      if (!extracted) {
+        throw new Error('ไม่พบข้อมูลโปรแกรมทัวร์ในภาพ กรุณาตรวจสอบภาพอีกครั้ง');
+      }
+
+      // Auto-fill extracted values into form fields
+      if (extracted.titleTH) setTitleTH(extracted.titleTH);
+      if (extracted.titleEN) setTitleEN(extracted.titleEN);
+      if (extracted.titleZH) setTitleZH(extracted.titleZH);
+      if (extracted.titleRU) setTitleRU(extracted.titleRU);
+
+      if (extracted.category && ['island', 'sunset', 'yacht', 'eco', 'sightseeing'].includes(extracted.category)) {
+        setCategory(extracted.category);
+      }
+      if (extracted.location) setLocation(extracted.location);
+
+      if (extracted.durationTH) setDurationTH(extracted.durationTH);
+      if (extracted.durationEN) setDurationEN(extracted.durationEN);
+      if (extracted.durationZH) setDurationZH(extracted.durationZH);
+      if (extracted.durationRU) setDurationRU(extracted.durationRU);
+
+      if (typeof extracted.priceAdult === 'number' && !isNaN(extracted.priceAdult)) {
+        setPriceAdult(extracted.priceAdult);
+      }
+      if (typeof extracted.priceChild === 'number' && !isNaN(extracted.priceChild)) {
+        setPriceChild(extracted.priceChild);
+      }
+      if (typeof extracted.originalPriceAdult === 'number' && !isNaN(extracted.originalPriceAdult)) {
+        setOriginalPriceAdult(extracted.originalPriceAdult);
+      }
+      if (typeof extracted.originalPriceChild === 'number' && !isNaN(extracted.originalPriceChild)) {
+        setOriginalPriceChild(extracted.originalPriceChild);
+      }
+      if (typeof extracted.costAdult === 'number' && !isNaN(extracted.costAdult)) {
+        setCostAdult(extracted.costAdult);
+      }
+      if (typeof extracted.costChild === 'number' && !isNaN(extracted.costChild)) {
+        setCostChild(extracted.costChild);
+      }
+
+      if (extracted.descTH) setDescTH(extracted.descTH);
+      if (extracted.descEN) setDescEN(extracted.descEN);
+      if (extracted.descZH) setDescZH(extracted.descZH);
+      if (extracted.descRU) setDescRU(extracted.descRU);
+
+      if (extracted.highlightsTH && Array.isArray(extracted.highlightsTH) && extracted.highlightsTH.length > 0) {
+        setHighlightsTH(extracted.highlightsTH);
+      }
+
+      if (extracted.includedItemsTH && Array.isArray(extracted.includedItemsTH) && extracted.includedItemsTH.length > 0) {
+        setIncludedItemsTH(extracted.includedItemsTH);
+      }
+
+      if (extracted.itinerarySteps && Array.isArray(extracted.itinerarySteps) && extracted.itinerarySteps.length > 0) {
+        setItinerarySteps(extracted.itinerarySteps);
+      }
+
+      // Check supplier match
+      if (extracted.supplierName && suppliers && suppliers.length > 0) {
+        const found = suppliers.find(s => 
+          s.name.toLowerCase().includes(extracted.supplierName.toLowerCase()) ||
+          extracted.supplierName.toLowerCase().includes(s.name.toLowerCase())
+        );
+        if (found) {
+          setSupplierId(found.id);
+        }
+      }
+
+      // If user chose to use image as cover
+      if (useImageAsCover && aiImagePreview) {
+        setImageUrl(aiImagePreview);
+      }
+
+      setAiScanSuccess(true);
+      setAiScanSummary(
+        `ชื่อทัวร์: "${extracted.titleTH || extracted.titleEN || '-'}" • ราคาผู้ใหญ่ ฿${(extracted.priceAdult || 0).toLocaleString()} • กำหนดการ ${extracted.itinerarySteps?.length || 0} ช่วงเวลา • ไฮไลท์ ${extracted.highlightsTH?.length || 0} ข้อ • สิ่งที่รวม ${extracted.includedItemsTH?.length || 0} รายการ`
+      );
+    } catch (err: any) {
+      console.error('Scan error:', err);
+      setAiScanError(err.message || 'เกิดข้อผิดพลาดในการวิเคราะห์รูปภาพ กรุณาลองใหม่อีกครั้ง');
+    } finally {
+      setIsAiScanning(false);
     }
   };
 
@@ -443,6 +626,241 @@ export const EditTourModal: React.FC<EditTourModalProps> = ({
                 </div>
               </button>
             </div>
+          </div>
+
+          {/* AI FEATURE: Auto-fill Tour Form from Flyer / Poster / Image */}
+          <div 
+            className="bg-gradient-to-br from-indigo-950/70 via-slate-900 to-purple-950/60 p-4 sm:p-5 rounded-2xl border-2 border-dashed border-indigo-500/50 shadow-xl shadow-indigo-950/30 space-y-4 relative overflow-hidden transition-all"
+            onPaste={handlePaste}
+          >
+            {/* Header with Collapse toggle */}
+            <div className="flex items-start justify-between gap-3">
+              <div className="flex items-start gap-2.5">
+                <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-purple-500 to-indigo-600 text-white flex items-center justify-center shrink-0 shadow-md shadow-indigo-500/30">
+                  <ScanLine className="w-5 h-5 text-amber-200" />
+                </div>
+                <div>
+                  <div className="flex flex-wrap items-center gap-2">
+                    <h4 className="font-extrabold text-white text-xs sm:text-sm flex items-center gap-1.5">
+                      <span>✨ AI อ่านรูปโบรชัวร์และกรอกข้อมูลทัวร์อัตโนมัติ</span>
+                    </h4>
+                    <span className="text-[10px] bg-indigo-500/30 text-indigo-200 border border-indigo-400/30 px-2 py-0.5 rounded-full font-bold flex items-center gap-1">
+                      <Sparkles className="w-3 h-3 text-amber-300" />
+                      <span>Gemini 3.8 Flash Vision</span>
+                    </span>
+                  </div>
+                  <p className="text-[11px] text-slate-300 mt-0.5 leading-relaxed">
+                    เพิ่มรูปรายละเอียดทัวร์ / ใบเสนอราคา / โบรชัวร์ แล้วให้ AI สกัดชื่อ ราคา กำหนดการ และสิ่งที่รวม กรอกลงในช่องต่างๆ ให้ทันที
+                  </p>
+                </div>
+              </div>
+
+              <button
+                type="button"
+                onClick={() => setIsAiSectionCollapsed(!isAiSectionCollapsed)}
+                className="text-xs text-indigo-300 hover:text-white bg-indigo-950/80 hover:bg-indigo-900 border border-indigo-700/50 px-3 py-1.5 rounded-xl transition shrink-0 cursor-pointer font-bold shadow-sm"
+              >
+                {isAiSectionCollapsed ? '+ เปิดใช้ AI สแกนรูป' : 'ย่อเก็บ'}
+              </button>
+            </div>
+
+            {!isAiSectionCollapsed && (
+              <div className="space-y-3.5 pt-1 animate-in fade-in">
+                {/* Hidden File Input */}
+                <input
+                  ref={fileInputRef}
+                  type="file"
+                  accept="image/png,image/jpeg,image/jpg,image/webp"
+                  className="hidden"
+                  onChange={(e) => {
+                    if (e.target.files && e.target.files[0]) {
+                      handleImageSelect(e.target.files[0]);
+                    }
+                  }}
+                />
+
+                {/* Upload or Drop Area */}
+                {!aiImagePreview ? (
+                  <div
+                    onDragOver={(e) => {
+                      e.preventDefault();
+                      setIsDraggingImage(true);
+                    }}
+                    onDragLeave={() => setIsDraggingImage(false)}
+                    onDrop={handleDrop}
+                    onClick={() => fileInputRef.current?.click()}
+                    className={`border-2 border-dashed rounded-2xl p-5 text-center transition cursor-pointer flex flex-col items-center justify-center gap-2.5 ${
+                      isDraggingImage
+                        ? 'border-indigo-400 bg-indigo-950/60 ring-2 ring-indigo-400/40'
+                        : 'border-slate-700 hover:border-indigo-500/80 bg-slate-950/60 hover:bg-indigo-950/30'
+                    }`}
+                  >
+                    <div className="w-12 h-12 rounded-2xl bg-indigo-500/20 border border-indigo-500/30 text-indigo-300 flex items-center justify-center shadow-inner">
+                      <Camera className="w-6 h-6 text-indigo-400" />
+                    </div>
+                    <div>
+                      <div className="font-bold text-white text-xs sm:text-sm">
+                        คลิกเพื่อเลือกไฟล์รูปภาพ หรือ ลากรูปโบรชัวร์มาวางที่นี่
+                      </div>
+                      <p className="text-[11px] text-slate-400 mt-0.5">
+                        รองรับไฟล์ JPG, PNG, WEBP หรือกด <kbd className="px-1.5 py-0.5 bg-slate-800 rounded border border-slate-700 text-indigo-300 font-mono text-[10px]">Ctrl+V</kbd> เพื่อวางรูปภาพจากคลิปบอร์ด
+                      </p>
+                    </div>
+                    <div className="flex flex-wrap items-center gap-2 mt-1">
+                      <span className="inline-flex items-center gap-1.5 bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-500 hover:to-purple-500 text-white font-bold px-3.5 py-2 rounded-xl text-xs shadow-md shadow-indigo-900/40 cursor-pointer">
+                        <Upload className="w-4 h-4" />
+                        <span>เลือกรูปโบรชัวร์ทัวร์</span>
+                      </span>
+                    </div>
+                  </div>
+                ) : (
+                  /* Image Preview & Action Controls */
+                  <div className="bg-slate-950/90 rounded-2xl border border-indigo-500/40 p-3.5 sm:p-4 space-y-3 shadow-md">
+                    <div className="flex flex-col sm:flex-row items-center sm:items-start gap-4">
+                      {/* Thumbnail Preview */}
+                      <div className="relative group shrink-0">
+                        <img
+                          src={aiImagePreview}
+                          alt="Tour details preview"
+                          className="w-32 h-32 sm:w-36 sm:h-36 object-cover rounded-xl border border-indigo-500/40 shadow-lg group-hover:scale-[1.02] transition"
+                        />
+                        <div className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 rounded-xl transition flex items-center justify-center">
+                          <button
+                            type="button"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              fileInputRef.current?.click();
+                            }}
+                            className="text-[10px] bg-slate-900/90 text-white px-2.5 py-1.5 rounded-lg font-bold shadow"
+                          >
+                            เปลี่ยนรูป
+                          </button>
+                        </div>
+                      </div>
+
+                      {/* Info & Options */}
+                      <div className="flex-1 space-y-2.5 w-full text-left">
+                        <div className="flex items-center justify-between">
+                          <span className="text-xs font-bold text-white flex items-center gap-1.5">
+                            <FileImage className="w-4 h-4 text-indigo-400" />
+                            <span className="truncate max-w-[200px] sm:max-w-xs">{aiImageFile?.name || 'รูปภาพโบรชัวร์รายละเอียดทัวร์'}</span>
+                          </span>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setAiImagePreview(null);
+                              setAiImageFile(null);
+                              setAiScanSuccess(false);
+                              setAiScanSummary(null);
+                              setAiScanError(null);
+                            }}
+                            className="text-slate-400 hover:text-rose-400 text-xs flex items-center gap-1 transition cursor-pointer"
+                          >
+                            <Trash2 className="w-3.5 h-3.5" />
+                            <span>ลบรูปภาพ</span>
+                          </button>
+                        </div>
+
+                        {/* Option: Use as cover image */}
+                        <label className="flex items-center gap-2.5 cursor-pointer bg-slate-900/80 p-2.5 rounded-xl border border-slate-800 hover:border-slate-700 transition">
+                          <input
+                            type="checkbox"
+                            checked={useImageAsCover}
+                            onChange={(e) => setUseImageAsCover(e.target.checked)}
+                            className="rounded border-slate-700 text-indigo-600 focus:ring-indigo-500 w-4 h-4"
+                          />
+                          <span className="text-xs text-slate-300 font-medium">
+                            นำรูปภาพนี้ไปใช้เป็น <strong className="text-cyan-300 font-bold">ภาพหน้าปกของโปรแกรมทัวร์ (Tour Cover)</strong> ด้วย
+                          </span>
+                        </label>
+
+                        {/* Action Buttons */}
+                        <div className="flex flex-wrap items-center gap-2 pt-1">
+                          <button
+                            type="button"
+                            onClick={handleScanTourImage}
+                            disabled={isAiScanning}
+                            className="bg-gradient-to-r from-purple-600 via-indigo-600 to-cyan-600 hover:from-purple-500 hover:to-cyan-500 text-white font-extrabold px-4 py-2.5 rounded-xl text-xs transition flex items-center gap-2 shadow-lg shadow-indigo-950/50 cursor-pointer active:scale-95 disabled:opacity-50"
+                          >
+                            {isAiScanning ? (
+                              <>
+                                <Loader2 className="w-4 h-4 animate-spin text-amber-300" />
+                                <span>AI กำลังวิเคราะห์รูปภาพและกรอกข้อมูล...</span>
+                              </>
+                            ) : (
+                              <>
+                                <Sparkles className="w-4 h-4 text-amber-300" />
+                                <span>✨ สั่งให้ AI อ่านรายละเอียดและกรอกฟอร์มอัตโนมัติ</span>
+                              </>
+                            )}
+                          </button>
+
+                          <button
+                            type="button"
+                            onClick={() => fileInputRef.current?.click()}
+                            disabled={isAiScanning}
+                            className="bg-slate-800 hover:bg-slate-700 text-slate-300 border border-slate-700 font-bold px-3 py-2.5 rounded-xl text-xs transition flex items-center gap-1.5 cursor-pointer"
+                          >
+                            <RefreshCw className="w-3.5 h-3.5 text-slate-400" />
+                            <span>เปลี่ยนรูป</span>
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+                {/* Status: Loading */}
+                {isAiScanning && (
+                  <div className="bg-indigo-950/60 border border-indigo-500/50 p-3.5 rounded-xl flex items-center gap-3 animate-pulse shadow-inner">
+                    <Loader2 className="w-5 h-5 text-indigo-400 animate-spin shrink-0" />
+                    <div>
+                      <div className="font-bold text-white text-xs">
+                        กำลังส่งรูปภาพให้ Gemini AI สแกนและถอดข้อความ...
+                      </div>
+                      <p className="text-[11px] text-indigo-200 mt-0.5">
+                        ระบบกำลังวิเคราะห์ชื่อโปรแกรมทัวร์, จุดหมายปลายทาง, ตารางเวลา, ราคาผู้ใหญ่/เด็ก, ไฮไลท์ท่องเที่ยว และแปล 4 ภาษาให้อัตโนมัติ
+                      </p>
+                    </div>
+                  </div>
+                )}
+
+                {/* Status: Error */}
+                {aiScanError && (
+                  <div className="bg-rose-950/80 border border-rose-500/50 p-3.5 rounded-xl flex items-start gap-2.5 text-rose-200 text-xs shadow-md">
+                    <AlertCircle className="w-4 h-4 text-rose-400 shrink-0 mt-0.5" />
+                    <div className="flex-1">
+                      <div className="font-bold text-rose-300">ไม่สามารถสกัดข้อมูลจากภาพได้:</div>
+                      <p className="mt-0.5">{aiScanError}</p>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => setAiScanError(null)}
+                      className="text-rose-400 hover:text-white cursor-pointer"
+                    >
+                      <X className="w-3.5 h-3.5" />
+                    </button>
+                  </div>
+                )}
+
+                {/* Status: Success */}
+                {aiScanSuccess && aiScanSummary && (
+                  <div className="bg-emerald-950/80 border border-emerald-500/60 p-3.5 rounded-xl space-y-1.5 text-xs animate-in fade-in shadow-md">
+                    <div className="flex items-center gap-2 text-emerald-300 font-bold">
+                      <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" />
+                      <span>🎉 AI สกัดข้อมูลและกรอกฟอร์มสำเร็จเรียบร้อยแล้ว!</span>
+                    </div>
+                    <p className="text-emerald-100 text-[11px] leading-relaxed pl-6">
+                      {aiScanSummary}
+                    </p>
+                    <div className="text-[11px] text-emerald-300/80 pl-6 pt-1 flex items-center gap-1 font-medium">
+                      <ArrowRight className="w-3 h-3 text-emerald-400" />
+                      <span>ข้อมูลทั้งหมดถูกใส่ลงในฟอร์มด้านล่างแล้ว สามารถเลื่อนลงเพื่อตรวจสอบและปรับแต่งได้เลยครับ</span>
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
           </div>
 
           {/* SECTION 1: Basic Information & Multilingual Content */}

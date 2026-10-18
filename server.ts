@@ -649,6 +649,122 @@ Return ONLY valid JSON in this exact structure without markdown formatting or ba
   }
 });
 
+// AI Tour Extraction from Flyer / Image endpoint for Admin
+app.post('/api/extract-tour-from-image', async (req, res) => {
+  try {
+    const { imageBase64, mimeType } = req.body;
+    if (!imageBase64) {
+      return res.status(400).json({ error: 'imageBase64 is required' });
+    }
+
+    // Clean base64 data if it contains data URI prefix
+    let cleanBase64 = imageBase64;
+    let detectedMime = mimeType || 'image/jpeg';
+    if (imageBase64.includes('base64,')) {
+      const match = imageBase64.match(/^data:([^;]+);base64,(.+)$/);
+      if (match) {
+        detectedMime = match[1] || detectedMime;
+        cleanBase64 = match[2];
+      }
+    }
+
+    const imagePart = {
+      inlineData: {
+        mimeType: detectedMime,
+        data: cleanBase64,
+      },
+    };
+
+    const prompt = `You are an expert travel operations manager and itinerary specialist for Trip Sea Tour Phuket (a premier tour agency in Phuket, Thailand).
+Analyze the provided tour brochure / flyer / timetable / poster image thoroughly and extract all tour details into structured JSON.
+
+Read all Thai and English text, pricing, schedules, highlights, destinations, inclusions, terms, and notes visible in the image.
+If any text is in Thai, extract it accurately and also generate high quality English (EN), Simplified Chinese (ZH), and Russian (RU) translations for multi-language fields.
+If specific prices are not explicitly written in the image, provide reasonable, realistic Phuket market rates (e.g., priceAdult: 1500-2500 THB, child ~70%).
+
+Output ONLY a valid JSON object matching this exact schema (no markdown, no backticks, no extra text):
+{
+  "titleTH": "ชื่อโปรแกรมทัวร์ภาษาไทย เช่น ทัวร์เกาะพีพี อ่าวมาหยา เกาะไข่ สปีดโบ๊ท",
+  "titleEN": "Tour Title in English",
+  "titleZH": "Tour Title in Simplified Chinese",
+  "titleRU": "Tour Title in Russian",
+  "category": "island",
+  "location": "สถานที่ เช่น เกาะพีพี - อ่าวมาหยา - เกาะไข่ หรือ ภูเก็ต / พังงา",
+  "durationTH": "ระยะเวลา เช่น เต็มวัน (08:00 - 17:00)",
+  "durationEN": "Full Day (08:00 AM - 05:00 PM)",
+  "durationZH": "全天 (08:00 - 17:00)",
+  "durationRU": "Полный день (08:00 - 17:00)",
+  "priceAdult": 1800,
+  "priceChild": 1200,
+  "originalPriceAdult": 2500,
+  "originalPriceChild": 1700,
+  "costAdult": 1150,
+  "costChild": 780,
+  "descTH": "คำอธิบายโปรแกรมทัวร์อย่างละเอียด น่าดึงดูดใจ และครบถ้วน (ภาษาไทย)",
+  "descEN": "Detailed and engaging tour description in English",
+  "descZH": "Chinese tour description",
+  "descRU": "Russian tour description",
+  "highlightsTH": [
+    "ไฮไลท์ 1 ที่ระบุในรูปภาพ",
+    "ไฮไลท์ 2",
+    "ไฮไลท์ 3",
+    "ไฮไลท์ 4"
+  ],
+  "includedItemsTH": [
+    "รถรับ-ส่งโรงแรม",
+    "อาหารกลางวัน และเครื่องดื่ม",
+    "อุปกรณ์ดำน้ำตื้นและเสื้อชูชีพ",
+    "ประกันอุบัติเหตุการเดินทาง",
+    "ไกด์นำเที่ยวมืออาชีพ"
+  ],
+  "itinerarySteps": [
+    {
+      "time": "07:30 - 08:30",
+      "title": {
+        "TH": "รถรับจากโรงแรมที่พัก สู่ท่าเรือ",
+        "EN": "Hotel pickup and transfer to pier",
+        "ZH": "酒店接送至码头",
+        "RU": "Трансфер из отеля к причалу"
+      },
+      "description": {
+        "TH": "เช็คอิน รับประทานอาหารว่าง ชา กาแฟ รับฟังบรรยายสรุป",
+        "EN": "Check-in, light refreshments, and briefing",
+        "ZH": "登记、享用茶点并听取安全讲解",
+        "RU": "Регистрация, легкий перекус и инструктаж"
+      }
+    }
+  ],
+  "supplierName": "ชื่อบริษัทเรือหรือซัพพลายเออร์ถ้ามี",
+  "notes": "ข้อความสำคัญเพิ่มเติม หรือสิ่งที่ควรนำมาด้วย"
+}
+
+Important:
+- "category" must be strictly one of: "island", "sunset", "yacht", "eco", "sightseeing"
+- Prices must be numbers (THB currency)
+- Ensure all itinerary steps visible in the image timetable are extracted accurately with times.`;
+
+    const textPart = { text: prompt };
+
+    const aiResponse = await ai.models.generateContent({
+      model: 'gemini-3.8-flash',
+      contents: { parts: [imagePart, textPart] },
+    });
+
+    const responseText = aiResponse.text || '';
+    const cleanJson = responseText.replace(/```json\s*|```/g, '').trim();
+    const parsed = JSON.parse(cleanJson);
+
+    res.json({
+      success: true,
+      data: parsed
+    });
+  } catch (err: any) {
+    console.error('Extract tour from image error:', err);
+    res.status(500).json({ error: err?.message || 'Failed to extract tour from image' });
+  }
+});
+
+
 // --- Bookings ---
 app.get('/api/bookings', (req, res) => {
   res.json(bookings);
