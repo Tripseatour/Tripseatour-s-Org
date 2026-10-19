@@ -3,10 +3,18 @@ import {
   X, Plus, Trash2, ArrowUp, ArrowDown, CheckSquare, Square, Clock, Sparkles, 
   MapPin, DollarSign, Image as ImageIcon, Calendar, ListChecks, Eye, EyeOff,
   Upload, FileImage, CheckCircle2, AlertCircle, RefreshCw, FileText, Camera, 
-  ScanLine, Loader2, ArrowRight
+  ScanLine, Loader2, ArrowRight, Layers, ImagePlus, Star, Images
 } from 'lucide-react';
 import { Tour, TourItinerary, Language, Supplier } from '../types';
 import { normalizeTours } from '../utils/tourNormalizer';
+
+export interface AiTourImageItem {
+  id: string;
+  name: string;
+  base64: string;
+  mimeType: string;
+  sizeBytes?: number;
+}
 
 interface EditTourModalProps {
   tour: Tour | null; // null = adding new, object = editing existing
@@ -76,9 +84,9 @@ export const EditTourModal: React.FC<EditTourModalProps> = ({
   const [highlightsTH, setHighlightsTH] = useState<string[]>([]);
   const [customHighlightInput, setCustomHighlightInput] = useState('');
 
-  // AI Image Scanner State
-  const [aiImagePreview, setAiImagePreview] = useState<string | null>(null);
-  const [aiImageFile, setAiImageFile] = useState<File | null>(null);
+  // AI Image Scanner State (Multi-Image Support)
+  const [aiImages, setAiImages] = useState<AiTourImageItem[]>([]);
+  const [coverImageIndex, setCoverImageIndex] = useState<number>(0);
   const [isAiScanning, setIsAiScanning] = useState<boolean>(false);
   const [aiScanSuccess, setAiScanSuccess] = useState<boolean>(false);
   const [aiScanSummary, setAiScanSummary] = useState<string | null>(null);
@@ -90,8 +98,8 @@ export const EditTourModal: React.FC<EditTourModalProps> = ({
 
   // Load existing tour data if editing
   useEffect(() => {
-    setAiImagePreview(null);
-    setAiImageFile(null);
+    setAiImages([]);
+    setCoverImageIndex(0);
     setAiScanSuccess(false);
     setAiScanSummary(null);
     setAiScanError(null);
@@ -304,52 +312,141 @@ export const EditTourModal: React.FC<EditTourModalProps> = ({
     }
   };
 
-  // Image Selection and Reading Handlers
-  const handleImageSelect = (file: File) => {
-    if (!file.type.startsWith('image/')) {
+  // Helper: Read and optimize image to Base64 (resizing very large images for fast processing)
+  const readFileAsOptimizedBase64 = (file: File): Promise<{ base64: string; mimeType: string; name: string; sizeBytes: number }> => {
+    return new Promise((resolve) => {
+      const reader = new FileReader();
+      reader.onload = (e) => {
+        const rawData = e.target?.result as string;
+        const img = new Image();
+        img.onload = () => {
+          const MAX_DIM = 1800;
+          let width = img.width;
+          let height = img.height;
+          if (width > MAX_DIM || height > MAX_DIM) {
+            if (width > height) {
+              height = Math.round((height * MAX_DIM) / width);
+              width = MAX_DIM;
+            } else {
+              width = Math.round((width * MAX_DIM) / height);
+              height = MAX_DIM;
+            }
+            const canvas = document.createElement('canvas');
+            canvas.width = width;
+            canvas.height = height;
+            const ctx = canvas.getContext('2d');
+            if (ctx) {
+              ctx.drawImage(img, 0, 0, width, height);
+              const optimized = canvas.toDataURL('image/jpeg', 0.88);
+              resolve({ base64: optimized, mimeType: 'image/jpeg', name: file.name, sizeBytes: file.size });
+              return;
+            }
+          }
+          resolve({ base64: rawData, mimeType: file.type || 'image/jpeg', name: file.name, sizeBytes: file.size });
+        };
+        img.onerror = () => {
+          resolve({ base64: rawData, mimeType: file.type || 'image/jpeg', name: file.name, sizeBytes: file.size });
+        };
+        img.src = rawData;
+      };
+      reader.readAsDataURL(file);
+    });
+  };
+
+  // Image Selection and Reading Handlers (Multiple Files)
+  const handleMultipleFiles = async (files: FileList | File[]) => {
+    const validFiles: File[] = [];
+    for (let i = 0; i < files.length; i++) {
+      const f = files[i];
+      if (f.type.startsWith('image/')) {
+        validFiles.push(f);
+      }
+    }
+
+    if (validFiles.length === 0) {
       setAiScanError('กรุณาเลือกไฟล์รูปภาพที่ถูกต้อง (เช่น JPG, PNG, WEBP)');
       return;
     }
-    setAiImageFile(file);
-    setAiScanError(null);
+
+    const availableSlots = Math.max(0, 10 - aiImages.length);
+    if (availableSlots <= 0) {
+      setAiScanError('สามารถอัปโหลดรูปภาพได้สูงสุด 10 รูป กรุณาลบรูปบางส่วนออกก่อนเพิ่มใหม่');
+      return;
+    }
+
+    if (validFiles.length > availableSlots) {
+      setAiScanError(`สามารถเพิ่มได้อีกเพียง ${availableSlots} รูป (สูงสุด 10 รูป) ระบบจะเลือกเฉพาะ ${availableSlots} รูปแรก`);
+    } else {
+      setAiScanError(null);
+    }
+
     setAiScanSuccess(false);
     setAiScanSummary(null);
 
-    const reader = new FileReader();
-    reader.onload = (e) => {
-      const result = e.target?.result as string;
-      setAiImagePreview(result);
-    };
-    reader.readAsDataURL(file);
+    const filesToProcess = validFiles.slice(0, availableSlots);
+    const processed = await Promise.all(filesToProcess.map(readFileAsOptimizedBase64));
+
+    const newItems: AiTourImageItem[] = processed.map((p, idx) => ({
+      id: `img-${Date.now()}-${idx}-${Math.random().toString(36).substring(2, 6)}`,
+      name: p.name,
+      base64: p.base64,
+      mimeType: p.mimeType,
+      sizeBytes: p.sizeBytes
+    }));
+
+    setAiImages(prev => {
+      const combined = [...prev, ...newItems];
+      return combined;
+    });
+  };
+
+  const handleRemoveImage = (indexToRemove: number) => {
+    setAiImages(prev => {
+      const updated = prev.filter((_, i) => i !== indexToRemove);
+      if (coverImageIndex >= updated.length) {
+        setCoverImageIndex(Math.max(0, updated.length - 1));
+      }
+      return updated;
+    });
+    setAiScanSuccess(false);
+  };
+
+  const handleClearAllImages = () => {
+    setAiImages([]);
+    setCoverImageIndex(0);
+    setAiScanSuccess(false);
+    setAiScanSummary(null);
+    setAiScanError(null);
   };
 
   const handleDrop = (e: React.DragEvent) => {
     e.preventDefault();
     setIsDraggingImage(false);
     if (e.dataTransfer.files && e.dataTransfer.files.length > 0) {
-      handleImageSelect(e.dataTransfer.files[0]);
+      handleMultipleFiles(e.dataTransfer.files);
     }
   };
 
   const handlePaste = (e: React.ClipboardEvent) => {
     if (e.clipboardData.items) {
+      const pastedFiles: File[] = [];
       for (let i = 0; i < e.clipboardData.items.length; i++) {
         const item = e.clipboardData.items[i];
         if (item.type.indexOf('image') !== -1) {
           const file = item.getAsFile();
-          if (file) {
-            handleImageSelect(file);
-            break;
-          }
+          if (file) pastedFiles.push(file);
         }
+      }
+      if (pastedFiles.length > 0) {
+        handleMultipleFiles(pastedFiles);
       }
     }
   };
 
-  // AI Scan Tour Image & Auto Fill
+  // AI Scan Tour Images & Auto Fill (Multi-Image Synthesis)
   const handleScanTourImage = async () => {
-    if (!aiImagePreview) {
-      setAiScanError('กรุณาอัปโหลดรูปภาพโบรชัวร์หรือรายละเอียดโปรแกรมทัวร์ก่อน');
+    if (aiImages.length === 0) {
+      setAiScanError('กรุณาอัปโหลดรูปภาพโบรชัวร์หรือรายละเอียดโปรแกรมทัวร์อย่างน้อย 1 รูป');
       return;
     }
 
@@ -363,8 +460,10 @@ export const EditTourModal: React.FC<EditTourModalProps> = ({
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          imageBase64: aiImagePreview,
-          mimeType: aiImageFile?.type || 'image/jpeg',
+          images: aiImages.map(img => ({
+            imageBase64: img.base64,
+            mimeType: img.mimeType,
+          }))
         }),
       });
 
@@ -377,7 +476,7 @@ export const EditTourModal: React.FC<EditTourModalProps> = ({
       const extracted = resData.data;
 
       if (!extracted) {
-        throw new Error('ไม่พบข้อมูลโปรแกรมทัวร์ในภาพ กรุณาตรวจสอบภาพอีกครั้ง');
+        throw new Error('ไม่พบข้อมูลโปรแกรมทัวร์ในรูปภาพ กรุณาตรวจสอบภาพอีกครั้ง');
       }
 
       // Auto-fill extracted values into form fields
@@ -443,14 +542,14 @@ export const EditTourModal: React.FC<EditTourModalProps> = ({
         }
       }
 
-      // If user chose to use image as cover
-      if (useImageAsCover && aiImagePreview) {
-        setImageUrl(aiImagePreview);
+      // If user chose to use image as cover, use selected cover image index
+      if (useImageAsCover && aiImages[coverImageIndex]) {
+        setImageUrl(aiImages[coverImageIndex].base64);
       }
 
       setAiScanSuccess(true);
       setAiScanSummary(
-        `ชื่อทัวร์: "${extracted.titleTH || extracted.titleEN || '-'}" • ราคาผู้ใหญ่ ฿${(extracted.priceAdult || 0).toLocaleString()} • กำหนดการ ${extracted.itinerarySteps?.length || 0} ช่วงเวลา • ไฮไลท์ ${extracted.highlightsTH?.length || 0} ข้อ • สิ่งที่รวม ${extracted.includedItemsTH?.length || 0} รายการ`
+        `ประมวลผลข้อมูลสำเร็จจากทั้งหมด ${aiImages.length} รูปภาพ: ชื่อทัวร์ "${extracted.titleTH || extracted.titleEN || '-'}" • ราคาผู้ใหญ่ ฿${(extracted.priceAdult || 0).toLocaleString()} • กำหนดการ ${extracted.itinerarySteps?.length || 0} ช่วงเวลา • ไฮไลท์ ${extracted.highlightsTH?.length || 0} ข้อ • สิ่งที่รวม ${extracted.includedItemsTH?.length || 0} รายการ`
       );
     } catch (err: any) {
       console.error('Scan error:', err);
@@ -646,11 +745,11 @@ export const EditTourModal: React.FC<EditTourModalProps> = ({
                     </h4>
                     <span className="text-[10px] bg-indigo-500/30 text-indigo-200 border border-indigo-400/30 px-2 py-0.5 rounded-full font-bold flex items-center gap-1">
                       <Sparkles className="w-3 h-3 text-amber-300" />
-                      <span>Gemini 3.8 Flash Vision</span>
+                      <span>Gemini 3.8 Flash (สแกนได้หลายรูป)</span>
                     </span>
                   </div>
                   <p className="text-[11px] text-slate-300 mt-0.5 leading-relaxed">
-                    เพิ่มรูปรายละเอียดทัวร์ / ใบเสนอราคา / โบรชัวร์ แล้วให้ AI สกัดชื่อ ราคา กำหนดการ และสิ่งที่รวม กรอกลงในช่องต่างๆ ให้ทันที
+                    เพิ่มรูปรายละเอียดทัวร์ได้หลายรูปพร้อมกัน (เช่น หน้าปก + ตารางเวลา + หน้ารายละเอียดราคา/สิ่งที่รวม) แล้วให้ AI สังเคราะห์ข้อมูลกรอกลงในช่องต่างๆ ให้ทันที
                   </p>
                 </div>
               </div>
@@ -666,21 +765,23 @@ export const EditTourModal: React.FC<EditTourModalProps> = ({
 
             {!isAiSectionCollapsed && (
               <div className="space-y-3.5 pt-1 animate-in fade-in">
-                {/* Hidden File Input */}
+                {/* Hidden File Input (supports multiple files) */}
                 <input
                   ref={fileInputRef}
                   type="file"
+                  multiple
                   accept="image/png,image/jpeg,image/jpg,image/webp"
                   className="hidden"
                   onChange={(e) => {
-                    if (e.target.files && e.target.files[0]) {
-                      handleImageSelect(e.target.files[0]);
+                    if (e.target.files && e.target.files.length > 0) {
+                      handleMultipleFiles(e.target.files);
+                      e.target.value = '';
                     }
                   }}
                 />
 
-                {/* Upload or Drop Area */}
-                {!aiImagePreview ? (
+                {/* Upload or Drop Area (when no images yet) */}
+                {aiImages.length === 0 ? (
                   <div
                     onDragOver={(e) => {
                       e.preventDefault();
@@ -696,116 +797,182 @@ export const EditTourModal: React.FC<EditTourModalProps> = ({
                     }`}
                   >
                     <div className="w-12 h-12 rounded-2xl bg-indigo-500/20 border border-indigo-500/30 text-indigo-300 flex items-center justify-center shadow-inner">
-                      <Camera className="w-6 h-6 text-indigo-400" />
+                      <Images className="w-6 h-6 text-indigo-400" />
                     </div>
                     <div>
                       <div className="font-bold text-white text-xs sm:text-sm">
-                        คลิกเพื่อเลือกไฟล์รูปภาพ หรือ ลากรูปโบรชัวร์มาวางที่นี่
+                        คลิกเพื่อเลือกไฟล์รูปภาพ (เลือกพร้อมกันได้หลายรูป) หรือ ลากรูปโบรชัวร์มาวางที่นี่
                       </div>
                       <p className="text-[11px] text-slate-400 mt-0.5">
-                        รองรับไฟล์ JPG, PNG, WEBP หรือกด <kbd className="px-1.5 py-0.5 bg-slate-800 rounded border border-slate-700 text-indigo-300 font-mono text-[10px]">Ctrl+V</kbd> เพื่อวางรูปภาพจากคลิปบอร์ด
+                        รองรับหลายรูปพร้อมกันสูงสุด 10 รูป (เช่น หน้าปก + ตารางเวลา + หน้ารายละเอียดราคา/สิ่งที่รวม) หรือกด <kbd className="px-1.5 py-0.5 bg-slate-800 rounded border border-slate-700 text-indigo-300 font-mono text-[10px]">Ctrl+V</kbd> เพื่อวางรูปภาพ
                       </p>
                     </div>
                     <div className="flex flex-wrap items-center gap-2 mt-1">
                       <span className="inline-flex items-center gap-1.5 bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-500 hover:to-purple-500 text-white font-bold px-3.5 py-2 rounded-xl text-xs shadow-md shadow-indigo-900/40 cursor-pointer">
                         <Upload className="w-4 h-4" />
-                        <span>เลือกรูปโบรชัวร์ทัวร์</span>
+                        <span>เลือกรูปโบรชัวร์ทัวร์ (เลือกได้หลายรูป)</span>
                       </span>
                     </div>
                   </div>
                 ) : (
-                  /* Image Preview & Action Controls */
-                  <div className="bg-slate-950/90 rounded-2xl border border-indigo-500/40 p-3.5 sm:p-4 space-y-3 shadow-md">
-                    <div className="flex flex-col sm:flex-row items-center sm:items-start gap-4">
-                      {/* Thumbnail Preview */}
-                      <div className="relative group shrink-0">
-                        <img
-                          src={aiImagePreview}
-                          alt="Tour details preview"
-                          className="w-32 h-32 sm:w-36 sm:h-36 object-cover rounded-xl border border-indigo-500/40 shadow-lg group-hover:scale-[1.02] transition"
+                  /* Multi-Image Gallery & Action Controls */
+                  <div className="bg-slate-950/90 rounded-2xl border border-indigo-500/40 p-3.5 sm:p-4 space-y-3.5 shadow-md">
+                    {/* Top Action Bar */}
+                    <div className="flex flex-wrap items-center justify-between gap-2 border-b border-slate-800/80 pb-2.5">
+                      <div className="flex items-center gap-2 text-xs font-bold text-white">
+                        <Layers className="w-4 h-4 text-indigo-400" />
+                        <span>รูปภาพที่เลือก ({aiImages.length} รูป / สูงสุด 10 รูป)</span>
+                        <span className="text-[10px] text-amber-300 font-normal hidden sm:inline">
+                          • คลิก "ตั้งเป็นรูปหน้าปก" เพื่อเลือกรูปปกทัวร์
+                        </span>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <button
+                          type="button"
+                          onClick={() => fileInputRef.current?.click()}
+                          disabled={aiImages.length >= 10 || isAiScanning}
+                          className="text-xs bg-indigo-950 hover:bg-indigo-900 text-indigo-200 border border-indigo-700/60 px-2.5 py-1.5 rounded-lg font-bold flex items-center gap-1 transition cursor-pointer disabled:opacity-50"
+                        >
+                          <ImagePlus className="w-3.5 h-3.5 text-indigo-400" />
+                          <span>+ เพิ่มรูปอีก</span>
+                        </button>
+                        <button
+                          type="button"
+                          onClick={handleClearAllImages}
+                          disabled={isAiScanning}
+                          className="text-xs text-slate-400 hover:text-rose-400 bg-slate-900 hover:bg-rose-950/40 border border-slate-800 px-2.5 py-1.5 rounded-lg flex items-center gap-1 transition cursor-pointer disabled:opacity-50"
+                        >
+                          <Trash2 className="w-3.5 h-3.5" />
+                          <span>ล้างทั้งหมด</span>
+                        </button>
+                      </div>
+                    </div>
+
+                    {/* Image Thumbnails Grid */}
+                    <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-3">
+                      {aiImages.map((imgItem, idx) => {
+                        const isCover = coverImageIndex === idx;
+                        return (
+                          <div
+                            key={imgItem.id}
+                            className={`relative group rounded-xl border-2 overflow-hidden transition-all bg-slate-900 flex flex-col ${
+                              isCover
+                                ? 'border-amber-400 shadow-md shadow-amber-950/40 ring-2 ring-amber-400/30'
+                                : 'border-indigo-500/30 hover:border-indigo-400/70'
+                            }`}
+                          >
+                            {/* Thumbnail */}
+                            <div className="relative aspect-square w-full bg-slate-950 overflow-hidden">
+                              <img
+                                src={imgItem.base64}
+                                alt={imgItem.name}
+                                className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-200"
+                              />
+
+                              {/* Page Badge */}
+                              <div className="absolute top-1.5 left-1.5 bg-slate-900/90 backdrop-blur-sm text-white text-[10px] font-black px-1.5 py-0.5 rounded-md border border-slate-700 shadow">
+                                #{idx + 1}
+                              </div>
+
+                              {/* Delete Button */}
+                              <button
+                                type="button"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  handleRemoveImage(idx);
+                                }}
+                                title="ลบรูปนี้"
+                                className="absolute top-1.5 right-1.5 bg-rose-600/90 hover:bg-rose-600 text-white p-1 rounded-md shadow transition cursor-pointer"
+                              >
+                                <Trash2 className="w-3.5 h-3.5" />
+                              </button>
+
+                              {/* Cover Badge Overlay */}
+                              {isCover && (
+                                <div className="absolute bottom-1.5 left-1.5 bg-gradient-to-r from-amber-500 to-yellow-400 text-slate-950 font-black text-[9px] px-1.5 py-0.5 rounded shadow flex items-center gap-1">
+                                  <Star className="w-2.5 h-2.5 fill-slate-950" />
+                                  <span>รูปหน้าปก</span>
+                                </div>
+                              )}
+                            </div>
+
+                            {/* Footer inside card */}
+                            <div className="p-2 bg-slate-950/90 flex flex-col gap-1 text-left">
+                              <span className="text-[10px] text-slate-300 font-medium truncate" title={imgItem.name}>
+                                {imgItem.name}
+                              </span>
+                              {!isCover ? (
+                                <button
+                                  type="button"
+                                  onClick={() => setCoverImageIndex(idx)}
+                                  className="text-[9px] text-indigo-300 hover:text-amber-300 bg-indigo-950/60 hover:bg-indigo-900/80 border border-indigo-700/50 rounded px-1.5 py-0.5 transition font-semibold text-center cursor-pointer flex items-center justify-center gap-1"
+                                >
+                                  <Star className="w-2.5 h-2.5" />
+                                  <span>ตั้งเป็นหน้าปก</span>
+                                </button>
+                              ) : (
+                                <span className="text-[9px] text-amber-400 font-bold flex items-center justify-center gap-1 py-0.5">
+                                  <CheckCircle2 className="w-2.5 h-2.5" />
+                                  <span>เลือกเป็นหน้าปกแล้ว</span>
+                                </span>
+                              )}
+                            </div>
+                          </div>
+                        );
+                      })}
+
+                      {/* Add More Slot */}
+                      {aiImages.length < 10 && (
+                        <button
+                          type="button"
+                          onClick={() => fileInputRef.current?.click()}
+                          className="aspect-square rounded-xl border-2 border-dashed border-indigo-500/40 hover:border-indigo-400 bg-indigo-950/20 hover:bg-indigo-950/40 text-indigo-300 flex flex-col items-center justify-center gap-1.5 p-3 transition cursor-pointer group"
+                        >
+                          <div className="w-8 h-8 rounded-full bg-indigo-500/20 group-hover:bg-indigo-500/30 flex items-center justify-center text-indigo-300 transition">
+                            <ImagePlus className="w-4 h-4" />
+                          </div>
+                          <span className="text-[11px] font-bold text-center leading-tight">
+                            + เพิ่มรูปอีก<br />
+                            <span className="text-[9px] text-slate-400 font-normal">({10 - aiImages.length} รูปที่เหลือ)</span>
+                          </span>
+                        </button>
+                      )}
+                    </div>
+
+                    {/* Options & Action Bar */}
+                    <div className="pt-2 border-t border-slate-800/80 flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3">
+                      {/* Option: Use as cover image */}
+                      <label className="flex items-center gap-2.5 cursor-pointer bg-slate-900/80 p-2.5 rounded-xl border border-slate-800 hover:border-slate-700 transition">
+                        <input
+                          type="checkbox"
+                          checked={useImageAsCover}
+                          onChange={(e) => setUseImageAsCover(e.target.checked)}
+                          className="rounded border-slate-700 text-indigo-600 focus:ring-indigo-500 w-4 h-4"
                         />
-                        <div className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 rounded-xl transition flex items-center justify-center">
-                          <button
-                            type="button"
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              fileInputRef.current?.click();
-                            }}
-                            className="text-[10px] bg-slate-900/90 text-white px-2.5 py-1.5 rounded-lg font-bold shadow"
-                          >
-                            เปลี่ยนรูป
-                          </button>
-                        </div>
-                      </div>
+                        <span className="text-xs text-slate-300 font-medium">
+                          นำรูปที่เลือก <strong className="text-amber-300 font-bold">(รูป #{coverImageIndex + 1})</strong> ไปใช้เป็น <strong className="text-cyan-300 font-bold">ภาพหน้าปกของโปรแกรมทัวร์ (Tour Cover)</strong> ด้วย
+                        </span>
+                      </label>
 
-                      {/* Info & Options */}
-                      <div className="flex-1 space-y-2.5 w-full text-left">
-                        <div className="flex items-center justify-between">
-                          <span className="text-xs font-bold text-white flex items-center gap-1.5">
-                            <FileImage className="w-4 h-4 text-indigo-400" />
-                            <span className="truncate max-w-[200px] sm:max-w-xs">{aiImageFile?.name || 'รูปภาพโบรชัวร์รายละเอียดทัวร์'}</span>
-                          </span>
-                          <button
-                            type="button"
-                            onClick={() => {
-                              setAiImagePreview(null);
-                              setAiImageFile(null);
-                              setAiScanSuccess(false);
-                              setAiScanSummary(null);
-                              setAiScanError(null);
-                            }}
-                            className="text-slate-400 hover:text-rose-400 text-xs flex items-center gap-1 transition cursor-pointer"
-                          >
-                            <Trash2 className="w-3.5 h-3.5" />
-                            <span>ลบรูปภาพ</span>
-                          </button>
-                        </div>
-
-                        {/* Option: Use as cover image */}
-                        <label className="flex items-center gap-2.5 cursor-pointer bg-slate-900/80 p-2.5 rounded-xl border border-slate-800 hover:border-slate-700 transition">
-                          <input
-                            type="checkbox"
-                            checked={useImageAsCover}
-                            onChange={(e) => setUseImageAsCover(e.target.checked)}
-                            className="rounded border-slate-700 text-indigo-600 focus:ring-indigo-500 w-4 h-4"
-                          />
-                          <span className="text-xs text-slate-300 font-medium">
-                            นำรูปภาพนี้ไปใช้เป็น <strong className="text-cyan-300 font-bold">ภาพหน้าปกของโปรแกรมทัวร์ (Tour Cover)</strong> ด้วย
-                          </span>
-                        </label>
-
-                        {/* Action Buttons */}
-                        <div className="flex flex-wrap items-center gap-2 pt-1">
-                          <button
-                            type="button"
-                            onClick={handleScanTourImage}
-                            disabled={isAiScanning}
-                            className="bg-gradient-to-r from-purple-600 via-indigo-600 to-cyan-600 hover:from-purple-500 hover:to-cyan-500 text-white font-extrabold px-4 py-2.5 rounded-xl text-xs transition flex items-center gap-2 shadow-lg shadow-indigo-950/50 cursor-pointer active:scale-95 disabled:opacity-50"
-                          >
-                            {isAiScanning ? (
-                              <>
-                                <Loader2 className="w-4 h-4 animate-spin text-amber-300" />
-                                <span>AI กำลังวิเคราะห์รูปภาพและกรอกข้อมูล...</span>
-                              </>
-                            ) : (
-                              <>
-                                <Sparkles className="w-4 h-4 text-amber-300" />
-                                <span>✨ สั่งให้ AI อ่านรายละเอียดและกรอกฟอร์มอัตโนมัติ</span>
-                              </>
-                            )}
-                          </button>
-
-                          <button
-                            type="button"
-                            onClick={() => fileInputRef.current?.click()}
-                            disabled={isAiScanning}
-                            className="bg-slate-800 hover:bg-slate-700 text-slate-300 border border-slate-700 font-bold px-3 py-2.5 rounded-xl text-xs transition flex items-center gap-1.5 cursor-pointer"
-                          >
-                            <RefreshCw className="w-3.5 h-3.5 text-slate-400" />
-                            <span>เปลี่ยนรูป</span>
-                          </button>
-                        </div>
-                      </div>
+                      {/* Scan Button */}
+                      <button
+                        type="button"
+                        onClick={handleScanTourImage}
+                        disabled={isAiScanning || aiImages.length === 0}
+                        className="bg-gradient-to-r from-purple-600 via-indigo-600 to-cyan-600 hover:from-purple-500 hover:to-cyan-500 text-white font-extrabold px-5 py-2.5 rounded-xl text-xs transition flex items-center justify-center gap-2 shadow-lg shadow-indigo-950/50 cursor-pointer active:scale-95 disabled:opacity-50 shrink-0"
+                      >
+                        {isAiScanning ? (
+                          <>
+                            <Loader2 className="w-4 h-4 animate-spin text-amber-300" />
+                            <span>AI กำลังวิเคราะห์ทั้ง {aiImages.length} รูปภาพ...</span>
+                          </>
+                        ) : (
+                          <>
+                            <Sparkles className="w-4 h-4 text-amber-300" />
+                            <span>✨ สั่งให้ AI อ่าน {aiImages.length} รูปภาพและกรอกฟอร์มอัตโนมัติ</span>
+                          </>
+                        )}
+                      </button>
                     </div>
                   </div>
                 )}
@@ -816,10 +983,10 @@ export const EditTourModal: React.FC<EditTourModalProps> = ({
                     <Loader2 className="w-5 h-5 text-indigo-400 animate-spin shrink-0" />
                     <div>
                       <div className="font-bold text-white text-xs">
-                        กำลังส่งรูปภาพให้ Gemini AI สแกนและถอดข้อความ...
+                        กำลังส่งรูปภาพทั้ง {aiImages.length} รูปให้ Gemini 3.8 Flash วิเคราะห์และถอดข้อความ...
                       </div>
                       <p className="text-[11px] text-indigo-200 mt-0.5">
-                        ระบบกำลังวิเคราะห์ชื่อโปรแกรมทัวร์, จุดหมายปลายทาง, ตารางเวลา, ราคาผู้ใหญ่/เด็ก, ไฮไลท์ท่องเที่ยว และแปล 4 ภาษาให้อัตโนมัติ
+                        ระบบกำลังวิเคราะห์และสังเคราะห์ข้อมูลจากรูปทั้งหมด: ชื่อโปรแกรมทัวร์, จุดหมายปลายทาง, ตารางเวลาการเดินทาง, ราคาผู้ใหญ่/เด็ก, ไฮไลท์ท่องเที่ยว และแปล 4 ภาษาให้อัตโนมัติ
                       </p>
                     </div>
                   </div>
@@ -830,7 +997,7 @@ export const EditTourModal: React.FC<EditTourModalProps> = ({
                   <div className="bg-rose-950/80 border border-rose-500/50 p-3.5 rounded-xl flex items-start gap-2.5 text-rose-200 text-xs shadow-md">
                     <AlertCircle className="w-4 h-4 text-rose-400 shrink-0 mt-0.5" />
                     <div className="flex-1">
-                      <div className="font-bold text-rose-300">ไม่สามารถสกัดข้อมูลจากภาพได้:</div>
+                      <div className="font-bold text-rose-300">ไม่สามารถสกัดข้อมูลจากรูปภาพได้:</div>
                       <p className="mt-0.5">{aiScanError}</p>
                     </div>
                     <button
@@ -848,7 +1015,7 @@ export const EditTourModal: React.FC<EditTourModalProps> = ({
                   <div className="bg-emerald-950/80 border border-emerald-500/60 p-3.5 rounded-xl space-y-1.5 text-xs animate-in fade-in shadow-md">
                     <div className="flex items-center gap-2 text-emerald-300 font-bold">
                       <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" />
-                      <span>🎉 AI สกัดข้อมูลและกรอกฟอร์มสำเร็จเรียบร้อยแล้ว!</span>
+                      <span>🎉 AI สกัดข้อมูลจากทั้ง {aiImages.length} รูปภาพและกรอกฟอร์มสำเร็จเรียบร้อยแล้ว!</span>
                     </div>
                     <p className="text-emerald-100 text-[11px] leading-relaxed pl-6">
                       {aiScanSummary}

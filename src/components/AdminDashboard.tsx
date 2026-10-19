@@ -2378,10 +2378,10 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                         setIsTourModalOpen(true);
                       }}
                       className="bg-gradient-to-r from-purple-600 via-indigo-600 to-cyan-600 hover:from-purple-500 hover:to-cyan-500 text-white font-extrabold px-3.5 py-2.5 rounded-xl text-xs transition flex items-center justify-center gap-2 shadow-lg shadow-purple-950/40 cursor-pointer active:scale-95 ring-1 ring-purple-400/30"
-                      title="เพิ่มโปรแกรมทัวร์ใหม่ด้วยการอัปโหลดรูปภาพโบรชัวร์ แล้วให้ AI อ่านและกรอกข้อมูลให้อัตโนมัติ"
+                      title="เพิ่มโปรแกรมทัวร์ใหม่ด้วยการอัปโหลดรูปภาพโบรชัวร์หลายๆ รูปพร้อมกัน (หน้าปก + ตารางเวลา + รายละเอียดราคา) แล้วให้ AI อ่านและกรอกข้อมูลให้อัตโนมัติ"
                     >
                       <Sparkles className="w-4 h-4 text-amber-300 animate-pulse" />
-                      <span>✨ เพิ่มทัวร์ด้วย AI สแกนรูปภาพ</span>
+                      <span>✨ เพิ่มทัวร์ด้วย AI สแกนรูปภาพ (หลายรูป)</span>
                     </button>
 
                     {/* Add New Tour Button */}

@@ -27,7 +27,8 @@ const ai = new GoogleGenAI({
   }
 });
 
-app.use(express.json({ limit: '10mb' }));
+app.use(express.json({ limit: '50mb' }));
+app.use(express.urlencoded({ limit: '50mb', extended: true }));
 
 // Authoritative Memory DB State with Supabase persistence
 let tours: Tour[] = [...initialTours];
@@ -649,36 +650,67 @@ Return ONLY valid JSON in this exact structure without markdown formatting or ba
   }
 });
 
-// AI Tour Extraction from Flyer / Image endpoint for Admin
+// AI Tour Extraction from Flyer / Image(s) endpoint for Admin (Single or Multiple Images)
 app.post('/api/extract-tour-from-image', async (req, res) => {
   try {
-    const { imageBase64, mimeType } = req.body;
-    if (!imageBase64) {
-      return res.status(400).json({ error: 'imageBase64 is required' });
+    const { images, imageBase64, mimeType } = req.body;
+    
+    // Normalize into array of images
+    const rawImages: Array<{ imageBase64: string; mimeType?: string }> = [];
+
+    if (Array.isArray(images) && images.length > 0) {
+      images.forEach((item: any) => {
+        if (typeof item === 'string' && item.trim()) {
+          rawImages.push({ imageBase64: item });
+        } else if (item && typeof item === 'object' && item.imageBase64) {
+          rawImages.push({
+            imageBase64: item.imageBase64,
+            mimeType: item.mimeType || 'image/jpeg'
+          });
+        }
+      });
+    } else if (imageBase64) {
+      rawImages.push({ imageBase64, mimeType: mimeType || 'image/jpeg' });
     }
 
-    // Clean base64 data if it contains data URI prefix
-    let cleanBase64 = imageBase64;
-    let detectedMime = mimeType || 'image/jpeg';
-    if (imageBase64.includes('base64,')) {
-      const match = imageBase64.match(/^data:([^;]+);base64,(.+)$/);
-      if (match) {
-        detectedMime = match[1] || detectedMime;
-        cleanBase64 = match[2];
+    if (rawImages.length === 0) {
+      return res.status(400).json({ error: 'At least one image is required for AI tour extraction' });
+    }
+
+    // Limit to maximum 10 images
+    const selectedImages = rawImages.slice(0, 10);
+
+    const imageParts: any[] = [];
+    selectedImages.forEach((img) => {
+      let cleanBase64 = img.imageBase64;
+      let detectedMime = img.mimeType || 'image/jpeg';
+      if (cleanBase64.includes('base64,')) {
+        const match = cleanBase64.match(/^data:([^;]+);base64,(.+)$/);
+        if (match) {
+          detectedMime = match[1] || detectedMime;
+          cleanBase64 = match[2];
+        }
       }
-    }
 
-    const imagePart = {
-      inlineData: {
-        mimeType: detectedMime,
-        data: cleanBase64,
-      },
-    };
+      imageParts.push({
+        inlineData: {
+          mimeType: detectedMime,
+          data: cleanBase64,
+        },
+      });
+    });
 
     const prompt = `You are an expert travel operations manager and itinerary specialist for Trip Sea Tour Phuket (a premier tour agency in Phuket, Thailand).
-Analyze the provided tour brochure / flyer / timetable / poster image thoroughly and extract all tour details into structured JSON.
+Analyze the provided tour brochure / flyer / timetable / poster image(s) thoroughly (${imageParts.length} page/image provided). 
+These images may contain multiple pages of a tour program, such as:
+1) Cover / Title / Overview page
+2) Pricing & Inclusions table
+3) Detailed Time Schedule / Itinerary timetable
+4) Pickup zones, conditions, and what to bring
 
-Read all Thai and English text, pricing, schedules, highlights, destinations, inclusions, terms, and notes visible in the image.
+Carefully correlate, cross-reference, and synthesize ALL details across ALL uploaded images into a single cohesive, structured JSON.
+
+Read all Thai and English text, pricing, schedules, highlights, destinations, inclusions, terms, and notes visible across all images.
 If any text is in Thai, extract it accurately and also generate high quality English (EN), Simplified Chinese (ZH), and Russian (RU) translations for multi-language fields.
 If specific prices are not explicitly written in the image, provide reasonable, realistic Phuket market rates (e.g., priceAdult: 1500-2500 THB, child ~70%).
 
@@ -741,13 +773,13 @@ Output ONLY a valid JSON object matching this exact schema (no markdown, no back
 Important:
 - "category" must be strictly one of: "island", "sunset", "yacht", "eco", "sightseeing"
 - Prices must be numbers (THB currency)
-- Ensure all itinerary steps visible in the image timetable are extracted accurately with times.`;
+- Ensure all itinerary steps visible in the timetable are extracted accurately in chronological order with start/end times.`;
 
     const textPart = { text: prompt };
 
     const aiResponse = await ai.models.generateContent({
       model: 'gemini-3.8-flash',
-      contents: { parts: [imagePart, textPart] },
+      contents: { parts: [...imageParts, textPart] },
     });
 
     const responseText = aiResponse.text || '';
@@ -756,7 +788,8 @@ Important:
 
     res.json({
       success: true,
-      data: parsed
+      data: parsed,
+      imageCount: imageParts.length
     });
   } catch (err: any) {
     console.error('Extract tour from image error:', err);
