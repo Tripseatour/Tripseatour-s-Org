@@ -1,5 +1,6 @@
 import express from 'express';
 import path from 'path';
+import fs from 'fs';
 import { createClient } from '@supabase/supabase-js';
 import { GoogleGenAI } from '@google/genai';
 import { initialTours, initialBookings, initialReviews, initialCustomers, initialSettings } from './src/data/mockData';
@@ -17,6 +18,44 @@ const supabase = (SUPABASE_URL && SUPABASE_ANON_KEY)
   ? createClient(SUPABASE_URL, SUPABASE_ANON_KEY)
   : null;
 
+// Local Disk Persistence Helpers to ensure data is permanently saved across server restarts
+const LOCAL_DATA_DIR = path.join(process.cwd(), 'data');
+
+function ensureDataDir() {
+  try {
+    if (!fs.existsSync(LOCAL_DATA_DIR)) {
+      fs.mkdirSync(LOCAL_DATA_DIR, { recursive: true });
+    }
+  } catch (e) {
+    console.warn('Could not create data directory:', e);
+  }
+}
+
+function saveLocalFile(filename: string, data: any) {
+  try {
+    ensureDataDir();
+    const filePath = path.join(LOCAL_DATA_DIR, filename);
+    fs.writeFileSync(filePath, JSON.stringify(data, null, 2), 'utf8');
+  } catch (e) {
+    console.warn(`Could not save local file ${filename}:`, e);
+  }
+}
+
+function readLocalFile<T>(filename: string, defaultValue: T): T {
+  try {
+    const filePath = path.join(LOCAL_DATA_DIR, filename);
+    if (fs.existsSync(filePath)) {
+      const raw = fs.readFileSync(filePath, 'utf8');
+      if (raw && raw.trim()) {
+        return JSON.parse(raw);
+      }
+    }
+  } catch (e) {
+    console.warn(`Could not read local file ${filename}:`, e);
+  }
+  return defaultValue;
+}
+
 // Gemini AI Client
 const ai = new GoogleGenAI({
   apiKey: process.env.GEMINI_API_KEY,
@@ -30,12 +69,23 @@ const ai = new GoogleGenAI({
 app.use(express.json({ limit: '50mb' }));
 app.use(express.urlencoded({ limit: '50mb', extended: true }));
 
-// Authoritative Memory DB State with Supabase persistence
-let tours: Tour[] = [...initialTours];
-let bookings: Booking[] = [...initialBookings];
-let reviews: Review[] = [...initialReviews];
-let customers: Customer[] = [...initialCustomers];
-let settings: AppSettings = { ...initialSettings };
+// Tombstone set for permanently deleted tours
+let deletedTourIds = new Set<string>(readLocalFile<string[]>('deleted_tour_ids.json', []));
+
+// Authoritative Memory DB State with local disk and Supabase persistence
+let tours: Tour[] = (() => {
+  const localSaved = readLocalFile<Tour[] | null>('tours.json', null);
+  if (localSaved && Array.isArray(localSaved) && localSaved.length > 0) {
+    return normalizeTours(localSaved).filter(t => !deletedTourIds.has(t.id) && !deletedTourIds.has(t.slug));
+  }
+  const defaults = normalizeTours(initialTours).filter(t => !deletedTourIds.has(t.id) && !deletedTourIds.has(t.slug));
+  saveLocalFile('tours.json', defaults);
+  return defaults;
+})();
+let bookings: Booking[] = readLocalFile<Booking[]>('bookings.json', [...initialBookings]);
+let reviews: Review[] = readLocalFile<Review[]>('reviews.json', [...initialReviews]);
+let customers: Customer[] = readLocalFile<Customer[]>('customers.json', [...initialCustomers]);
+let settings: AppSettings = readLocalFile<AppSettings>('settings.json', { ...initialSettings });
 let detectedLineGroups: Array<{ groupId: string; groupName?: string; lastSeen: string }> = [
   {
     groupId: 'C1bb0d71ad5dbb960801dad6bd5208afa',
@@ -113,10 +163,18 @@ async function loadStateFromSupabase() {
     const { data: kvTours } = await supabase.from('app_store').select('value').eq('key', 'tours').maybeSingle();
     if (kvTours && kvTours.value !== undefined && kvTours.value !== null) {
       try {
-        tours = normalizeTours(JSON.parse(kvTours.value));
+        const loaded = normalizeTours(JSON.parse(kvTours.value));
+        if (loaded && loaded.length > 0) {
+          tours = loaded.filter(t => !deletedTourIds.has(t.id) && !deletedTourIds.has(t.slug));
+          saveLocalFile('tours.json', tours);
+        } else if (tours.length === 0) {
+          tours = normalizeTours(initialTours).filter(t => !deletedTourIds.has(t.id) && !deletedTourIds.has(t.slug));
+          saveLocalFile('tours.json', tours);
+          await persistState('tours');
+        }
       } catch (e) {}
     } else {
-      tours = normalizeTours(initialTours);
+      tours = tours.filter(t => !deletedTourIds.has(t.id) && !deletedTourIds.has(t.slug));
     }
   } catch (e) {
     console.warn('Could not load tours from Supabase:', e);
@@ -239,6 +297,26 @@ export function updateSyncMetadata(key?: 'tours' | 'bookings' | 'reviews' | 'cus
 
 async function persistState(key: 'tours' | 'bookings' | 'settings' | 'reviews' | 'customers') {
   updateSyncMetadata(key);
+
+  // 1. Always save to local file on disk for 100% permanent persistence
+  try {
+    if (key === 'tours') {
+      saveLocalFile('tours.json', tours);
+      saveLocalFile('deleted_tour_ids.json', Array.from(deletedTourIds));
+    } else if (key === 'bookings') {
+      saveLocalFile('bookings.json', bookings);
+    } else if (key === 'settings') {
+      saveLocalFile('settings.json', settings);
+    } else if (key === 'reviews') {
+      saveLocalFile('reviews.json', reviews);
+    } else if (key === 'customers') {
+      saveLocalFile('customers.json', customers);
+    }
+  } catch (localErr) {
+    console.warn(`Local file save error for ${key}:`, localErr);
+  }
+
+  // 2. Sync to Supabase if configured
   if (!supabase) return;
   try {
     let val = '';
@@ -489,7 +567,13 @@ app.get('/api/sync-status', (req, res) => {
 });
 // --- Tours ---
 app.get('/api/tours', (req, res) => {
-  res.json(normalizeTours(tours));
+  const activeTours = tours.filter(t => !deletedTourIds.has(t.id) && !deletedTourIds.has(t.slug));
+  res.json(normalizeTours(activeTours));
+});
+
+// Endpoint to retrieve deleted tour IDs
+app.get('/api/tours/deleted-ids', (req, res) => {
+  res.json({ deletedTourIds: Array.from(deletedTourIds) });
 });
 
 app.post('/api/tours', async (req, res) => {
@@ -499,7 +583,7 @@ app.post('/api/tours', async (req, res) => {
     slug: req.body.slug || `tour-${Date.now()}`
   };
   tours.unshift(newTour);
-  tours = normalizeTours(tours);
+  tours = normalizeTours(tours).filter(t => !deletedTourIds.has(t.id) && !deletedTourIds.has(t.slug));
   await persistState('tours');
   res.json({ ...tours[0], version: syncMetadata.version });
 });
@@ -509,7 +593,7 @@ app.put('/api/tours/:id', async (req, res) => {
   const index = tours.findIndex(t => t.id === id);
   if (index !== -1) {
     tours[index] = { ...tours[index], ...req.body };
-    tours = normalizeTours(tours);
+    tours = normalizeTours(tours).filter(t => !deletedTourIds.has(t.id) && !deletedTourIds.has(t.slug));
     await persistState('tours');
     res.json({ ...tours[index], version: syncMetadata.version });
   } else {
@@ -519,9 +603,23 @@ app.put('/api/tours/:id', async (req, res) => {
 
 app.delete('/api/tours/:id', async (req, res) => {
   const { id } = req.params;
-  tours = tours.filter(t => t.id !== id);
+  const target = tours.find(t => t.id === id || t.slug === id);
+  deletedTourIds.add(id);
+  if (target?.id) deletedTourIds.add(target.id);
+  if (target?.slug) deletedTourIds.add(target.slug);
+
+  tours = tours.filter(t => t.id !== id && t.slug !== id && !deletedTourIds.has(t.id));
   await persistState('tours');
-  res.json({ success: true, id, version: syncMetadata.version });
+  saveLocalFile('deleted_tour_ids.json', Array.from(deletedTourIds));
+
+  console.log(`[Permanently Deleted Tour]: ${id} (${target?.title?.TH || ''}), remaining tours: ${tours.length}`);
+
+  res.json({
+    success: true,
+    id,
+    deletedTourIds: Array.from(deletedTourIds),
+    version: syncMetadata.version
+  });
 });
 
 // Save all tours in batch / overwrite all tours
@@ -531,7 +629,7 @@ app.post('/api/tours/save-all', async (req, res) => {
     if (!Array.isArray(incomingTours)) {
       return res.status(400).json({ error: 'tours payload must be an array' });
     }
-    tours = normalizeTours(incomingTours);
+    tours = normalizeTours(incomingTours).filter(t => !deletedTourIds.has(t.id) && !deletedTourIds.has(t.slug));
     await persistState('tours');
     res.json({
       success: true,
@@ -546,15 +644,18 @@ app.post('/api/tours/save-all', async (req, res) => {
   }
 });
 
-// Reset tours to default initial tours
+// Reset tours to default initial tours (clears deleted list upon explicit user request)
 app.post('/api/tours/reset-default', async (req, res) => {
   try {
+    deletedTourIds.clear();
+    saveLocalFile('deleted_tour_ids.json', []);
     tours = normalizeTours([...initialTours]);
     await persistState('tours');
     res.json({
       success: true,
       count: tours.length,
       tours,
+      deletedTourIds: [],
       version: syncMetadata.version,
       lastUpdatedAt: syncMetadata.lastUpdatedAt.tours
     });

@@ -22,7 +22,10 @@ export const ItineraryModal: React.FC<ItineraryModalProps> = ({
 
   const t = translations[currentLang];
   const title = tour.title[currentLang] || tour.title.TH;
-  const duration = tour.duration[currentLang] || tour.duration.TH;
+  const duration = tour.duration?.[currentLang] || tour.duration?.TH || '';
+  const tourImage = (Array.isArray(tour.images) && tour.images.length > 0 && tour.images[0])
+    ? tour.images[0]
+    : ((tour as any).image || 'https://images.unsplash.com/photo-1507525428034-b723cf961d3e?auto=format&fit=crop&w=1200&q=80');
 
   return (
     <div className="fixed inset-0 z-50 bg-slate-950/80 backdrop-blur-md flex items-center justify-center p-3 sm:p-4 overflow-y-auto animate-in fade-in duration-200">
@@ -30,7 +33,7 @@ export const ItineraryModal: React.FC<ItineraryModalProps> = ({
         {/* Modal Header */}
         <div className="relative h-44 sm:h-52 overflow-hidden bg-slate-800">
           <img
-            src={tour.images[0]}
+            src={tourImage}
             alt={title}
             className="w-full h-full object-cover"
           />

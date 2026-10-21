@@ -2645,8 +2645,8 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                           {/* Image & Badges */}
                           <div className="relative aspect-video bg-slate-950 overflow-hidden">
                             <img
-                              src={tr.images[0]}
-                              alt={tr.title.TH}
+                              src={(Array.isArray(tr.images) && tr.images[0]) ? tr.images[0] : ((tr as any).image || 'https://images.unsplash.com/photo-1507525428034-b723cf961d3e?auto=format&fit=crop&w=1200&q=80')}
+                              alt={tr.title?.TH || 'Tour'}
                               className={`w-full h-full object-cover transition duration-300 ${!isVis ? 'grayscale-[25%] opacity-85' : ''}`}
                             />
                             <div className="absolute inset-0 bg-gradient-to-t from-slate-950/80 via-transparent to-black/40" />

@@ -27,10 +27,18 @@ export const TourCard: React.FC<TourCardProps> = ({
 }) => {
   const t = translations[currentLang];
 
-  const title = tour.title[currentLang] || tour.title.TH;
-  const description = tour.description[currentLang] || tour.description.TH;
-  const duration = tour.duration[currentLang] || tour.duration.TH;
-  const highlights = tour.highlights[currentLang] || tour.highlights.TH;
+  const title = tour.title?.[currentLang] || tour.title?.TH || 'ทัวร์ภูเก็ต';
+  const description = tour.description?.[currentLang] || tour.description?.TH || '';
+  const duration = tour.duration?.[currentLang] || tour.duration?.TH || '08:00 - 17:00 น.';
+  const highlights = (Array.isArray(tour.highlights?.[currentLang]) && tour.highlights[currentLang].length)
+    ? tour.highlights[currentLang]
+    : (Array.isArray(tour.highlights?.TH) ? tour.highlights.TH : []);
+  const coverImage = (Array.isArray(tour.images) && tour.images.length > 0 && tour.images[0])
+    ? tour.images[0]
+    : ((tour as any).image || 'https://images.unsplash.com/photo-1507525428034-b723cf961d3e?auto=format&fit=crop&w=1200&q=80');
+  const categoryBadge = tour.categoryLabel?.[currentLang] || tour.categoryLabel?.TH || tour.category || 'Phuket Tour';
+  const durationDisplay = duration ? duration.split('(')[0] : '';
+  const locationDisplay = tour.location ? tour.location.split(',')[0] : 'ภูเก็ต';
 
   return (
     <div className="group bg-white rounded-2xl border border-sky-100/80 hover:border-cyan-300 shadow-sm hover:shadow-xl hover:shadow-cyan-900/10 transition-all duration-300 flex flex-col justify-between overflow-hidden hover:-translate-y-1">
@@ -38,7 +46,7 @@ export const TourCard: React.FC<TourCardProps> = ({
       <div>
         <div className="relative aspect-[16/10] overflow-hidden bg-slate-900">
           <img
-            src={tour.images[0]}
+            src={coverImage}
             alt={title}
             className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
             loading="lazy"
@@ -48,7 +56,7 @@ export const TourCard: React.FC<TourCardProps> = ({
           {/* Top Badges */}
           <div className="absolute top-3 left-3 flex flex-wrap gap-1.5 z-10">
             <span className="bg-gradient-to-r from-cyan-600 to-sky-600 text-white text-[11px] font-extrabold px-2.5 py-1 rounded-lg border border-cyan-400/40 shadow-sm uppercase tracking-wider">
-              {tour.categoryLabel[currentLang] || tour.categoryLabel.TH}
+              {categoryBadge}
             </span>
             {tour.originalPriceAdult && (
               <span className="bg-rose-600 text-white text-[10px] font-black px-2 py-0.5 rounded-md uppercase tracking-wider shadow-sm">
@@ -60,19 +68,19 @@ export const TourCard: React.FC<TourCardProps> = ({
           {/* Rating Badge */}
           <div className="absolute top-3 right-3 bg-white/95 backdrop-blur-md px-2.5 py-1 rounded-lg shadow-sm flex items-center gap-1 text-slate-800 text-xs font-bold z-10 border border-slate-100">
             <Star className="w-3.5 h-3.5 fill-amber-400 text-amber-400" />
-            <span>{tour.rating}</span>
-            <span className="text-[10px] text-slate-500 font-normal">({tour.reviewCount})</span>
+            <span>{tour.rating || 4.9}</span>
+            <span className="text-[10px] text-slate-500 font-normal">({tour.reviewCount || 128})</span>
           </div>
 
           {/* Location & Duration on Image bottom */}
           <div className="absolute bottom-2.5 left-3 right-3 flex items-center justify-between text-white text-xs z-10">
             <span className="inline-flex items-center gap-1 bg-slate-900/80 backdrop-blur-sm px-2.5 py-1 rounded-md text-[11px] font-medium border border-cyan-500/20">
               <Clock className="w-3 h-3 text-cyan-300" />
-              {duration.split('(')[0]}
+              {durationDisplay}
             </span>
             <span className="inline-flex items-center gap-1 bg-slate-900/80 backdrop-blur-sm px-2.5 py-1 rounded-md text-[11px] font-medium border border-cyan-500/20">
               <MapPin className="w-3 h-3 text-cyan-400" />
-              {tour.location.split(',')[0]}
+              {locationDisplay}
             </span>
           </div>
         </div>

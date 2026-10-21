@@ -39,8 +39,11 @@ const STANDARD_CATEGORY_LABELS: Record<string, Record<Language, string>> = {
  * Fixes any corrupted or missing language fields from localStorage or older database backups.
  */
 export function normalizeTours(toursList: Tour[]): Tour[] {
-  if (!Array.isArray(toursList) || toursList.length === 0) {
+  if (!Array.isArray(toursList)) {
     return initialTours;
+  }
+  if (toursList.length === 0) {
+    return [];
   }
 
   const initialMap = new Map<string, Tour>(initialTours.map(t => [t.id, t]));
@@ -48,11 +51,35 @@ export function normalizeTours(toursList: Tour[]): Tour[] {
   return toursList.map((tour) => {
     const defaultTour = initialMap.get(tour.id);
 
+    const fallbackImg = 'https://images.unsplash.com/photo-1507525428034-b723cf961d3e?auto=format&fit=crop&w=1200&q=80';
+    let safeImages: string[] = [];
+    if (Array.isArray(tour.images) && tour.images.length > 0) {
+      safeImages = tour.images.filter(img => typeof img === 'string' && img.trim().length > 0);
+    }
+    if (safeImages.length === 0 && (tour as any).image && typeof (tour as any).image === 'string') {
+      safeImages = [(tour as any).image];
+    }
+    if (safeImages.length === 0 && defaultTour?.images && defaultTour.images.length > 0) {
+      safeImages = [...defaultTour.images];
+    }
+    if (safeImages.length === 0) {
+      safeImages = [fallbackImg];
+    }
+
     // If it's one of our standard tours, merge with initialTour to ensure full translations
     if (defaultTour) {
       return {
         ...defaultTour,
         ...tour,
+        slug: tour.slug || defaultTour.slug || tour.id,
+        images: safeImages,
+        location: tour.location || defaultTour.location || 'ภูเก็ต (Phuket)',
+        rating: Number(tour.rating) || defaultTour.rating || 4.9,
+        reviewCount: Number(tour.reviewCount) || defaultTour.reviewCount || 128,
+        priceAdult: Number(tour.priceAdult) || defaultTour.priceAdult || 1500,
+        priceChild: Number(tour.priceChild) || defaultTour.priceChild || 1000,
+        priceInfant: Number(tour.priceInfant) || defaultTour.priceInfant || 0,
+        tags: Array.isArray(tour.tags) && tour.tags.length ? tour.tags : defaultTour.tags,
         title: {
           TH: tour.title?.TH || defaultTour.title.TH,
           EN: (tour.title?.EN && tour.title.EN !== tour.title?.TH) ? tour.title.EN : defaultTour.title.EN,
@@ -135,6 +162,15 @@ export function normalizeTours(toursList: Tour[]): Tour[] {
 
     return {
       ...tour,
+      slug: tour.slug || tour.id,
+      images: safeImages,
+      location: tour.location || 'ภูเก็ต (Phuket)',
+      rating: Number(tour.rating) || 4.9,
+      reviewCount: Number(tour.reviewCount) || 88,
+      priceAdult: Number(tour.priceAdult) || 1500,
+      priceChild: Number(tour.priceChild) || 1000,
+      priceInfant: Number(tour.priceInfant) || 0,
+      tags: Array.isArray(tour.tags) && tour.tags.length ? tour.tags : [catLabels.TH, 'Phuket Tour'],
       title: { TH: titleTH, EN: titleEN, ZH: titleZH, RU: titleRU },
       categoryLabel: {
         TH: tour.categoryLabel?.TH || catLabels.TH,

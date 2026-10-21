@@ -70,11 +70,24 @@ export default function App() {
   });
   const [isAdminAuthModalOpen, setIsAdminAuthModalOpen] = useState<boolean>(false);
 
-  // Backend Data with localStorage cache
+  // Tombstone list of permanently deleted tour IDs to prevent bounce back
+  const [deletedTourIds, setDeletedTourIds] = useState<string[]>(() => {
+    try {
+      const saved = localStorage.getItem('tst_deleted_tour_ids');
+      return saved ? JSON.parse(saved) : [];
+    } catch {
+      return [];
+    }
+  });
+
+  // Backend Data with localStorage cache and deleted tombstone filter
   const [tours, setTours] = useState<Tour[]>(() => {
     try {
+      const savedDeleted = localStorage.getItem('tst_deleted_tour_ids');
+      const tombstoneList: string[] = savedDeleted ? JSON.parse(savedDeleted) : [];
       const saved = localStorage.getItem('tst_tours');
-      return saved ? normalizeTours(JSON.parse(saved)) : initialTours;
+      const loadedTours: Tour[] = saved ? normalizeTours(JSON.parse(saved)) : initialTours;
+      return loadedTours.filter(t => !tombstoneList.includes(t.id) && !tombstoneList.includes(t.slug));
     } catch {
       return initialTours;
     }
@@ -249,15 +262,32 @@ export default function App() {
         return;
       }
 
-      // 1. Check server version first
+      // 1. Check server version and deleted tour IDs
       let serverVersion: number | null = null;
+      let serverDeletedIds: string[] = [];
       try {
-        const syncRes = await fetch('/api/sync-status', { cache: 'no-store' });
-        if (syncRes.ok) {
+        const [syncRes, delRes] = await Promise.all([
+          fetch('/api/sync-status', { cache: 'no-store' }).catch(() => null),
+          fetch('/api/tours/deleted-ids', { cache: 'no-store' }).catch(() => null)
+        ]);
+        if (syncRes && syncRes.ok) {
           const syncData = await syncRes.json();
           serverVersion = syncData.version;
         }
+        if (delRes && delRes.ok) {
+          const delData = await delRes.json();
+          if (Array.isArray(delData.deletedTourIds)) {
+            serverDeletedIds = delData.deletedTourIds;
+          }
+        }
       } catch (e) {}
+
+      // Combine local tombstone and server tombstone list
+      const latestDeletedIds = Array.from(new Set([...deletedTourIds, ...serverDeletedIds]));
+      if (serverDeletedIds.length > 0 && serverDeletedIds.some(id => !deletedTourIds.includes(id))) {
+        setDeletedTourIds(latestDeletedIds);
+        localStorage.setItem('tst_deleted_tour_ids', JSON.stringify(latestDeletedIds));
+      }
 
       // If server version has NOT changed and we are not forcing reload, skip heavy re-renders
       if (!forceReload && serverVersion !== null && serverVersion === lastServerVersionRef.current && lastServerVersionRef.current > 0) {
@@ -314,10 +344,9 @@ export default function App() {
       if (serverTours === null) {
         const directTours = await supabaseApi.getTours();
         if (directTours !== null) {
-          serverTours = directTours;
+          serverTours = directTours.filter(t => !latestDeletedIds.includes(t.id) && !latestDeletedIds.includes(t.slug));
         } else {
-          serverTours = initialTours;
-          supabaseApi.saveTours(initialTours).catch(() => {});
+          serverTours = initialTours.filter(t => !latestDeletedIds.includes(t.id) && !latestDeletedIds.includes(t.slug));
         }
       }
       if (serverCustomers === null) {
@@ -339,9 +368,10 @@ export default function App() {
         }
       }
 
-      // Update state & replace localStorage cache authoritatively
+      // Update state & replace localStorage cache authoritatively (excluding permanently deleted tours)
       if (serverTours && Array.isArray(serverTours)) {
-        const normalized = normalizeTours(serverTours);
+        const filteredTours = serverTours.filter(t => !latestDeletedIds.includes(t.id) && !latestDeletedIds.includes(t.slug));
+        const normalized = normalizeTours(filteredTours);
         setTours(normalized);
         localStorage.setItem('tst_tours', JSON.stringify(normalized));
       }
@@ -852,29 +882,52 @@ export default function App() {
   const handleDeleteTour = async (id: string) => {
     try {
       lastMutationTimeRef.current = Date.now();
-      const nextTours = tours.filter(t => t.id !== id);
-      setTours(nextTours);
-      localStorage.setItem('tst_tours', JSON.stringify(nextTours));
-      showToast('🗑️ ลบโปรแกรมทัวร์เรียบร้อย');
 
-      // Sync to Supabase
-      supabaseApi.saveTours(nextTours).catch(() => {});
+      // Find target tour to get both its id and slug
+      const targetTour = tours.find(t => t.id === id || t.slug === id);
+      const idsToExclude = new Set<string>([id]);
+      if (targetTour?.id) idsToExclude.add(targetTour.id);
+      if (targetTour?.slug) idsToExclude.add(targetTour.slug);
+
+      // Record in tombstone list permanently in state & localStorage
+      const updatedDeletedIds = Array.from(new Set([...deletedTourIds, ...Array.from(idsToExclude)]));
+      setDeletedTourIds(updatedDeletedIds);
+      localStorage.setItem('tst_deleted_tour_ids', JSON.stringify(updatedDeletedIds));
+
+      // Update tours state immediately using functional setter to guarantee no stale data
+      let remainingTours: Tour[] = [];
+      setTours(prevTours => {
+        remainingTours = prevTours.filter(t => !idsToExclude.has(t.id) && !idsToExclude.has(t.slug));
+        localStorage.setItem('tst_tours', JSON.stringify(remainingTours));
+        return remainingTours;
+      });
+
+      showToast('🗑️ ลบโปรแกรมทัวร์ถาวรเรียบร้อย');
+
+      // Sync remaining tours to Supabase
+      supabaseApi.saveTours(remainingTours).catch(() => {});
 
       // Sync to Express API
-      const res = await fetch(`/api/tours/${id}`, { method: 'DELETE' }).catch(() => null);
+      const res = await fetch(`/api/tours/${encodeURIComponent(id)}`, { method: 'DELETE' }).catch(() => null);
       if (res && res.ok) {
         const data = await res.json().catch(() => ({}));
         if (data.version) lastServerVersionRef.current = data.version;
+        if (Array.isArray(data.deletedTourIds)) {
+          const merged = Array.from(new Set([...updatedDeletedIds, ...data.deletedTourIds]));
+          setDeletedTourIds(merged);
+          localStorage.setItem('tst_deleted_tour_ids', JSON.stringify(merged));
+        }
       }
     } catch (err) {
-      console.error(err);
+      console.error('Delete tour error:', err);
     }
   };
 
   const handleSaveAllTours = async (toursToSave: Tour[]): Promise<boolean> => {
     try {
       lastMutationTimeRef.current = Date.now();
-      const normalized = normalizeTours(toursToSave);
+      const filtered = toursToSave.filter(t => !deletedTourIds.includes(t.id) && !deletedTourIds.includes(t.slug));
+      const normalized = normalizeTours(filtered);
       setTours(normalized);
       localStorage.setItem('tst_tours', JSON.stringify(normalized));
 
@@ -907,6 +960,10 @@ export default function App() {
   const handleResetToursToDefault = async () => {
     try {
       lastMutationTimeRef.current = Date.now();
+      // Clear tombstone list when admin explicitly clicks reset to default
+      setDeletedTourIds([]);
+      localStorage.removeItem('tst_deleted_tour_ids');
+
       const defaultList = normalizeTours([...initialTours]);
       setTours(defaultList);
       localStorage.setItem('tst_tours', JSON.stringify(defaultList));

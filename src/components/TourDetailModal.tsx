@@ -62,36 +62,44 @@ export const TourDetailModal: React.FC<TourDetailModalProps> = ({
         {/* Scrollable Modal Body */}
         <div className="p-5 overflow-y-auto space-y-6 flex-1 text-sm">
           {/* Gallery */}
-          <div className="space-y-3">
-            <div className="aspect-[16/9] rounded-2xl overflow-hidden bg-slate-100 shadow-inner relative">
-              <img
-                src={tour.images[activeImageIndex] || tour.images[0]}
-                alt={title}
-                className="w-full h-full object-cover"
-              />
-              <div className="absolute bottom-3 right-3 bg-black/60 backdrop-blur-md text-white text-xs font-semibold px-3 py-1 rounded-full flex items-center gap-1.5">
-                <Star className="w-4 h-4 fill-amber-400 text-amber-400" />
-                <span>{tour.rating} ({tour.reviewCount} {t.reviews})</span>
-              </div>
-            </div>
+          {(() => {
+            const tourImages = (Array.isArray(tour.images) && tour.images.length > 0)
+              ? tour.images
+              : [(tour as any).image || 'https://images.unsplash.com/photo-1507525428034-b723cf961d3e?auto=format&fit=crop&w=1200&q=80'];
+            const currentImg = tourImages[activeImageIndex] || tourImages[0];
+            return (
+              <div className="space-y-3">
+                <div className="aspect-[16/9] rounded-2xl overflow-hidden bg-slate-100 shadow-inner relative">
+                  <img
+                    src={currentImg}
+                    alt={title}
+                    className="w-full h-full object-cover"
+                  />
+                  <div className="absolute bottom-3 right-3 bg-black/60 backdrop-blur-md text-white text-xs font-semibold px-3 py-1 rounded-full flex items-center gap-1.5">
+                    <Star className="w-4 h-4 fill-amber-400 text-amber-400" />
+                    <span>{tour.rating || 4.9} ({tour.reviewCount || 128} {t.reviews})</span>
+                  </div>
+                </div>
 
-            {/* Thumbnail Selectors */}
-            {tour.images.length > 1 && (
-              <div className="flex gap-2 overflow-x-auto pb-1">
-                {tour.images.map((img, idx) => (
-                  <button
-                    key={idx}
-                    onClick={() => setActiveImageIndex(idx)}
-                    className={`w-20 h-14 rounded-xl overflow-hidden shrink-0 border-2 transition ${
-                      activeImageIndex === idx ? 'border-cyan-500 ring-2 ring-cyan-200' : 'border-transparent opacity-70 hover:opacity-100'
-                    }`}
-                  >
-                    <img src={img} alt="thumb" className="w-full h-full object-cover" />
-                  </button>
-                ))}
+                {/* Thumbnail Selectors */}
+                {tourImages.length > 1 && (
+                  <div className="flex gap-2 overflow-x-auto pb-1">
+                    {tourImages.map((img, idx) => (
+                      <button
+                        key={idx}
+                        onClick={() => setActiveImageIndex(idx)}
+                        className={`w-20 h-14 rounded-xl overflow-hidden shrink-0 border-2 transition ${
+                          activeImageIndex === idx ? 'border-cyan-500 ring-2 ring-cyan-200' : 'border-transparent opacity-70 hover:opacity-100'
+                        }`}
+                      >
+                        <img src={img} alt="thumb" className="w-full h-full object-cover" />
+                      </button>
+                    ))}
+                  </div>
+                )}
               </div>
-            )}
-          </div>
+            );
+          })()}
 
           {/* Key Facts Bar */}
           <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 bg-slate-50 border border-slate-200/80 p-3.5 rounded-2xl">
