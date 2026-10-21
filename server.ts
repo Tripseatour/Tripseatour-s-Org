@@ -878,12 +878,18 @@ Important:
 
     const textPart = { text: prompt };
 
-    const aiResponse = await ai.models.generateContent({
-      model: 'gemini-3.8-flash',
-      contents: { parts: [...imageParts, textPart] },
-    });
+    let responseText = '';
+    try {
+      const aiResponse = await ai.models.generateContent({
+        model: 'gemini-3.8-flash',
+        contents: { parts: [...imageParts, textPart] },
+      });
+      responseText = aiResponse.text || '';
+    } catch (primaryErr: any) {
+      console.warn('Model gemini-3.8-flash failed:', primaryErr?.message);
+      throw new Error(primaryErr?.message || 'AI extraction failed');
+    }
 
-    const responseText = aiResponse.text || '';
     const cleanJson = responseText.replace(/```json\s*|```/g, '').trim();
     const parsed = JSON.parse(cleanJson);
 
