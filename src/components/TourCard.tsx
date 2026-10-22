@@ -40,6 +40,10 @@ export const TourCard: React.FC<TourCardProps> = ({
   const durationDisplay = duration ? duration.split('(')[0] : '';
   const locationDisplay = tour.location ? tour.location.split(',')[0] : 'ภูเก็ต';
 
+  const isForeignLang = currentLang !== 'TH';
+  const effectivePriceAdult = isForeignLang && tour.priceForeignAdult ? tour.priceForeignAdult : tour.priceAdult;
+  const effectiveOriginalPriceAdult = isForeignLang && tour.originalPriceForeignAdult ? tour.originalPriceForeignAdult : tour.originalPriceAdult;
+
   return (
     <div className="group bg-white rounded-2xl border border-sky-100/80 hover:border-cyan-300 shadow-sm hover:shadow-xl hover:shadow-cyan-900/10 transition-all duration-300 flex flex-col justify-between overflow-hidden hover:-translate-y-1">
       {/* Tour Image & Badges */}
@@ -58,9 +62,14 @@ export const TourCard: React.FC<TourCardProps> = ({
             <span className="bg-gradient-to-r from-cyan-600 to-sky-600 text-white text-[11px] font-extrabold px-2.5 py-1 rounded-lg border border-cyan-400/40 shadow-sm uppercase tracking-wider">
               {categoryBadge}
             </span>
-            {tour.originalPriceAdult && (
+            {isForeignLang && (
+              <span className="bg-sky-800 text-sky-100 text-[10px] font-bold px-2 py-0.5 rounded-md border border-sky-500/50 shadow-sm">
+                🌍 Foreigner Rate
+              </span>
+            )}
+            {effectiveOriginalPriceAdult && (
               <span className="bg-rose-600 text-white text-[10px] font-black px-2 py-0.5 rounded-md uppercase tracking-wider shadow-sm">
-                {Math.round(((tour.originalPriceAdult - tour.priceAdult) / tour.originalPriceAdult) * 100)}% OFF
+                {Math.round(((effectiveOriginalPriceAdult - effectivePriceAdult) / effectiveOriginalPriceAdult) * 100)}% OFF
               </span>
             )}
           </div>
@@ -113,18 +122,18 @@ export const TourCard: React.FC<TourCardProps> = ({
             <div>
               <span className="text-[10px] uppercase font-bold text-slate-400 block">{t.from}</span>
               <div className="flex items-baseline gap-1.5">
-                {tour.originalPriceAdult && (
+                {effectiveOriginalPriceAdult && (
                   <span className="text-xs text-slate-400 line-through font-medium">
-                    {formatPrice(tour.originalPriceAdult, currentCurrency as Currency)}
+                    {formatPrice(effectiveOriginalPriceAdult, currentCurrency as Currency)}
                   </span>
                 )}
                 <span className="text-2xl font-black text-sky-950">
-                  {formatPrice(tour.priceAdult, currentCurrency as Currency)}
+                  {formatPrice(effectivePriceAdult, currentCurrency as Currency)}
                 </span>
                 <span className="text-[11px] text-slate-500 font-normal">/{t.adult}</span>
                 {currentCurrency !== 'THB' && (
                   <span className="text-[10px] text-slate-400 ml-1">
-                    (฿{tour.priceAdult.toLocaleString()})
+                    (฿{effectivePriceAdult.toLocaleString()})
                   </span>
                 )}
               </div>

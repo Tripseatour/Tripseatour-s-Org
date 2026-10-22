@@ -50,9 +50,11 @@ export const BookingModal: React.FC<BookingModalProps> = ({
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [completedBooking, setCompletedBooking] = useState<Booking | null>(null);
 
-  // Price Calculation
-  const priceAdult = tour?.priceAdult || 0;
-  const priceChild = tour?.priceChild || 0;
+  const [isForeigner, setIsForeigner] = useState<boolean>(currentLang !== 'TH');
+
+  // Price Calculation according to Nationality / Rate Category
+  const priceAdult = isForeigner && tour?.priceForeignAdult ? tour.priceForeignAdult : (tour?.priceAdult || 0);
+  const priceChild = isForeigner && tour?.priceForeignChild ? tour.priceForeignChild : (tour?.priceChild || 0);
   const totalAmount = (adults * priceAdult) + (children * priceChild);
 
   // Generate PromptPay QR Data URL
@@ -110,6 +112,7 @@ export const BookingModal: React.FC<BookingModalProps> = ({
         adults,
         children,
         infants,
+        isForeigner,
         totalAmount,
       };
 
@@ -355,13 +358,48 @@ export const BookingModal: React.FC<BookingModalProps> = ({
                 />
               </div>
 
+              {/* Rate Category Selector (Thai vs Foreigner) */}
+              <div className="bg-sky-50 border border-sky-200/90 p-3 rounded-2xl flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-2.5">
+                <div>
+                  <span className="font-extrabold text-xs text-sky-950 flex items-center gap-1">
+                    <span>🏷️ เลือกอัตราเรทราคา (Rate Category)</span>
+                  </span>
+                  <p className="text-[11px] text-slate-600 mt-0.5">
+                    {isForeigner
+                      ? '🌍 ราคาชาวต่างชาติ (รวมค่าธรรมเนียมอุทยานต่างชาติแล้ว)'
+                      : '🇹🇭 ราคาสำหรับสัญชาติไทย (แสดงบัตรประชาชนในวันเดินทาง)'}
+                  </p>
+                </div>
+
+                <div className="flex items-center gap-1 bg-white p-1 rounded-xl border border-sky-300 shrink-0">
+                  <button
+                    type="button"
+                    onClick={() => setIsForeigner(false)}
+                    className={`px-3 py-1 rounded-lg text-xs font-bold transition cursor-pointer ${
+                      !isForeigner ? 'bg-cyan-600 text-white shadow-xs' : 'text-slate-600 hover:bg-slate-100'
+                    }`}
+                  >
+                    🇹🇭 คนไทย
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setIsForeigner(true)}
+                    className={`px-3 py-1 rounded-lg text-xs font-bold transition cursor-pointer ${
+                      isForeigner ? 'bg-cyan-600 text-white shadow-xs' : 'text-slate-600 hover:bg-slate-100'
+                    }`}
+                  >
+                    🌍 ต่างชาติ (Foreigner)
+                  </button>
+                </div>
+              </div>
+
               {/* Guest Counters */}
               <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 bg-slate-50 border border-slate-200 p-3.5 rounded-2xl">
                 {/* Adult */}
                 <div className="space-y-1">
                   <div className="flex justify-between text-xs">
                     <span className="font-bold text-slate-800">{t.adult}</span>
-                    <span className="text-cyan-700 font-bold">฿{tour.priceAdult.toLocaleString()}</span>
+                    <span className="text-cyan-700 font-bold">฿{priceAdult.toLocaleString()}</span>
                   </div>
                   <div className="flex items-center justify-between bg-white border border-slate-300 rounded-xl p-1">
                     <button
@@ -384,7 +422,7 @@ export const BookingModal: React.FC<BookingModalProps> = ({
                 <div className="space-y-1">
                   <div className="flex justify-between text-xs">
                     <span className="font-bold text-slate-800">{t.child}</span>
-                    <span className="text-cyan-700 font-bold">฿{tour.priceChild.toLocaleString()}</span>
+                    <span className="text-cyan-700 font-bold">฿{priceChild.toLocaleString()}</span>
                   </div>
                   <div className="flex items-center justify-between bg-white border border-slate-300 rounded-xl p-1">
                     <button

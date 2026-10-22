@@ -41,6 +41,12 @@ export interface Tour {
   priceInfant?: number; // Age 0-3 (Usually free 0 THB)
   costAdult?: number; // ราคาทุนเอเยนต์ผู้ใหญ่ (Net Cost)
   costChild?: number; // ราคาทุนเอเยนต์เด็ก (Net Cost)
+  priceForeignAdult?: number; // ราคาชาวต่างชาติ ผู้ใหญ่ (Foreign Adult Price)
+  priceForeignChild?: number; // ราคาชาวต่างชาติ เด็ก (Foreign Child Price)
+  costForeignAdult?: number; // ราคาทุนเอเยนต์ต่างชาติ ผู้ใหญ่ (Net Cost Foreign Adult)
+  costForeignChild?: number; // ราคาทุนเอเยนต์ต่างชาติ เด็ก (Net Cost Foreign Child)
+  originalPriceForeignAdult?: number;
+  originalPriceForeignChild?: number;
   supplierId?: string; // ID บริษัท Supplier ผู้ให้บริการเรือ
   supplierName?: string; // ชื่อบริษัท Supplier
   originalPriceAdult?: number;
@@ -68,6 +74,7 @@ export interface CartItem {
   adults: number;
   children: number;
   infants: number;
+  isForeigner?: boolean;
   pickupHotel?: string;
   pickupZone?: string;
   roomNumber?: string;
@@ -90,6 +97,7 @@ export interface Booking {
   customerPhone: string;
   customerLineId?: string;
   nationality: string;
+  isForeigner?: boolean;
   travelDate: string; // YYYY-MM-DD
   pickupTime?: string;
   pickupHotel: string;

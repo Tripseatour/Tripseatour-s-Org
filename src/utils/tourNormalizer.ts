@@ -79,6 +79,14 @@ export function normalizeTours(toursList: Tour[]): Tour[] {
         priceAdult: Number(tour.priceAdult) || defaultTour.priceAdult || 1500,
         priceChild: Number(tour.priceChild) || defaultTour.priceChild || 1000,
         priceInfant: Number(tour.priceInfant) || defaultTour.priceInfant || 0,
+        costAdult: tour.costAdult !== undefined ? Number(tour.costAdult) : defaultTour.costAdult,
+        costChild: tour.costChild !== undefined ? Number(tour.costChild) : defaultTour.costChild,
+        priceForeignAdult: Number(tour.priceForeignAdult) || defaultTour.priceForeignAdult || (Number(tour.priceAdult || defaultTour.priceAdult) + 400),
+        priceForeignChild: Number(tour.priceForeignChild) || defaultTour.priceForeignChild || (Number(tour.priceChild || defaultTour.priceChild) + 300),
+        costForeignAdult: tour.costForeignAdult !== undefined ? Number(tour.costForeignAdult) : (defaultTour.costForeignAdult ?? (tour.costAdult ? Number(tour.costAdult) + 400 : undefined)),
+        costForeignChild: tour.costForeignChild !== undefined ? Number(tour.costForeignChild) : (defaultTour.costForeignChild ?? (tour.costChild ? Number(tour.costChild) + 300 : undefined)),
+        originalPriceForeignAdult: Number(tour.originalPriceForeignAdult) || defaultTour.originalPriceForeignAdult || (Number(tour.originalPriceAdult || defaultTour.originalPriceAdult || 0) + 500),
+        originalPriceForeignChild: Number(tour.originalPriceForeignChild) || defaultTour.originalPriceForeignChild || (Number(tour.originalPriceChild || defaultTour.originalPriceChild || 0) + 400),
         tags: Array.isArray(tour.tags) && tour.tags.length ? tour.tags : defaultTour.tags,
         title: {
           TH: tour.title?.TH || defaultTour.title.TH,
@@ -170,6 +178,14 @@ export function normalizeTours(toursList: Tour[]): Tour[] {
       priceAdult: Number(tour.priceAdult) || 1500,
       priceChild: Number(tour.priceChild) || 1000,
       priceInfant: Number(tour.priceInfant) || 0,
+      costAdult: tour.costAdult !== undefined ? Number(tour.costAdult) : undefined,
+      costChild: tour.costChild !== undefined ? Number(tour.costChild) : undefined,
+      priceForeignAdult: Number(tour.priceForeignAdult) || (Number(tour.priceAdult) ? Number(tour.priceAdult) + 400 : 1900),
+      priceForeignChild: Number(tour.priceForeignChild) || (Number(tour.priceChild) ? Number(tour.priceChild) + 300 : 1300),
+      costForeignAdult: tour.costForeignAdult !== undefined ? Number(tour.costForeignAdult) : (tour.costAdult ? Number(tour.costAdult) + 400 : undefined),
+      costForeignChild: tour.costForeignChild !== undefined ? Number(tour.costForeignChild) : (tour.costChild ? Number(tour.costChild) + 300 : undefined),
+      originalPriceForeignAdult: Number(tour.originalPriceForeignAdult) || (Number(tour.originalPriceAdult) ? Number(tour.originalPriceAdult) + 500 : undefined),
+      originalPriceForeignChild: Number(tour.originalPriceForeignChild) || (Number(tour.originalPriceChild) ? Number(tour.originalPriceChild) + 400 : undefined),
       tags: Array.isArray(tour.tags) && tour.tags.length ? tour.tags : [catLabels.TH, 'Phuket Tour'],
       title: { TH: titleTH, EN: titleEN, ZH: titleZH, RU: titleRU },
       categoryLabel: {
@@ -209,4 +225,15 @@ export function normalizeTours(toursList: Tour[]): Tour[] {
       })) : []
     };
   });
+}
+
+/**
+ * Returns adult and child pricing according to language or foreigner flag
+ */
+export function getTourPrice(tour: Tour, isForeigner: boolean = false) {
+  const adult = isForeigner && tour.priceForeignAdult ? tour.priceForeignAdult : tour.priceAdult;
+  const child = isForeigner && tour.priceForeignChild ? tour.priceForeignChild : tour.priceChild;
+  const originalAdult = isForeigner && tour.originalPriceForeignAdult ? tour.originalPriceForeignAdult : tour.originalPriceAdult;
+  const originalChild = isForeigner && tour.originalPriceForeignChild ? tour.originalPriceForeignChild : tour.originalPriceChild;
+  return { adult, child, originalAdult, originalChild };
 }

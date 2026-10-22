@@ -6,6 +6,8 @@ import { GoogleGenAI } from '@google/genai';
 import { initialTours, initialBookings, initialReviews, initialCustomers, initialSettings } from './src/data/mockData';
 import { normalizeTours } from './src/utils/tourNormalizer';
 import { Tour, Booking, Review, Customer, AppSettings, LineNotificationLog, SalesStats, AdminUser } from './src/types';
+import extractTourHandler from './api/extract-tour-from-image';
+import translateTourHandler from './api/translate-tour';
 
 const app = express();
 const PORT = 3000;
@@ -1540,6 +1542,15 @@ function generateSmartFallbackReply(message: string, language: string = 'TH'): s
     `📌 **โปรแกรมแนะนำยอดนิยม**:\n${tourListText}\n\n` +
     `ท่านสามารถคลิกดูรายละเอียดและกด **"จองทัวร์"** บนหน้าเว็บได้ทันที หรือสอบถามเจ้าหน้าที่ทาง LINE: **${lineOa}** (โทร **${phone}**) ได้ตลอด 24 ชม. เลยนะคะ!`;
 }
+
+// AI Tour Extraction & Translation endpoints
+app.all('/api/extract-tour-from-image', async (req, res) => {
+  return extractTourHandler(req, res);
+});
+
+app.all('/api/translate-tour', async (req, res) => {
+  return translateTourHandler(req, res);
+});
 
 app.post('/api/chat', async (req, res) => {
   const { message = '', language = 'TH' } = req.body || {};

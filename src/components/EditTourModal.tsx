@@ -7,6 +7,8 @@ import {
 } from 'lucide-react';
 import { Tour, TourItinerary, Language, Supplier } from '../types';
 import { normalizeTours } from '../utils/tourNormalizer';
+import { compressImageBase64 } from '../utils/storage';
+import { translateTourData } from '../utils/translationHelper';
 
 export interface AiTourImageItem {
   id: string;
@@ -64,6 +66,14 @@ export const EditTourModal: React.FC<EditTourModalProps> = ({
   const [costChild, setCostChild] = useState(650);
   const [originalPriceAdult, setOriginalPriceAdult] = useState(2200);
   const [originalPriceChild, setOriginalPriceChild] = useState(1500);
+
+  // Foreigner Prices (ราคาชาวต่างชาติ สำหรับภาษา EN / ZH / RU)
+  const [priceForeignAdult, setPriceForeignAdult] = useState(1900);
+  const [priceForeignChild, setPriceForeignChild] = useState(1300);
+  const [costForeignAdult, setCostForeignAdult] = useState(1400);
+  const [costForeignChild, setCostForeignChild] = useState(950);
+  const [originalPriceForeignAdult, setOriginalPriceForeignAdult] = useState(2700);
+  const [originalPriceForeignChild, setOriginalPriceForeignChild] = useState(1900);
   const [imageUrl, setImageUrl] = useState('');
   const [descTH, setDescTH] = useState('');
   const [descEN, setDescEN] = useState('');
@@ -120,6 +130,12 @@ export const EditTourModal: React.FC<EditTourModalProps> = ({
       setCostChild(tour.costChild !== undefined ? tour.costChild : Math.round((tour.priceChild || 0) * 0.65));
       setOriginalPriceAdult(tour.originalPriceAdult || Math.round(tour.priceAdult * 1.3));
       setOriginalPriceChild(tour.originalPriceChild || Math.round(tour.priceChild * 1.3));
+      setPriceForeignAdult(tour.priceForeignAdult || (tour.priceAdult ? tour.priceAdult + 400 : 1900));
+      setPriceForeignChild(tour.priceForeignChild || (tour.priceChild ? tour.priceChild + 300 : 1300));
+      setCostForeignAdult(tour.costForeignAdult !== undefined ? tour.costForeignAdult : (tour.costAdult ? tour.costAdult + 400 : Math.round((tour.priceForeignAdult || 1900) * 0.65)));
+      setCostForeignChild(tour.costForeignChild !== undefined ? tour.costForeignChild : (tour.costChild ? tour.costChild + 300 : Math.round((tour.priceForeignChild || 1300) * 0.65)));
+      setOriginalPriceForeignAdult(tour.originalPriceForeignAdult || (tour.originalPriceAdult ? tour.originalPriceAdult + 500 : 2700));
+      setOriginalPriceForeignChild(tour.originalPriceForeignChild || (tour.originalPriceChild ? tour.originalPriceChild + 400 : 1900));
       setImageUrl(tour.images && tour.images[0] ? tour.images[0] : '');
       setDescTH(tour.description?.TH || '');
       setDescEN(tour.description?.EN || '');
@@ -143,8 +159,16 @@ export const EditTourModal: React.FC<EditTourModalProps> = ({
       setLocation('ภูเก็ต / เกาะพีพี');
       setPriceAdult(1500);
       setPriceChild(1000);
+      setCostAdult(1000);
+      setCostChild(650);
       setOriginalPriceAdult(2200);
       setOriginalPriceChild(1500);
+      setPriceForeignAdult(1900);
+      setPriceForeignChild(1300);
+      setCostForeignAdult(1400);
+      setCostForeignChild(950);
+      setOriginalPriceForeignAdult(2700);
+      setOriginalPriceForeignChild(1900);
       setImageUrl('https://images.unsplash.com/photo-1537996194471-e657df975ab4?auto=format&fit=crop&q=80&w=1000');
       setDescTH('สัมผัสความงดงามของท้องทะเลอันดามัน พร้อมกิจกรรมดำน้ำและบริการระดับพรีเมียม');
       setDescEN('Experience the beauty of the Andaman sea with snorkeling and premium service.');
@@ -257,7 +281,7 @@ export const EditTourModal: React.FC<EditTourModalProps> = ({
     setItinerarySteps(updated);
   };
 
-  // AI Auto-Translate to EN, ZH, RU
+  // Auto-Translate to EN, ZH, RU (Powered by Gemini + Smart Tourism Localization Engine)
   const handleAutoTranslate = async () => {
     if (!titleTH.trim()) {
       alert('กรุณากรอกชื่อโปรแกรมทัวร์ (ภาษาไทย) ก่อนกดแปลภาษา');
@@ -266,50 +290,44 @@ export const EditTourModal: React.FC<EditTourModalProps> = ({
 
     setIsTranslating(true);
     try {
-      const res = await fetch('/api/translate-tour', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          titleTH,
-          descTH,
-          durationTH,
-          highlightsTH,
-          category,
-          itinerarySteps
-        })
+      const translated = await translateTourData({
+        titleTH,
+        descTH,
+        durationTH,
+        highlightsTH,
+        category,
+        itinerarySteps
       });
 
-      if (res.ok) {
-        const data = await res.json();
-        if (data.titleEN) setTitleEN(data.titleEN);
-        if (data.titleZH) setTitleZH(data.titleZH);
-        if (data.titleRU) setTitleRU(data.titleRU);
-        if (data.descEN) setDescEN(data.descEN);
-        if (data.descZH) setDescZH(data.descZH);
-        if (data.descRU) setDescRU(data.descRU);
-        if (data.durationEN) setDurationEN(data.durationEN);
-        if (data.durationZH) setDurationZH(data.durationZH);
-        if (data.durationRU) setDurationRU(data.durationRU);
-        if (data.translatedItinerary && Array.isArray(data.translatedItinerary)) {
-          setItinerarySteps(data.translatedItinerary);
-        }
-      } else {
-        // Fallback translation
-        if (!titleEN) setTitleEN(titleTH);
-        if (!titleZH) setTitleZH(titleTH);
-        if (!titleRU) setTitleRU(titleTH);
-        if (!descEN) setDescEN(descTH);
-        if (!descZH) setDescZH(descTH);
-        if (!descRU) setDescRU(descTH);
+      if (translated.titleEN) setTitleEN(translated.titleEN);
+      if (translated.titleZH) setTitleZH(translated.titleZH);
+      if (translated.titleRU) setTitleRU(translated.titleRU);
+      if (translated.descEN) setDescEN(translated.descEN);
+      if (translated.descZH) setDescZH(translated.descZH);
+      if (translated.descRU) setDescRU(translated.descRU);
+      if (translated.durationEN) setDurationEN(translated.durationEN);
+      if (translated.durationZH) setDurationZH(translated.durationZH);
+      if (translated.durationRU) setDurationRU(translated.durationRU);
+      if (translated.translatedItinerary && Array.isArray(translated.translatedItinerary)) {
+        setItinerarySteps(translated.translatedItinerary);
       }
     } catch (err) {
       console.error('Translation error:', err);
-      if (!titleEN) setTitleEN(titleTH);
-      if (!titleZH) setTitleZH(titleTH);
-      if (!titleRU) setTitleRU(titleTH);
     } finally {
       setIsTranslating(false);
     }
+  };
+
+  // Helper: Auto-calculate foreigner rate based on Thai rate + National Park foreigner fee
+  const handleAutoCalcForeignerPrices = () => {
+    const parkFeeAdult = 400; // ค่าธรรมเนียมอุทยานต่างชาติมาตรฐาน (เช่น เกาะพีพี / อ่าวพังงา / สิมิลัน)
+    const parkFeeChild = 300;
+    setPriceForeignAdult(Number(priceAdult) + parkFeeAdult);
+    setPriceForeignChild(Number(priceChild) + parkFeeChild);
+    setCostForeignAdult(Number(costAdult) + parkFeeAdult);
+    setCostForeignChild(Number(costChild) + parkFeeChild);
+    setOriginalPriceForeignAdult(Number(originalPriceAdult) + 500);
+    setOriginalPriceForeignChild(Number(originalPriceChild) + 400);
   };
 
   // Helper: Read and optimize image to Base64 (resizing very large images for fast processing)
@@ -583,6 +601,11 @@ export const EditTourModal: React.FC<EditTourModalProps> = ({
 
     const catLabel = categoryLabelsMap[category] || { TH: 'ทัวร์ภูเก็ต', EN: 'Phuket Tour', ZH: '普吉行程', RU: 'Тур на Пхукете' };
 
+    let finalImageUrl = imageUrl || 'https://images.unsplash.com/photo-1537996194471-e657df975ab4?auto=format&fit=crop&q=80&w=1000';
+    if (finalImageUrl.startsWith('data:image')) {
+      finalImageUrl = await compressImageBase64(finalImageUrl, 900, 0.75);
+    }
+
     const selectedSup = suppliers.find(s => s.id === supplierId);
 
     const rawTour: Partial<Tour> = {
@@ -621,7 +644,13 @@ export const EditTourModal: React.FC<EditTourModalProps> = ({
       costChild: Number(costChild),
       originalPriceAdult: Number(originalPriceAdult),
       originalPriceChild: Number(originalPriceChild),
-      images: [imageUrl || 'https://images.unsplash.com/photo-1537996194471-e657df975ab4?auto=format&fit=crop&q=80&w=1000'],
+      priceForeignAdult: Number(priceForeignAdult),
+      priceForeignChild: Number(priceForeignChild),
+      costForeignAdult: Number(costForeignAdult),
+      costForeignChild: Number(costForeignChild),
+      originalPriceForeignAdult: Number(originalPriceForeignAdult),
+      originalPriceForeignChild: Number(originalPriceForeignChild),
+      images: [finalImageUrl],
       included: {
         TH: includedItemsTH,
         EN: includedItemsTH,
@@ -1072,14 +1101,26 @@ export const EditTourModal: React.FC<EditTourModalProps> = ({
             <div className="flex flex-wrap items-center gap-1.5 bg-slate-900/90 p-1.5 rounded-xl border border-slate-800">
               {[
                 { id: 'TH', label: '🇹🇭 ภาษาไทย (TH)', filled: Boolean(titleTH) },
-                { id: 'EN', label: '🇬🇧 English (EN)', filled: Boolean(titleEN) },
-                { id: 'ZH', label: '🇨🇳 中文 (ZH)', filled: Boolean(titleZH) },
-                { id: 'RU', label: '🇷🇺 Русский (RU)', filled: Boolean(titleRU) },
+                { id: 'EN', label: '🇬🇧 English (EN)', filled: Boolean(titleEN && titleEN !== titleTH) },
+                { id: 'ZH', label: '🇨🇳 中文 (ZH)', filled: Boolean(titleZH && titleZH !== titleTH) },
+                { id: 'RU', label: '🇷🇺 Русский (RU)', filled: Boolean(titleRU && titleRU !== titleTH) },
               ].map((tab) => (
                 <button
                   key={tab.id}
                   type="button"
-                  onClick={() => setActiveLangTab(tab.id as any)}
+                  onClick={() => {
+                    const targetLang = tab.id as 'TH' | 'EN' | 'ZH' | 'RU';
+                    setActiveLangTab(targetLang);
+                    if (targetLang !== 'TH' && titleTH.trim()) {
+                      const isTargetEmpty = 
+                        (targetLang === 'EN' && (!titleEN.trim() || titleEN === titleTH)) ||
+                        (targetLang === 'ZH' && (!titleZH.trim() || titleZH === titleTH)) ||
+                        (targetLang === 'RU' && (!titleRU.trim() || titleRU === titleTH));
+                      if (isTargetEmpty && !isTranslating) {
+                        handleAutoTranslate();
+                      }
+                    }
+                  }}
                   className={`px-3 py-1.5 rounded-lg text-xs font-bold transition flex items-center gap-1.5 cursor-pointer ${
                     activeLangTab === tab.id
                       ? 'bg-gradient-to-r from-cyan-500 to-sky-500 text-slate-950 shadow-md font-black'
@@ -1132,7 +1173,7 @@ export const EditTourModal: React.FC<EditTourModalProps> = ({
                     </span>
                   </button>
                   <p className="text-[10.5px] text-slate-400 mt-1 text-center">
-                    💡 เพียงกรอกข้อมูลภาษาไทย แล้วกดปุ่มนี้ ระบบจะใช้ AI แปลและเติมช่องภาษาอังกฤษ จีน และรัสเซียให้อัตโนมัติทันที
+                    💡 เพียงกรอกข้อมูลภาษาไทย แล้วกดปุ่มนี้ ระบบจะแปลและเติมช่องภาษาอังกฤษ จีน และรัสเซียให้อัตโนมัติทันที
                   </p>
                 </div>
               </div>
@@ -1140,6 +1181,20 @@ export const EditTourModal: React.FC<EditTourModalProps> = ({
 
             {activeLangTab === 'EN' && (
               <div className="space-y-3 animate-in fade-in">
+                <div className="flex items-center justify-between bg-cyan-950/50 border border-cyan-500/30 p-2.5 rounded-xl text-xs">
+                  <span className="text-cyan-200 flex items-center gap-1.5">
+                    <Sparkles className="w-3.5 h-3.5 text-amber-300" />
+                    <span>แปลชื่อและรายละเอียดจากภาษาไทยเป็นภาษาอังกฤษอัตโนมัติ</span>
+                  </span>
+                  <button
+                    type="button"
+                    onClick={handleAutoTranslate}
+                    disabled={isTranslating}
+                    className="bg-cyan-600 hover:bg-cyan-500 text-white font-extrabold px-3 py-1 rounded-lg text-xs cursor-pointer active:scale-95 transition"
+                  >
+                    {isTranslating ? 'กำลังแปล...' : '⚡ กดแปลทันที (Translate)'}
+                  </button>
+                </div>
                 <div>
                   <label className="font-bold text-slate-300 block mb-1">Tour Title (English)</label>
                   <input
@@ -1165,6 +1220,20 @@ export const EditTourModal: React.FC<EditTourModalProps> = ({
 
             {activeLangTab === 'ZH' && (
               <div className="space-y-3 animate-in fade-in">
+                <div className="flex items-center justify-between bg-cyan-950/50 border border-cyan-500/30 p-2.5 rounded-xl text-xs">
+                  <span className="text-cyan-200 flex items-center gap-1.5">
+                    <Sparkles className="w-3.5 h-3.5 text-amber-300" />
+                    <span>从泰语自动翻译为中文简体</span>
+                  </span>
+                  <button
+                    type="button"
+                    onClick={handleAutoTranslate}
+                    disabled={isTranslating}
+                    className="bg-cyan-600 hover:bg-cyan-500 text-white font-extrabold px-3 py-1 rounded-lg text-xs cursor-pointer active:scale-95 transition"
+                  >
+                    {isTranslating ? '正在翻译...' : '⚡ 立即翻译 (Translate)'}
+                  </button>
+                </div>
                 <div>
                   <label className="font-bold text-slate-300 block mb-1">行程名称 (中文简体)</label>
                   <input
@@ -1190,6 +1259,20 @@ export const EditTourModal: React.FC<EditTourModalProps> = ({
 
             {activeLangTab === 'RU' && (
               <div className="space-y-3 animate-in fade-in">
+                <div className="flex items-center justify-between bg-cyan-950/50 border border-cyan-500/30 p-2.5 rounded-xl text-xs">
+                  <span className="text-cyan-200 flex items-center gap-1.5">
+                    <Sparkles className="w-3.5 h-3.5 text-amber-300" />
+                    <span>Автоматический перевод с тайского на русский</span>
+                  </span>
+                  <button
+                    type="button"
+                    onClick={handleAutoTranslate}
+                    disabled={isTranslating}
+                    className="bg-cyan-600 hover:bg-cyan-500 text-white font-extrabold px-3 py-1 rounded-lg text-xs cursor-pointer active:scale-95 transition"
+                  >
+                    {isTranslating ? 'Перевод...' : '⚡ Перевести (Translate)'}
+                  </button>
+                </div>
                 <div>
                   <label className="font-bold text-slate-300 block mb-1">Название тура (Русский)</label>
                   <input
@@ -1269,76 +1352,181 @@ export const EditTourModal: React.FC<EditTourModalProps> = ({
               </div>
             </div>
 
-            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-              <div>
-                <label className="font-bold text-emerald-400 block mb-1">ราคาผู้ใหญ่ (THB) *</label>
-                <input
-                  type="number"
-                  required
-                  value={priceAdult}
-                  onChange={(e) => setPriceAdult(Number(e.target.value))}
-                  className="w-full bg-slate-900 border border-emerald-500/50 rounded-xl p-2.5 text-emerald-300 font-bold"
-                />
+            {/* SECTION: Thai Resident Pricing */}
+            <div className="space-y-2 pt-2 border-t border-slate-800">
+              <div className="flex items-center justify-between">
+                <h5 className="font-extrabold text-emerald-300 text-xs flex items-center gap-1.5">
+                  <span>🇹🇭 1. ราคาสำหรับคนไทย (Thai Resident Rates - แสดงเมื่อเลือกภาษาไทย)</span>
+                </h5>
               </div>
 
-              <div>
-                <label className="font-bold text-cyan-400 block mb-1">ราคาเด็ก (THB) *</label>
-                <input
-                  type="number"
-                  required
-                  value={priceChild}
-                  onChange={(e) => setPriceChild(Number(e.target.value))}
-                  className="w-full bg-slate-900 border border-cyan-500/50 rounded-xl p-2.5 text-cyan-300 font-bold"
-                />
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                <div>
+                  <label className="font-bold text-emerald-400 block mb-1">ขายผู้ใหญ่ (THB) *</label>
+                  <input
+                    type="number"
+                    required
+                    value={priceAdult}
+                    onChange={(e) => setPriceAdult(Number(e.target.value))}
+                    className="w-full bg-slate-900 border border-emerald-500/50 rounded-xl p-2.5 text-emerald-300 font-bold"
+                  />
+                </div>
+
+                <div>
+                  <label className="font-bold text-cyan-400 block mb-1">ขายเด็ก (THB) *</label>
+                  <input
+                    type="number"
+                    required
+                    value={priceChild}
+                    onChange={(e) => setPriceChild(Number(e.target.value))}
+                    className="w-full bg-slate-900 border border-cyan-500/50 rounded-xl p-2.5 text-cyan-300 font-bold"
+                  />
+                </div>
+
+                <div>
+                  <label className="font-bold text-amber-400 block mb-1">🏭 ทุนเอเยนต์ผู้ใหญ่</label>
+                  <input
+                    type="number"
+                    required
+                    value={costAdult}
+                    onChange={(e) => setCostAdult(Number(e.target.value))}
+                    className="w-full bg-slate-900 border border-amber-500/50 rounded-xl p-2.5 text-amber-300 font-bold"
+                  />
+                </div>
+
+                <div>
+                  <label className="font-bold text-amber-400 block mb-1">🏭 ทุนเอเยนต์เด็ก</label>
+                  <input
+                    type="number"
+                    required
+                    value={costChild}
+                    onChange={(e) => setCostChild(Number(e.target.value))}
+                    className="w-full bg-slate-900 border border-amber-500/50 rounded-xl p-2.5 text-amber-300 font-bold"
+                  />
+                </div>
+
+                <div>
+                  <label className="font-bold text-slate-400 block mb-1">ราคาขีดฆ่าผู้ใหญ่</label>
+                  <input
+                    type="number"
+                    value={originalPriceAdult}
+                    onChange={(e) => setOriginalPriceAdult(Number(e.target.value))}
+                    className="w-full bg-slate-900 border border-slate-700 rounded-xl p-2.5 text-slate-400"
+                  />
+                </div>
+
+                <div>
+                  <label className="font-bold text-slate-400 block mb-1">ราคาขีดฆ่าเด็ก</label>
+                  <input
+                    type="number"
+                    value={originalPriceChild}
+                    onChange={(e) => setOriginalPriceChild(Number(e.target.value))}
+                    className="w-full bg-slate-900 border border-slate-700 rounded-xl p-2.5 text-slate-400"
+                  />
+                </div>
+
+                <div className="col-span-2 bg-emerald-950/40 border border-emerald-500/30 p-2.5 rounded-xl flex items-center justify-between">
+                  <span className="text-slate-300 font-medium text-[11px]">กำไรคาดการณ์คนไทย/ตั๋ว:</span>
+                  <span className="font-extrabold text-emerald-400 text-xs">
+                    ผู้ใหญ่ ฿{(priceAdult - costAdult).toLocaleString()} / เด็ก ฿{(priceChild - costChild).toLocaleString()}
+                  </span>
+                </div>
+              </div>
+            </div>
+
+            {/* SECTION: Foreigner Pricing */}
+            <div className="space-y-2 pt-3 border-t border-slate-800 bg-sky-950/20 p-3 rounded-2xl border border-sky-500/30">
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <div>
+                  <h5 className="font-extrabold text-sky-300 text-xs flex items-center gap-1.5">
+                    <span>🌍 2. ราคาสำหรับชาวต่างชาติ (Foreigner / International Rates - สำหรับภาษา EN, ZH, RU)</span>
+                  </h5>
+                  <p className="text-[10.5px] text-slate-400 mt-0.5">
+                    ระบบจะใช้ราคานี้อัตโนมัติเมื่อลูกค้าดูหน้าเว็บเป็นภาษาอังกฤษ จีน หรือรัสเซีย (รวมค่าอุทยานต่างชาติแล้ว)
+                  </p>
+                </div>
+
+                <button
+                  type="button"
+                  onClick={handleAutoCalcForeignerPrices}
+                  className="bg-gradient-to-r from-sky-600 to-indigo-600 hover:from-sky-500 hover:to-indigo-500 text-white font-bold px-3 py-1 rounded-xl text-[11px] shadow-sm cursor-pointer active:scale-95 transition flex items-center gap-1"
+                >
+                  <Sparkles className="w-3.5 h-3.5 text-amber-300" />
+                  <span>⚡ คำนวณราคาต่างชาติอัตโนมัติ (+ค่าอุทยาน ฿400 / ฿300)</span>
+                </button>
               </div>
 
-              <div>
-                <label className="font-bold text-amber-400 block mb-1">🏭 ทุนเอเยนต์ ผู้ใหญ่ (Net)</label>
-                <input
-                  type="number"
-                  required
-                  value={costAdult}
-                  onChange={(e) => setCostAdult(Number(e.target.value))}
-                  className="w-full bg-slate-900 border border-amber-500/50 rounded-xl p-2.5 text-amber-300 font-bold"
-                />
-              </div>
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                <div>
+                  <label className="font-bold text-sky-400 block mb-1">ขายผู้ใหญ่ต่างชาติ (THB) *</label>
+                  <input
+                    type="number"
+                    required
+                    value={priceForeignAdult}
+                    onChange={(e) => setPriceForeignAdult(Number(e.target.value))}
+                    className="w-full bg-slate-900 border border-sky-500/50 rounded-xl p-2.5 text-sky-300 font-bold"
+                  />
+                </div>
 
-              <div>
-                <label className="font-bold text-amber-400 block mb-1">🏭 ทุนเอเยนต์ เด็ก (Net)</label>
-                <input
-                  type="number"
-                  required
-                  value={costChild}
-                  onChange={(e) => setCostChild(Number(e.target.value))}
-                  className="w-full bg-slate-900 border border-amber-500/50 rounded-xl p-2.5 text-amber-300 font-bold"
-                />
-              </div>
+                <div>
+                  <label className="font-bold text-cyan-400 block mb-1">ขายเด็กต่างชาติ (THB) *</label>
+                  <input
+                    type="number"
+                    required
+                    value={priceForeignChild}
+                    onChange={(e) => setPriceForeignChild(Number(e.target.value))}
+                    className="w-full bg-slate-900 border border-cyan-500/50 rounded-xl p-2.5 text-cyan-300 font-bold"
+                  />
+                </div>
 
-              <div>
-                <label className="font-bold text-slate-400 block mb-1">ราคาปกติผู้ใหญ่ (ขีดฆ่า)</label>
-                <input
-                  type="number"
-                  value={originalPriceAdult}
-                  onChange={(e) => setOriginalPriceAdult(Number(e.target.value))}
-                  className="w-full bg-slate-900 border border-slate-700 rounded-xl p-2.5 text-slate-400"
-                />
-              </div>
+                <div>
+                  <label className="font-bold text-amber-400 block mb-1">🏭 ทุนต่างชาติผู้ใหญ่</label>
+                  <input
+                    type="number"
+                    required
+                    value={costForeignAdult}
+                    onChange={(e) => setCostForeignAdult(Number(e.target.value))}
+                    className="w-full bg-slate-900 border border-amber-500/50 rounded-xl p-2.5 text-amber-300 font-bold"
+                  />
+                </div>
 
-              <div>
-                <label className="font-bold text-slate-400 block mb-1">ราคาปกติเด็ก (ขีดฆ่า)</label>
-                <input
-                  type="number"
-                  value={originalPriceChild}
-                  onChange={(e) => setOriginalPriceChild(Number(e.target.value))}
-                  className="w-full bg-slate-900 border border-slate-700 rounded-xl p-2.5 text-slate-400"
-                />
-              </div>
+                <div>
+                  <label className="font-bold text-amber-400 block mb-1">🏭 ทุนต่างชาติเด็ก</label>
+                  <input
+                    type="number"
+                    required
+                    value={costForeignChild}
+                    onChange={(e) => setCostForeignChild(Number(e.target.value))}
+                    className="w-full bg-slate-900 border border-amber-500/50 rounded-xl p-2.5 text-amber-300 font-bold"
+                  />
+                </div>
 
-              <div className="col-span-2 bg-emerald-950/40 border border-emerald-500/30 p-2.5 rounded-xl flex items-center justify-between">
-                <span className="text-slate-300 font-medium">กำไรคาดการณ์/ตั๋ว (Estimated Profit):</span>
-                <span className="font-extrabold text-emerald-400">
-                  ผู้ใหญ่ ฿{(priceAdult - costAdult).toLocaleString()} / เด็ก ฿{(priceChild - costChild).toLocaleString()}
-                </span>
+                <div>
+                  <label className="font-bold text-slate-400 block mb-1">ราคาขีดฆ่าผู้ใหญ่ต่างชาติ</label>
+                  <input
+                    type="number"
+                    value={originalPriceForeignAdult}
+                    onChange={(e) => setOriginalPriceForeignAdult(Number(e.target.value))}
+                    className="w-full bg-slate-900 border border-slate-700 rounded-xl p-2.5 text-slate-400"
+                  />
+                </div>
+
+                <div>
+                  <label className="font-bold text-slate-400 block mb-1">ราคาขีดฆ่าเด็กต่างชาติ</label>
+                  <input
+                    type="number"
+                    value={originalPriceForeignChild}
+                    onChange={(e) => setOriginalPriceForeignChild(Number(e.target.value))}
+                    className="w-full bg-slate-900 border border-slate-700 rounded-xl p-2.5 text-slate-400"
+                  />
+                </div>
+
+                <div className="col-span-2 bg-sky-950/60 border border-sky-500/40 p-2.5 rounded-xl flex items-center justify-between">
+                  <span className="text-slate-300 font-medium text-[11px]">กำไรคาดการณ์ต่างชาติ/ตั๋ว:</span>
+                  <span className="font-extrabold text-sky-300 text-xs">
+                    ผู้ใหญ่ ฿{(priceForeignAdult - costForeignAdult).toLocaleString()} / เด็ก ฿{(priceForeignChild - costForeignChild).toLocaleString()}
+                  </span>
+                </div>
               </div>
             </div>
 

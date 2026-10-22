@@ -294,17 +294,29 @@ export const TourDetailModal: React.FC<TourDetailModalProps> = ({
         </div>
 
         {/* Bottom Booking Sticky Bar */}
-        <div className="p-4 bg-slate-900 text-white border-t border-slate-800 flex flex-wrap items-center justify-between gap-3 shrink-0">
-          <div>
-            <span className="text-[11px] text-slate-400 block">{t.priceSummary} ({t.adult})</span>
-            <div className="flex items-baseline gap-2">
-              <span className="text-2xl font-extrabold text-cyan-400">
-                ฿{tour.priceAdult.toLocaleString()}
-              </span>
-              <span className="text-xs text-slate-300">/ {t.adult}</span>
-              <span className="text-xs text-slate-400 ml-2">({t.child} ฿{tour.priceChild.toLocaleString()})</span>
-            </div>
-          </div>
+        {(() => {
+          const isForeignLang = currentLang !== 'TH';
+          const effAdult = isForeignLang && tour.priceForeignAdult ? tour.priceForeignAdult : tour.priceAdult;
+          const effChild = isForeignLang && tour.priceForeignChild ? tour.priceForeignChild : tour.priceChild;
+          return (
+            <div className="p-4 bg-slate-900 text-white border-t border-slate-800 flex flex-wrap items-center justify-between gap-3 shrink-0">
+              <div>
+                <span className="text-[11px] text-slate-400 flex items-center gap-1.5">
+                  <span>{t.priceSummary} ({t.adult})</span>
+                  {isForeignLang && (
+                    <span className="text-[9.5px] bg-sky-900/80 text-sky-200 border border-sky-500/40 px-1.5 py-0.5 rounded font-bold">
+                      🌍 Foreigner Rate
+                    </span>
+                  )}
+                </span>
+                <div className="flex items-baseline gap-2 mt-0.5">
+                  <span className="text-2xl font-extrabold text-cyan-400">
+                    ฿{effAdult.toLocaleString()}
+                  </span>
+                  <span className="text-xs text-slate-300">/ {t.adult}</span>
+                  <span className="text-xs text-slate-400 ml-2">({t.child} ฿{effChild.toLocaleString()})</span>
+                </div>
+              </div>
 
           <div className="flex items-center gap-2">
             <button
@@ -331,6 +343,8 @@ export const TourDetailModal: React.FC<TourDetailModalProps> = ({
             </button>
           </div>
         </div>
+      );
+    })()}
       </div>
     </div>
   );

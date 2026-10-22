@@ -24,6 +24,7 @@ import { initialTours, initialBookings, initialReviews, initialCustomers, initia
 import { normalizeTours } from './utils/tourNormalizer';
 import { Compass, Sparkles, Filter, Ticket, QrCode, Phone, MessageCircle, ShieldCheck, Clock } from 'lucide-react';
 import { supabaseApi } from './lib/supabase';
+import { safeSetLocalStorage } from './utils/storage';
 
 export default function App() {
   const [currentLang, setCurrentLang] = useState<Language>(() => {
@@ -547,7 +548,7 @@ export default function App() {
     lastMutationTimeRef.current = Date.now();
     const nextBookings = [newBooking, ...bookings];
     setBookings(nextBookings);
-    localStorage.setItem('tst_bookings', JSON.stringify(nextBookings));
+    safeSetLocalStorage('tst_bookings', nextBookings);
 
     // Save to Supabase (works on Vercel and production)
     supabaseApi.createBooking(newBooking).catch(() => {});
@@ -587,7 +588,7 @@ export default function App() {
         orderStatusLocal: orderStatus === 'confirmed' ? 'confirmed' : b.orderStatus
       } : b);
       setBookings(nextBookings);
-      localStorage.setItem('tst_bookings', JSON.stringify(nextBookings));
+      safeSetLocalStorage('tst_bookings', nextBookings);
 
       const updatedBooking = nextBookings.find(b => b.id === id);
       if (updatedBooking) {
@@ -689,7 +690,7 @@ export default function App() {
 
       const nextBookings = bookings.filter(b => b.id !== id && b.bookingRef !== id);
       setBookings(nextBookings);
-      localStorage.setItem('tst_bookings', JSON.stringify(nextBookings));
+      safeSetLocalStorage('tst_bookings', nextBookings);
       showToast('🗑️ ลบคำสั่งซื้อทัวร์เรียบร้อยแล้ว');
 
       // Sync to Supabase (delete from bookings table AND update app_store backup)
@@ -714,7 +715,7 @@ export default function App() {
     try {
       lastMutationTimeRef.current = Date.now();
       setSettings(newSettings);
-      localStorage.setItem('tst_settings', JSON.stringify(newSettings));
+      safeSetLocalStorage('tst_settings', newSettings);
       showToast('💾 บันทึกการตั้งค่าแล้ว');
 
       // Sync to Supabase
@@ -740,7 +741,7 @@ export default function App() {
       lastMutationTimeRef.current = Date.now();
       const nextCustomers = customers.map(c => c.id === id ? { ...c, ...updatedCustomerData } : c);
       setCustomers(nextCustomers);
-      localStorage.setItem('tst_customers', JSON.stringify(nextCustomers));
+      safeSetLocalStorage('tst_customers', nextCustomers);
       showToast('💾 อัปเดตข้อมูลลูกค้าใน CRM เรียบร้อยแล้ว');
 
       // Sync to Supabase
@@ -766,7 +767,7 @@ export default function App() {
       lastMutationTimeRef.current = Date.now();
       const nextCustomers = customers.filter(c => c.id !== id);
       setCustomers(nextCustomers);
-      localStorage.setItem('tst_customers', JSON.stringify(nextCustomers));
+      safeSetLocalStorage('tst_customers', nextCustomers);
       showToast('🗑️ ลบข้อมูลลูกค้าเรียบร้อยแล้ว');
 
       // Sync to Supabase
@@ -832,7 +833,7 @@ export default function App() {
       lastMutationTimeRef.current = Date.now();
       const nextTours = [newTour, ...tours];
       setTours(nextTours);
-      localStorage.setItem('tst_tours', JSON.stringify(nextTours));
+      safeSetLocalStorage('tst_tours', nextTours);
       showToast('🏝️ เพิ่มโปรแกรมทัวร์ใหม่เรียบร้อย');
 
       // Sync to Supabase
@@ -858,7 +859,7 @@ export default function App() {
       lastMutationTimeRef.current = Date.now();
       const nextTours = tours.map(t => t.id === id ? { ...t, ...updatedTourData } : t);
       setTours(nextTours);
-      localStorage.setItem('tst_tours', JSON.stringify(nextTours));
+      safeSetLocalStorage('tst_tours', nextTours);
       showToast('💾 บันทึกการแก้ไขโปรแกรมทัวร์เรียบร้อย');
 
       // Sync to Supabase
@@ -892,13 +893,13 @@ export default function App() {
       // Record in tombstone list permanently in state & localStorage
       const updatedDeletedIds = Array.from(new Set([...deletedTourIds, ...Array.from(idsToExclude)]));
       setDeletedTourIds(updatedDeletedIds);
-      localStorage.setItem('tst_deleted_tour_ids', JSON.stringify(updatedDeletedIds));
+      safeSetLocalStorage('tst_deleted_tour_ids', updatedDeletedIds);
 
       // Update tours state immediately using functional setter to guarantee no stale data
       let remainingTours: Tour[] = [];
       setTours(prevTours => {
         remainingTours = prevTours.filter(t => !idsToExclude.has(t.id) && !idsToExclude.has(t.slug));
-        localStorage.setItem('tst_tours', JSON.stringify(remainingTours));
+        safeSetLocalStorage('tst_tours', remainingTours);
         return remainingTours;
       });
 
@@ -915,7 +916,7 @@ export default function App() {
         if (Array.isArray(data.deletedTourIds)) {
           const merged = Array.from(new Set([...updatedDeletedIds, ...data.deletedTourIds]));
           setDeletedTourIds(merged);
-          localStorage.setItem('tst_deleted_tour_ids', JSON.stringify(merged));
+          safeSetLocalStorage('tst_deleted_tour_ids', merged);
         }
       }
     } catch (err) {
@@ -929,7 +930,7 @@ export default function App() {
       const filtered = toursToSave.filter(t => !deletedTourIds.includes(t.id) && !deletedTourIds.includes(t.slug));
       const normalized = normalizeTours(filtered);
       setTours(normalized);
-      localStorage.setItem('tst_tours', JSON.stringify(normalized));
+      safeSetLocalStorage('tst_tours', normalized);
 
       // 1. Sync to Supabase KV store
       supabaseApi.saveTours(normalized).catch((err) => {
@@ -966,7 +967,7 @@ export default function App() {
 
       const defaultList = normalizeTours([...initialTours]);
       setTours(defaultList);
-      localStorage.setItem('tst_tours', JSON.stringify(defaultList));
+      safeSetLocalStorage('tst_tours', defaultList);
 
       // Sync to Supabase
       supabaseApi.saveTours(defaultList).catch(() => {});
@@ -996,7 +997,7 @@ export default function App() {
           if (created.version) lastServerVersionRef.current = created.version;
           const nextReviews = [created, ...reviews];
           setReviews(nextReviews);
-          localStorage.setItem('tst_reviews', JSON.stringify(nextReviews));
+          safeSetLocalStorage('tst_reviews', nextReviews);
           supabaseApi.saveReviews(nextReviews).catch(() => {});
           showToast('⭐ ขอบพระคุณสำหรับรีวิวครับ!');
           return;
@@ -1022,7 +1023,7 @@ export default function App() {
       };
       const nextReviews = [localReview, ...reviews];
       setReviews(nextReviews);
-      localStorage.setItem('tst_reviews', JSON.stringify(nextReviews));
+      safeSetLocalStorage('tst_reviews', nextReviews);
       supabaseApi.saveReviews(nextReviews).catch(() => {});
       showToast('⭐ ขอบพระคุณสำหรับรีวิวครับ!');
     } catch (err) {
@@ -1034,7 +1035,7 @@ export default function App() {
     lastMutationTimeRef.current = Date.now();
     const nextReviews = reviews.map(r => r.id === id ? { ...r, isApproved } : r);
     setReviews(nextReviews);
-    localStorage.setItem('tst_reviews', JSON.stringify(nextReviews));
+    safeSetLocalStorage('tst_reviews', nextReviews);
     supabaseApi.saveReviews(nextReviews).catch(() => {});
     showToast(isApproved ? '✓ อนุมัติการแสดงผลรีวิวแล้ว' : '⏳ ซ่อนรีวิวเรียบร้อย');
     try {
@@ -1054,7 +1055,7 @@ export default function App() {
     lastMutationTimeRef.current = Date.now();
     const nextReviews = reviews.map(r => r.id === id ? { ...r, ...updatedFields } : r);
     setReviews(nextReviews);
-    localStorage.setItem('tst_reviews', JSON.stringify(nextReviews));
+    safeSetLocalStorage('tst_reviews', nextReviews);
     supabaseApi.saveReviews(nextReviews).catch(() => {});
     showToast('✏️ แก้ไขข้อมูลรีวิวเรียบร้อยแล้ว');
     try {
