@@ -131,7 +131,7 @@ export default function App() {
   });
 
   useEffect(() => {
-    localStorage.setItem('tst_suppliers', JSON.stringify(suppliers));
+    safeSetLocalStorage('tst_suppliers', suppliers);
   }, [suppliers]);
 
   const handleAddSupplier = (newSup: Supplier) => {
@@ -182,11 +182,7 @@ export default function App() {
 
   // Save Cart to localStorage
   useEffect(() => {
-    try {
-      localStorage.setItem('tst_cart', JSON.stringify(cart));
-    } catch (e) {
-      console.warn('Failed to save cart to localStorage', e);
-    }
+    safeSetLocalStorage('tst_cart', cart);
   }, [cart]);
 
   // Toast alert
@@ -287,7 +283,7 @@ export default function App() {
       const latestDeletedIds = Array.from(new Set([...deletedTourIds, ...serverDeletedIds]));
       if (serverDeletedIds.length > 0 && serverDeletedIds.some(id => !deletedTourIds.includes(id))) {
         setDeletedTourIds(latestDeletedIds);
-        localStorage.setItem('tst_deleted_tour_ids', JSON.stringify(latestDeletedIds));
+        safeSetLocalStorage('tst_deleted_tour_ids', latestDeletedIds);
       }
 
       // If server version has NOT changed and we are not forcing reload, skip heavy re-renders
@@ -374,23 +370,23 @@ export default function App() {
         const filteredTours = serverTours.filter(t => !latestDeletedIds.includes(t.id) && !latestDeletedIds.includes(t.slug));
         const normalized = normalizeTours(filteredTours);
         setTours(normalized);
-        localStorage.setItem('tst_tours', JSON.stringify(normalized));
+        safeSetLocalStorage('tst_tours', normalized);
       }
       if (serverBookings && Array.isArray(serverBookings)) {
         setBookings(serverBookings);
-        localStorage.setItem('tst_bookings', JSON.stringify(serverBookings));
+        safeSetLocalStorage('tst_bookings', serverBookings);
       }
       if (serverReviews && Array.isArray(serverReviews)) {
         setReviews(serverReviews);
-        localStorage.setItem('tst_reviews', JSON.stringify(serverReviews));
+        safeSetLocalStorage('tst_reviews', serverReviews);
       }
       if (serverCustomers && Array.isArray(serverCustomers)) {
         setCustomers(serverCustomers);
-        localStorage.setItem('tst_customers', JSON.stringify(serverCustomers));
+        safeSetLocalStorage('tst_customers', serverCustomers);
       }
       if (serverSettings && serverSettings.promptPayId) {
         setSettings(serverSettings);
-        localStorage.setItem('tst_settings', JSON.stringify(serverSettings));
+        safeSetLocalStorage('tst_settings', serverSettings);
       }
 
       if (serverVersion !== null) {

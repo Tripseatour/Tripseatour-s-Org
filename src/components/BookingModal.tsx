@@ -52,10 +52,21 @@ export const BookingModal: React.FC<BookingModalProps> = ({
 
   const [isForeigner, setIsForeigner] = useState<boolean>(currentLang !== 'TH');
 
-  // Price Calculation according to Nationality / Rate Category
+  const [selectedAddonIds, setSelectedAddonIds] = useState<string[]>(() => {
+    return (tour?.addons || []).filter(a => a.enabled !== false).map(a => a.id);
+  });
+
+  // Price Calculation according to Nationality / Rate Category & Add-ons
   const priceAdult = isForeigner && tour?.priceForeignAdult ? tour.priceForeignAdult : (tour?.priceAdult || 0);
   const priceChild = isForeigner && tour?.priceForeignChild ? tour.priceForeignChild : (tour?.priceChild || 0);
-  const totalAmount = (adults * priceAdult) + (children * priceChild);
+  const totalGuests = Number(adults) + Number(children);
+  const basePrice = (Number(adults) * priceAdult) + (Number(children) * priceChild);
+  const addonAdjustment = (tour?.addons || []).filter(a => selectedAddonIds.includes(a.id)).reduce((sum, a) => sum + (Number(a.priceAdjustment || 0) * totalGuests), 0);
+  const totalAmount = Math.max(0, basePrice + addonAdjustment);
+
+  const toggleAddonSelection = (id: string) => {
+    setSelectedAddonIds(prev => prev.includes(id) ? prev.filter(i => i !== id) : [...prev, id]);
+  };
 
   // Generate PromptPay QR Data URL
   useEffect(() => {
@@ -113,6 +124,7 @@ export const BookingModal: React.FC<BookingModalProps> = ({
         children,
         infants,
         isForeigner,
+        selectedAddons: (tour?.addons || []).filter(a => selectedAddonIds.includes(a.id)),
         totalAmount,
       };
 
@@ -145,6 +157,8 @@ export const BookingModal: React.FC<BookingModalProps> = ({
           customerPhone,
           customerLineId,
           nationality: nationality || 'Thai',
+          isForeigner,
+          selectedAddons: (tour?.addons || []).filter(a => selectedAddonIds.includes(a.id)),
           travelDate,
           pickupHotel,
           pickupZone: pickupZone || 'General Zone',
@@ -464,6 +478,53 @@ export const BookingModal: React.FC<BookingModalProps> = ({
                   </div>
                 </div>
               </div>
+
+              {/* Tour Optional Add-ons */}
+              {tour.addons && tour.addons.length > 0 && (
+                <div className="bg-emerald-50/80 border border-emerald-200 p-3.5 rounded-2xl space-y-2">
+                  <span className="font-extrabold text-emerald-950 text-xs flex items-center gap-1.5">
+                    <span>⚙️ ออฟชั่นเสริม / ส่วนลดพิเศษ (Optional Add-ons)</span>
+                  </span>
+                  <p className="text-[11px] text-slate-600">
+                    เลือกออฟชั่นเสริมเพิ่มเติม เช่น เดินทางไปท่าเรือเองเพื่อรับส่วนลด:
+                  </p>
+                  <div className="space-y-2 pt-1">
+                    {tour.addons.map((addon) => {
+                      const isSelected = selectedAddonIds.includes(addon.id);
+                      const adj = addon.priceAdjustment * totalGuests;
+                      return (
+                        <button
+                          key={addon.id}
+                          type="button"
+                          onClick={() => toggleAddonSelection(addon.id)}
+                          className={`w-full text-left p-3 rounded-xl border transition flex items-center justify-between cursor-pointer ${
+                            isSelected
+                              ? 'bg-emerald-950 text-white border-emerald-700 shadow-md'
+                              : 'bg-white text-slate-800 border-emerald-200 hover:bg-emerald-100/50'
+                          }`}
+                        >
+                          <div className="flex items-center gap-2.5">
+                            <div className={`w-4 h-4 rounded border flex items-center justify-center shrink-0 ${
+                              isSelected ? 'bg-emerald-400 border-emerald-300 text-slate-950 font-bold' : 'border-slate-300 bg-white'
+                            }`}>
+                              {isSelected && <Check className="w-3 h-3 stroke-[3]" />}
+                            </div>
+                            <div>
+                              <div className="font-bold text-xs">{addon.name}</div>
+                              <div className={`text-[10px] ${isSelected ? 'text-emerald-300' : 'text-slate-500'}`}>
+                                {addon.priceAdjustment < 0 ? `ส่วนลด ${addon.priceAdjustment} บาท/ท่าน` : `เพิ่ม ${addon.priceAdjustment} บาท/ท่าน`}
+                              </div>
+                            </div>
+                          </div>
+                          <div className={`font-extrabold text-xs ${adj < 0 ? 'text-emerald-400' : 'text-amber-600'}`}>
+                            {adj < 0 ? `-฿${Math.abs(adj).toLocaleString()}` : `+฿${adj.toLocaleString()}`}
+                          </div>
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
 
               {/* Pickup Hotel */}
               <div className="space-y-3">

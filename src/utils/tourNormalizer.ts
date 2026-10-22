@@ -141,7 +141,10 @@ export function normalizeTours(toursList: Tour[]): Tour[] {
               RU: step.description?.RU || defaultStep?.description?.RU || step.description?.EN || step.description?.TH || '',
             } : defaultStep?.description
           };
-        }) : defaultTour.itinerary
+        }) : defaultTour.itinerary,
+        addons: Array.isArray(tour.addons) ? tour.addons : (defaultTour.addons || [
+          { id: 'addon-1', name: 'เดินทางไปท่าเรือเอง (ลด -200 บาท/ท่าน)', priceAdjustment: -200, enabled: true }
+        ])
       };
     }
 
@@ -222,7 +225,10 @@ export function normalizeTours(toursList: Tour[]): Tour[] {
           ZH: (typeof step.description === 'object' && step.description?.ZH) ? step.description.ZH : ((typeof step.description === 'object' && step.description?.EN) ? step.description.EN : (step.description?.TH || '')),
           RU: (typeof step.description === 'object' && step.description?.RU) ? step.description.RU : ((typeof step.description === 'object' && step.description?.EN) ? step.description.EN : (step.description?.TH || '')),
         } : undefined
-      })) : []
+      })) : [],
+      addons: Array.isArray(tour.addons) ? tour.addons : [
+        { id: 'addon-1', name: 'เดินทางไปท่าเรือเอง (ลด -200 บาท/ท่าน)', priceAdjustment: -200, enabled: true }
+      ]
     };
   });
 }

@@ -5,7 +5,7 @@ import {
   Upload, FileImage, CheckCircle2, AlertCircle, RefreshCw, FileText, Camera, 
   ScanLine, Loader2, ArrowRight, Layers, ImagePlus, Star, Images
 } from 'lucide-react';
-import { Tour, TourItinerary, Language, Supplier } from '../types';
+import { Tour, TourItinerary, Language, Supplier, TourAddon } from '../types';
 import { normalizeTours } from '../utils/tourNormalizer';
 import { compressImageBase64 } from '../utils/storage';
 import { translateTourData } from '../utils/translationHelper';
@@ -94,6 +94,31 @@ export const EditTourModal: React.FC<EditTourModalProps> = ({
   const [highlightsTH, setHighlightsTH] = useState<string[]>([]);
   const [customHighlightInput, setCustomHighlightInput] = useState('');
 
+  // Tour Addons State
+  const [tourAddons, setTourAddons] = useState<TourAddon[]>([
+    { id: 'addon-1', name: 'เดินทางไปท่าเรือเอง (ลด -200 บาท/ท่าน)', priceAdjustment: -200, enabled: true }
+  ]);
+
+  const handleAddTourAddon = () => {
+    setTourAddons(prev => [
+      ...prev,
+      {
+        id: `addon-${Date.now()}`,
+        name: '',
+        priceAdjustment: -200,
+        enabled: true
+      }
+    ]);
+  };
+
+  const handleUpdateTourAddon = (index: number, field: keyof TourAddon, value: any) => {
+    setTourAddons(prev => prev.map((item, idx) => idx === index ? { ...item, [field]: value } : item));
+  };
+
+  const handleDeleteTourAddon = (index: number) => {
+    setTourAddons(prev => prev.filter((_, idx) => idx !== index));
+  };
+
   // AI Image Scanner State (Multi-Image Support)
   const [aiImages, setAiImages] = useState<AiTourImageItem[]>([]);
   const [coverImageIndex, setCoverImageIndex] = useState<number>(0);
@@ -144,10 +169,16 @@ export const EditTourModal: React.FC<EditTourModalProps> = ({
       setIncludedItemsTH(tour.included?.TH || []);
       setItinerarySteps(tour.itinerary ? JSON.parse(JSON.stringify(tour.itinerary)) : []);
       setHighlightsTH(tour.highlights?.TH || []);
+      setTourAddons(tour.addons !== undefined ? JSON.parse(JSON.stringify(tour.addons)) : [
+        { id: 'addon-1', name: 'เดินทางไปท่าเรือเอง (ลด -200 บาท/ท่าน)', priceAdjustment: -200, enabled: true }
+      ]);
       setIsVisible(tour.isVisible !== undefined ? tour.isVisible : (tour.isAvailable !== undefined ? tour.isAvailable : true));
       setIsAiSectionCollapsed(!initialAiScanMode);
     } else {
       // Default initial state for new tour
+      setTourAddons([
+        { id: 'addon-1', name: 'เดินทางไปท่าเรือเอง (ลด -200 บาท/ท่าน)', priceAdjustment: -200, enabled: true }
+      ]);
       setIsVisible(true);
       setTitleTH('');
       setTitleEN('');
@@ -669,7 +700,8 @@ export const EditTourModal: React.FC<EditTourModalProps> = ({
       reviewCount: tour?.reviewCount || 35,
       tags: [catLabel.TH, 'ภูเก็ต', 'ดำน้ำ'],
       isVisible,
-      isAvailable: isVisible
+      isAvailable: isVisible,
+      addons: tourAddons.filter(a => a.name.trim().length > 0)
     };
 
     const normalizedList = normalizeTours([rawTour as Tour]);
@@ -1329,26 +1361,62 @@ export const EditTourModal: React.FC<EditTourModalProps> = ({
                 </select>
               </div>
 
-              <div>
-                <label className="font-bold text-slate-300 block mb-1">ระยะเวลาเดินทาง (Duration)</label>
-                <input
-                  type="text"
-                  placeholder="เช่น เต็มวัน (08:00 - 17:00)"
-                  value={durationTH}
-                  onChange={(e) => setDurationTH(e.target.value)}
-                  className="w-full bg-slate-900 border border-slate-700 rounded-xl p-2.5 text-white"
-                />
+            </div>
+
+            {/* Prominent Section: Duration Badge & Location Badge (Displays on Tour Card Cover) */}
+            <div className="bg-slate-950/80 p-4 rounded-2xl border border-cyan-500/40 space-y-3 shadow-inner">
+              <div className="flex items-center justify-between">
+                <h5 className="font-extrabold text-cyan-300 text-xs flex items-center gap-1.5 uppercase tracking-wider">
+                  <Clock className="w-4 h-4 text-cyan-400" />
+                  <span>📍 ข้อความป้ายบนรูปภาพทัวร์ (ระยะเวลาเดินทาง & จุดหมายปลายทาง)</span>
+                </h5>
+                <span className="text-[10px] bg-cyan-950 text-cyan-300 border border-cyan-700/50 px-2 py-0.5 rounded-full font-bold">
+                  แสดงบนการ์ดหน้าร้าน
+                </span>
               </div>
 
-              <div className="sm:col-span-3">
-                <label className="font-bold text-slate-300 block mb-1">สถานที่ท่องเที่ยวหลัก (Location)</label>
-                <input
-                  type="text"
-                  placeholder="เช่น ภูเก็ต / เกาะพีพี / อ่าวพังงา"
-                  value={location}
-                  onChange={(e) => setLocation(e.target.value)}
-                  className="w-full bg-slate-900 border border-slate-700 rounded-xl p-2.5 text-white"
-                />
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                {/* 1. Duration / รอบเวลา */}
+                <div className="bg-slate-900 p-3 rounded-xl border border-slate-700 space-y-1.5">
+                  <label className="font-extrabold text-amber-300 text-xs flex items-center justify-between">
+                    <span className="flex items-center gap-1.5">
+                      <Clock className="w-4 h-4 text-amber-400" />
+                      <span>⏱️ ป้ายซ้าย: ระยะเวลาเดินทาง & รอบเวลา (Duration) *</span>
+                    </span>
+                  </label>
+                  <input
+                    type="text"
+                    required
+                    placeholder="เช่น ครึ่งวัน รอบเช้า 09:00 - 13:00 น. หรือ รอบบ่าย 13:00 - 17:00 น."
+                    value={durationTH}
+                    onChange={(e) => setDurationTH(e.target.value)}
+                    className="w-full bg-slate-950 border border-amber-500/50 rounded-xl p-2.5 text-amber-100 font-bold focus:ring-2 focus:ring-amber-500 text-xs"
+                  />
+                  <p className="text-[10.5px] text-slate-400 leading-normal">
+                    💡 <strong>ป้ายเวลารูปภาพซ้ายมือ</strong> (เช่น <span className="text-amber-300">ครึ่งวัน รอบเช้า 09:00 - 13:00 น. หรือ รอบบ่าย 13:00 - 17:00 น.</span>)
+                  </p>
+                </div>
+
+                {/* 2. Location / เกาะที่ไป */}
+                <div className="bg-slate-900 p-3 rounded-xl border border-slate-700 space-y-1.5">
+                  <label className="font-extrabold text-cyan-300 text-xs flex items-center justify-between">
+                    <span className="flex items-center gap-1.5">
+                      <MapPin className="w-4 h-4 text-cyan-400" />
+                      <span>📍 ป้ายขวา: สถานที่ท่องเที่ยวหลัก / เกาะที่แวะ (Location) *</span>
+                    </span>
+                  </label>
+                  <input
+                    type="text"
+                    required
+                    placeholder="เช่น เกาะไข่นอก - เกาะไข่ใน (เกาะไข่แมว) - เกาะไข่นุ้ย"
+                    value={location}
+                    onChange={(e) => setLocation(e.target.value)}
+                    className="w-full bg-slate-950 border border-cyan-500/50 rounded-xl p-2.5 text-cyan-100 font-bold focus:ring-2 focus:ring-cyan-500 text-xs"
+                  />
+                  <p className="text-[10.5px] text-slate-400 leading-normal">
+                    💡 <strong>ป้ายสถานที่รูปภาพขวามือ</strong> (เช่น <span className="text-cyan-300">เกาะไข่นอก - เกาะไข่ใน (เกาะไข่แมว) - เกาะไข่นุ้ย</span>)
+                  </p>
+                </div>
               </div>
             </div>
 
@@ -1721,6 +1789,74 @@ export const EditTourModal: React.FC<EditTourModalProps> = ({
                       placeholder="เช่น มีชูชีพให้บริการ พักถ่ายรูป 45 นาที..."
                       className="w-full bg-slate-950 border border-slate-700 rounded-lg p-2 text-slate-300 text-xs"
                     />
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          {/* SECTION 4: Optional Add-ons & Discounts */}
+          <div className="bg-slate-950/60 p-4 rounded-2xl border border-slate-800 space-y-3">
+            <div className="flex items-center justify-between">
+              <h4 className="font-bold text-emerald-300 text-xs uppercase tracking-wider flex items-center gap-1.5">
+                <Sparkles className="w-4 h-4 text-emerald-400" />
+                <span>4. ออฟชั่นเสริมแบบเปิดปิดได้ / ส่วนลด (Optional Add-ons & Discounts)</span>
+              </h4>
+
+              <button
+                type="button"
+                onClick={handleAddTourAddon}
+                className="bg-emerald-600 hover:bg-emerald-500 text-white font-bold px-3 py-1.5 rounded-xl text-xs transition flex items-center gap-1 cursor-pointer"
+              >
+                <Plus className="w-3.5 h-3.5" />
+                <span>+ เพิ่มออฟชั่นเสริม</span>
+              </button>
+            </div>
+
+            <p className="text-[11px] text-slate-400">
+              กำหนดออฟชั่นเสริมที่ลูกค้าสามารถเลือกติ๊กเปิด/ปิดได้ตอนจอง (เช่น เดินทางไปท่าเรือเอง ลด 200 บาท หรือบริการเสริมพิเศษ):
+            </p>
+
+            <div className="space-y-3 pt-1">
+              {tourAddons.map((addon, idx) => (
+                <div key={addon.id || idx} className="bg-slate-900 p-3 rounded-2xl border border-slate-800 space-y-2">
+                  <div className="flex items-center justify-between gap-2 border-b border-slate-800 pb-2">
+                    <span className="font-mono text-emerald-400 font-bold text-xs">
+                      ออฟชั่นเสริม #{idx + 1}
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() => handleDeleteTourAddon(idx)}
+                      className="text-rose-400 hover:text-rose-300 cursor-pointer p-1"
+                      title="ลบออฟชั่นนี้"
+                    >
+                      <Trash2 className="w-3.5 h-3.5" />
+                    </button>
+                  </div>
+
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+                    <div className="sm:col-span-2">
+                      <label className="text-[10px] text-slate-400 block mb-0.5">ชื่อออฟชั่นเสริม (เช่น เดินทางไปท่าเรือเอง)</label>
+                      <input
+                        type="text"
+                        value={addon.name}
+                        onChange={(e) => handleUpdateTourAddon(idx, 'name', e.target.value)}
+                        placeholder="เช่น เดินทางไปท่าเรือเอง (ลด -200 บาท/ท่าน)"
+                        className="w-full bg-slate-950 border border-slate-700 rounded-lg p-2 text-white text-xs font-bold"
+                      />
+                    </div>
+
+                    <div>
+                      <label className="text-[10px] text-slate-400 block mb-0.5">ราคาปรับเปลี่ยนต่อท่าน (บาท)</label>
+                      <input
+                        type="number"
+                        value={addon.priceAdjustment}
+                        onChange={(e) => handleUpdateTourAddon(idx, 'priceAdjustment', Number(e.target.value))}
+                        placeholder="-200 หรือ 500"
+                        className="w-full bg-slate-950 border border-slate-700 rounded-lg p-2 text-cyan-300 text-xs font-bold"
+                      />
+                      <span className="text-[9px] text-slate-500 mt-0.5 block">ติดลบ (-) คือส่วนลด, บวก (+) คือเพิ่มราคา</span>
+                    </div>
                   </div>
                 </div>
               ))}

@@ -28,6 +28,13 @@ export interface Supplier {
   createdAt?: string;
 }
 
+export interface TourAddon {
+  id: string;
+  name: string; // e.g. "เดินทางไปท่าเรือเอง (ลด -200 บาท/ท่าน)"
+  priceAdjustment: number; // e.g. -200 for discount, +500 for extra charge
+  enabled?: boolean;
+}
+
 export interface Tour {
   id: string;
   slug: string;
@@ -64,6 +71,7 @@ export interface Tour {
   isFeatured?: boolean;
   isAvailable?: boolean;
   isVisible?: boolean; // แสดงบนหน้าเว็บหรือไม่ (true = แสดง, false = ซ่อน/ไม่แสดง)
+  addons?: TourAddon[]; // ออฟชั่นเสริมเปิด-ปิดได้ / ส่วนลดพิเศษ
 }
 
 export interface CartItem {
@@ -75,6 +83,7 @@ export interface CartItem {
   children: number;
   infants: number;
   isForeigner?: boolean;
+  selectedAddons?: TourAddon[];
   pickupHotel?: string;
   pickupZone?: string;
   roomNumber?: string;
@@ -98,6 +107,7 @@ export interface Booking {
   customerLineId?: string;
   nationality: string;
   isForeigner?: boolean;
+  selectedAddons?: TourAddon[];
   travelDate: string; // YYYY-MM-DD
   pickupTime?: string;
   pickupHotel: string;
