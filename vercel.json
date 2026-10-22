@@ -2,15 +2,27 @@
   "rewrites": [
     {
       "source": "/api/livechat/sessions/:id",
-      "destination": "/api/livechat/sessions?id=:id"
+      "destination": "/api/livechat?action=sessions&id=:id"
+    },
+    {
+      "source": "/api/livechat/sessions",
+      "destination": "/api/livechat?action=sessions"
+    },
+    {
+      "source": "/api/livechat/send",
+      "destination": "/api/livechat?action=send"
     },
     {
       "source": "/api/livechat/read/:id",
-      "destination": "/api/livechat/read?id=:id"
+      "destination": "/api/livechat?action=read&id=:id"
     },
     {
       "source": "/api/livechat/delete/:id",
-      "destination": "/api/livechat/delete?id=:id"
+      "destination": "/api/livechat?action=delete&id=:id"
+    },
+    {
+      "source": "/api/line-notify",
+      "destination": "/api/send-line"
     },
     {
       "source": "/((?!api/).*)",
