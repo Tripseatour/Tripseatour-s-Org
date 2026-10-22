@@ -209,7 +209,7 @@ LINE OA: ${settings.lineOaId || '@056hxinu'}
 Provide friendly, warm, polite, and helpful travel advice in ${language}. Use clean markdown and emojis.`;
 
         const response = await ai.models.generateContent({
-          model: 'gemini-2.5-flash',
+          model: 'gemini-3.8-flash',
           contents: `${systemInstruction}\n\nCustomer Question: ${message}`,
         });
 

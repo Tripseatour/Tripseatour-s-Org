@@ -468,8 +468,26 @@ export const EditTourModal: React.FC<EditTourModalProps> = ({
       });
 
       if (!res.ok) {
-        const errJson = await res.json().catch(() => ({}));
-        throw new Error(errJson.error || 'ไม่สามารถวิเคราะห์ข้อมูลจากรูปภาพได้');
+        let errorMsg = '';
+        try {
+          const errJson = await res.json();
+          errorMsg = errJson.error || errJson.message || errJson.details || '';
+        } catch (_) {
+          // Response is not JSON
+        }
+
+        if (!errorMsg) {
+          if (res.status === 404) {
+            errorMsg = 'ไม่พบ Endpoint /api/extract-tour-from-image (404 Not Found) - กำลังซิงค์ไฟล์ API ไปยัง Vercel';
+          } else if (res.status === 429) {
+            errorMsg = 'โควต้าการใช้งาน Gemini AI ชั่วคราวเต็ม (Rate Limit) กรุณารอสักครู่ (1-2 นาที) แล้วลองใหม่อีกครั้ง หรือโควต้ารายวันจะรีเซ็ตเวลา 14:00 - 15:00 น.';
+          } else if (res.status === 503) {
+            errorMsg = 'เซิร์ฟเวอร์ Gemini AI กำลังมีผู้ใช้งานหนาแน่นชั่วคราว (High demand) กรุณาลองใหม่อีกครั้งใน 1-2 นาที';
+          } else {
+            errorMsg = `ไม่สามารถวิเคราะห์ข้อมูลจากรูปภาพได้ (HTTP ${res.status})`;
+          }
+        }
+        throw new Error(errorMsg);
       }
 
       const resData = await res.json();

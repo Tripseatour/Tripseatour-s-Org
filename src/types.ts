@@ -38,6 +38,7 @@ export interface Tour {
   highlights: Record<Language, string[]>;
   priceAdult: number;
   priceChild: number; // Age 4-11
+  priceInfant?: number; // Age 0-3 (Usually free 0 THB)
   costAdult?: number; // ราคาทุนเอเยนต์ผู้ใหญ่ (Net Cost)
   costChild?: number; // ราคาทุนเอเยนต์เด็ก (Net Cost)
   supplierId?: string; // ID บริษัท Supplier ผู้ให้บริการเรือ
