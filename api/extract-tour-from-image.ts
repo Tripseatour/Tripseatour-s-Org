@@ -1,5 +1,30 @@
 import { GoogleGenAI } from '@google/genai';
 
+// Helper to gather all configured Gemini API keys (Key Pool / Rotation)
+function getGeminiApiKeys(): string[] {
+  const keys: string[] = [];
+  const addKey = (k?: string) => {
+    if (!k || typeof k !== 'string') return;
+    k.split(/[\n,]/).forEach(item => {
+      const clean = item.trim();
+      if (clean && !clean.includes('MY_GEMINI_API_KEY') && !keys.includes(clean)) {
+        keys.push(clean);
+      }
+    });
+  };
+
+  addKey(process.env.GEMINI_API_KEYS);
+  addKey(process.env.VITE_GEMINI_API_KEYS);
+  addKey(process.env.GEMINI_API_KEY);
+  addKey(process.env.VITE_GEMINI_API_KEY);
+  addKey(process.env.GEMINI_API_KEY_2);
+  addKey(process.env.GEMINI_API_KEY_3);
+  addKey(process.env.GEMINI_API_KEY_4);
+  addKey(process.env.GEMINI_API_KEY_5);
+
+  return keys;
+}
+
 export default async function handler(req: any, res: any) {
   // CORS configuration for Vercel Serverless Function
   res.setHeader('Access-Control-Allow-Credentials', 'true');
@@ -22,11 +47,11 @@ export default async function handler(req: any, res: any) {
     const body = typeof req.body === 'string' ? JSON.parse(req.body) : (req.body || {});
     const { images, imageBase64, mimeType } = body;
 
-    // Check Gemini API Key
-    const apiKey = process.env.GEMINI_API_KEY || process.env.VITE_GEMINI_API_KEY;
-    if (!apiKey || apiKey.includes('MY_GEMINI_API_KEY')) {
+    // Check Available Gemini API Keys Pool
+    const apiKeys = getGeminiApiKeys();
+    if (apiKeys.length === 0) {
       return res.status(500).json({
-        error: 'ยังไม่ได้ระบุ GEMINI_API_KEY ใน Vercel: กรุณาเข้าไปที่ Vercel Dashboard > Project Settings > Environment Variables แล้วเพิ่มตัวแปรชื่อ GEMINI_API_KEY พร้อมใส่ API Key จาก Google AI Studio'
+        error: 'ยังไม่ได้ระบุ GEMINI_API_KEY ใน Vercel: กรุณาเข้าไปที่ Vercel Dashboard > Project Settings > Environment Variables แล้วเพิ่มตัวแปรชื่อ GEMINI_API_KEY หรือ GEMINI_API_KEY_2 พร้อมใส่ API Key จาก Google AI Studio'
       });
     }
 
@@ -152,28 +177,50 @@ Important:
 
     const textPart = { text: prompt };
 
-    const ai = new GoogleGenAI({
-      apiKey,
-      httpOptions: {
-        headers: {
-          'User-Agent': 'aistudio-build'
+    let responseText = '';
+    let lastError: any = null;
+    let successfulKeyIndex = -1;
+
+    // Multi-key rotation loop: automatically try next available key if one fails
+    for (let i = 0; i < apiKeys.length; i++) {
+      const activeKey = apiKeys[i];
+      try {
+        const ai = new GoogleGenAI({
+          apiKey: activeKey,
+          httpOptions: {
+            headers: {
+              'User-Agent': 'aistudio-build'
+            }
+          }
+        });
+
+        const aiResponse = await ai.models.generateContent({
+          model: 'gemini-3.8-flash',
+          contents: { parts: [...imageParts, textPart] },
+        });
+
+        if (aiResponse && aiResponse.text) {
+          responseText = aiResponse.text;
+          successfulKeyIndex = i;
+          break; // Success!
+        }
+      } catch (err: any) {
+        lastError = err;
+        console.warn(`Gemini Key #${i + 1} failed:`, err?.message || err);
+
+        // If there are more keys in the pool, try the next one
+        if (i < apiKeys.length - 1) {
+          console.log(`Rotating to Gemini Key #${i + 2}...`);
+          continue;
         }
       }
-    });
+    }
 
-    let responseText = '';
-    try {
-      const aiResponse = await ai.models.generateContent({
-        model: 'gemini-3.8-flash',
-        contents: { parts: [...imageParts, textPart] },
-      });
-      responseText = aiResponse.text || '';
-    } catch (primaryErr: any) {
-      console.warn('Vercel Gemini 3.8-flash extract error:', primaryErr?.message || primaryErr);
-      const errMsg = (primaryErr?.message || '').toLowerCase();
+    if (!responseText) {
+      const errMsg = (lastError?.message || '').toLowerCase();
       if (errMsg.includes('429') || errMsg.includes('quota') || errMsg.includes('resource_exhausted')) {
         return res.status(429).json({
-          error: 'โควต้าการใช้งาน Gemini AI ชั่วคราวเต็ม (Rate Limit) กรุณารอสักครู่ (1-2 นาที) แล้วลองใหม่อีกครั้ง หรือโควต้ารายวันจะรีเซ็ตเวลา 14:00 - 15:00 น. เวลาไทย'
+          error: `โควต้าการใช้งาน Gemini AI ชั่วคราวเต็ม (ระบบทดลองหมุนเวียนคีย์ทั้งหมด ${apiKeys.length} ตัวแล้ว) กรุณารอสักครู่ (1-2 นาที) แล้วลองใหม่อีกครั้ง หรือโควต้ารายวันจะรีเซ็ตเวลา 14:00 - 15:00 น. เวลาไทย`
         });
       }
       if (errMsg.includes('503') || errMsg.includes('unavailable') || errMsg.includes('high demand')) {
@@ -182,7 +229,7 @@ Important:
         });
       }
       return res.status(500).json({
-        error: `เกิดข้อผิดพลาดในการประมวลผล Gemini AI: ${primaryErr?.message || 'ไม่สามารถวิเคราะห์ข้อมูลจากรูปภาพได้'}`
+        error: `เกิดข้อผิดพลาดในการประมวลผล Gemini AI: ${lastError?.message || 'ไม่สามารถวิเคราะห์ข้อมูลจากรูปภาพได้'}`
       });
     }
 
@@ -192,7 +239,8 @@ Important:
     return res.status(200).json({
       success: true,
       data: parsed,
-      imageCount: imageParts.length
+      imageCount: imageParts.length,
+      usedKeyIndex: successfulKeyIndex
     });
   } catch (err: any) {
     console.error('Vercel extract-tour-from-image error:', err);

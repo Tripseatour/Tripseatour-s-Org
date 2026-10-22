@@ -56,6 +56,31 @@ function readLocalFile<T>(filename: string, defaultValue: T): T {
   return defaultValue;
 }
 
+// Helper to gather all configured Gemini API keys (Key Pool / Rotation)
+function getGeminiApiKeys(): string[] {
+  const keys: string[] = [];
+  const addKey = (k?: string) => {
+    if (!k || typeof k !== 'string') return;
+    k.split(/[\n,]/).forEach(item => {
+      const clean = item.trim();
+      if (clean && !clean.includes('MY_GEMINI_API_KEY') && !keys.includes(clean)) {
+        keys.push(clean);
+      }
+    });
+  };
+
+  addKey(process.env.GEMINI_API_KEYS);
+  addKey(process.env.VITE_GEMINI_API_KEYS);
+  addKey(process.env.GEMINI_API_KEY);
+  addKey(process.env.VITE_GEMINI_API_KEY);
+  addKey(process.env.GEMINI_API_KEY_2);
+  addKey(process.env.GEMINI_API_KEY_3);
+  addKey(process.env.GEMINI_API_KEY_4);
+  addKey(process.env.GEMINI_API_KEY_5);
+
+  return keys;
+}
+
 // Gemini AI Client
 const ai = new GoogleGenAI({
   apiKey: process.env.GEMINI_API_KEY,
@@ -878,16 +903,45 @@ Important:
 
     const textPart = { text: prompt };
 
+    const apiKeys = getGeminiApiKeys();
     let responseText = '';
-    try {
-      const aiResponse = await ai.models.generateContent({
-        model: 'gemini-3.8-flash',
-        contents: { parts: [...imageParts, textPart] },
-      });
-      responseText = aiResponse.text || '';
-    } catch (primaryErr: any) {
-      console.warn('Model gemini-3.8-flash failed:', primaryErr?.message);
-      throw new Error(primaryErr?.message || 'AI extraction failed');
+    let lastError: any = null;
+    let successfulKeyIndex = -1;
+
+    for (let i = 0; i < apiKeys.length; i++) {
+      const activeKey = apiKeys[i];
+      try {
+        const genClient = new GoogleGenAI({
+          apiKey: activeKey,
+          httpOptions: {
+            headers: {
+              'User-Agent': 'aistudio-build'
+            }
+          }
+        });
+
+        const aiResponse = await genClient.models.generateContent({
+          model: 'gemini-3.8-flash',
+          contents: { parts: [...imageParts, textPart] },
+        });
+
+        if (aiResponse && aiResponse.text) {
+          responseText = aiResponse.text;
+          successfulKeyIndex = i;
+          break;
+        }
+      } catch (err: any) {
+        lastError = err;
+        console.warn(`Server Gemini Key #${i + 1} failed:`, err?.message || err);
+        if (i < apiKeys.length - 1) {
+          console.log(`Rotating to Gemini Key #${i + 2}...`);
+          continue;
+        }
+      }
+    }
+
+    if (!responseText) {
+      throw new Error(lastError?.message || 'AI extraction failed across all configured keys');
     }
 
     const cleanJson = responseText.replace(/```json\s*|```/g, '').trim();
@@ -896,7 +950,8 @@ Important:
     res.json({
       success: true,
       data: parsed,
-      imageCount: imageParts.length
+      imageCount: imageParts.length,
+      usedKeyIndex: successfulKeyIndex
     });
   } catch (err: any) {
     console.error('Extract tour from image error:', err);
