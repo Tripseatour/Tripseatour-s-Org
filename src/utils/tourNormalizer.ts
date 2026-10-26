@@ -144,7 +144,13 @@ export function normalizeTours(toursList: Tour[]): Tour[] {
         }) : defaultTour.itinerary,
         addons: Array.isArray(tour.addons) ? tour.addons : (defaultTour.addons || [
           { id: 'addon-1', name: 'เดินทางไปท่าเรือเอง (ลด -200 บาท/ท่าน)', priceAdjustment: -200, enabled: true }
-        ])
+        ]),
+        pickupZoneConfigs: (Array.isArray(tour.pickupZoneConfigs) && tour.pickupZoneConfigs.length > 0)
+          ? tour.pickupZoneConfigs
+          : defaultTour.pickupZoneConfigs,
+        pickupAreas: (Array.isArray(tour.pickupAreas) && tour.pickupAreas.length > 0)
+          ? tour.pickupAreas
+          : (tour.pickupZoneConfigs ? tour.pickupZoneConfigs.map(z => z.zoneName) : defaultTour.pickupAreas)
       };
     }
 
@@ -228,7 +234,13 @@ export function normalizeTours(toursList: Tour[]): Tour[] {
       })) : [],
       addons: Array.isArray(tour.addons) ? tour.addons : [
         { id: 'addon-1', name: 'เดินทางไปท่าเรือเอง (ลด -200 บาท/ท่าน)', priceAdjustment: -200, enabled: true }
-      ]
+      ],
+      pickupZoneConfigs: (Array.isArray(tour.pickupZoneConfigs) && tour.pickupZoneConfigs.length > 0)
+        ? tour.pickupZoneConfigs
+        : undefined,
+      pickupAreas: (Array.isArray(tour.pickupAreas) && tour.pickupAreas.length > 0)
+        ? tour.pickupAreas
+        : (tour.pickupZoneConfigs ? tour.pickupZoneConfigs.map(z => z.zoneName) : ['Patong', 'Kata', 'Karon', 'Phuket Town'])
     };
   });
 }

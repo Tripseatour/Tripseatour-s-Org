@@ -1,7 +1,9 @@
 import React, { useRef, useState, useEffect } from 'react';
 import { Download, CheckCircle2, QrCode, ShieldCheck, Sparkles } from 'lucide-react';
 import { toPng } from 'html-to-image';
-import { Booking, AppSettings } from '../types';
+import { Booking, AppSettings, Language } from '../types';
+import { getAddonDisplayName } from '../utils/addonHelper';
+import { getZoneDisplayName } from '../utils/pickupZoneHelper';
 import tripSeaLogo from '../assets/images/trip_sea_tour_logo_1786613886795.jpg';
 
 interface TicketVoucherProps {
@@ -223,7 +225,7 @@ export const TicketVoucher: React.FC<TicketVoucherProps> = ({
                 <div className="border-b border-slate-900 p-2 space-y-1 flex-1">
                   <div className="text-[9px] text-slate-500 font-bold uppercase leading-none">Pick up Hotel (รับโรงแรม)</div>
                   <div className="text-xs font-extrabold text-slate-900">
-                    🏨 {booking.pickupHotel} {booking.roomNumber ? `(ห้อง ${booking.roomNumber})` : ''} {booking.pickupZone ? `[โซน ${booking.pickupZone}]` : ''}
+                    🏨 {booking.pickupHotel} {booking.roomNumber ? `(ห้อง ${booking.roomNumber})` : ''} {booking.pickupZone ? `[โซน ${getZoneDisplayName(booking.pickupZone, (currentLang as Language) || 'TH')}${booking.pickupZoneFee ? ` +฿${booking.pickupZoneFee}` : ''}]` : ''}
                   </div>
                 </div>
 
@@ -234,6 +236,20 @@ export const TicketVoucher: React.FC<TicketVoucherProps> = ({
                     🚐 {booking.sendBackHotel || booking.pickupHotel}
                   </div>
                 </div>
+
+                {/* Selected Options / Addons Row */}
+                {booking.selectedAddons && booking.selectedAddons.length > 0 && (
+                  <div className="border-b border-slate-900 p-2 space-y-1 bg-emerald-50/60">
+                    <div className="text-[9px] text-emerald-800 font-bold uppercase leading-none">Selected Options / Add-ons (ออฟชั่นเสริม)</div>
+                    <div className="text-xs font-bold text-emerald-950 flex flex-wrap gap-1">
+                      {booking.selectedAddons.map((addon, aIdx) => (
+                        <span key={aIdx} className="bg-emerald-100 border border-emerald-300 px-2 py-0.5 rounded text-[11px]">
+                          ✓ {getAddonDisplayName(addon, currentLang as Language)}
+                        </span>
+                      ))}
+                    </div>
+                  </div>
+                )}
 
                 {/* Remarks Row */}
                 <div className="p-2 space-y-1 flex-1 bg-slate-50">
@@ -309,24 +325,27 @@ export const TicketVoucher: React.FC<TicketVoucherProps> = ({
               {/* THAI Cautions */}
               <div className="text-rose-700 font-bold space-y-0.5 pr-2 border-r border-slate-200">
                 <p>1. โปรดรอที่ล็อบบี้ตรงเวลานัด คนขับรถตู้จะรอสูงสุดเพียง 5 นาที หากล่าช้าจะถือว่าสละสิทธิ์และไม่คืนเงินทุกกรณี</p>
-                <p>2. สตรีมีครรภ์ ผู้ป่วยโรคหัวใจ โรคกระดูกสันหลัง หรือความดันโลหิตสูง ห้ามเดินทางออกทะเลเพื่อความปลอดภัย</p>
-                <p>3. หากไม่พบรถรับภายใน 20 นาที หรือต้องการความช่วยเหลือด่วน กรุณาโทรติดต่อ {companyPhone}</p>
+                <p>2. ชำระล่วงหน้าก่อนวันเดินทาง 1 วัน / เลื่อนหรือยกเลิกได้ล่วงหน้าก่อนวันเดินทาง 1 วัน ไม่เกินเวลา 18:00 น. (หากเลยกำหนดงดคืนเงินทุกกรณี)</p>
+                <p>3. สตรีมีครรภ์ ผู้ป่วยโรคหัวใจ โรคกระดูกสันหลัง หรือความดันโลหิตสูง ห้ามเดินทางออกทะเลเพื่อความปลอดภัย</p>
+                <p>4. หากไม่พบรถรับภายใน 20 นาที หรือต้องการความช่วยเหลือด่วน กรุณาโทรติดต่อ {companyPhone}</p>
               </div>
 
               {/* CHINESE Cautions */}
               <div className="text-slate-700 font-medium space-y-0.5 pr-2 border-r border-slate-200">
                 <p className="font-extrabold text-slate-900 leading-none">重要提醒 :</p>
                 <p>1. 请准时在酒店大堂等候。司机最多等5分钟，逾期视为自动放弃，恕不予退款。</p>
-                <p>2. 孕妇、患有心脏病、严重高血压及脊椎疾病患者禁止乘船出海，隐瞒行程风险自负。</p>
-                <p>3. 若超过预定时间20分钟未见司机，请立即拨打客服热线: {companyPhone}</p>
+                <p>2. 须提前1天付款。改期/取消须在出行前1天 18:00 前提出，逾期概不退款。</p>
+                <p>3. 孕妇、患有心脏病、严重高血压及脊椎疾病患者禁止乘船出海。</p>
+                <p>4. 若超过预定时间20分钟未见司机，请立即拨打客服热线: {companyPhone}</p>
               </div>
 
               {/* ENGLISH Cautions */}
               <div className="text-slate-700 font-medium space-y-0.5">
                 <p className="font-extrabold text-slate-900 leading-none">Cautions & Policy:</p>
-                <p>1. Please standby at lobby on time. Driver waits max 5 mins. No refund for late show.</p>
-                <p>2. Pregnant women and guests with heart, bone, or hypertension conditions are strictly prohibited on tours.</p>
-                <p>3. If driver is delayed over 20 mins, contact support immediately: {companyPhone}</p>
+                <p>1. Standby at lobby on time. Driver waits max 5 mins. No refund for late show.</p>
+                <p>2. Advance payment req. 1 day prior. Cancel/reschedule allowed up to 1 day prior before 18:00 (No refund past deadline).</p>
+                <p>3. Pregnant women and guests with heart/spine/hypertension conditions are prohibited on boat tours.</p>
+                <p>4. If driver is delayed over 20 mins, contact support: {companyPhone}</p>
               </div>
             </div>
 

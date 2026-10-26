@@ -1,4 +1,5 @@
-import { GoogleGenAI } from '@google/genai';
+import { GoogleGenAI, ThinkingLevel } from '@google/genai';
+import { safeParseLlmJson } from '../src/utils/llmJsonParser';
 
 // Helper to gather all configured Gemini API keys (Key Pool / Rotation)
 function getGeminiApiKeys(): string[] {
@@ -173,45 +174,56 @@ Output ONLY a valid JSON object matching this exact schema (no markdown, no back
 Important:
 - "category" must be strictly one of: "island", "sunset", "yacht", "eco", "sightseeing"
 - Prices must be numbers (THB currency)
-- Ensure all itinerary steps visible in the timetable are extracted accurately in chronological order with start/end times.`;
+- Ensure all itinerary steps visible in the timetable are extracted accurately in chronological order with start/end times.
+- Output MUST be pure, valid JSON format matching the schema above.
+- Never use unescaped double quotes inside text values (use single quotes '...' or escape with \").
+- Do not include trailing commas or comments.`;
 
     const textPart = { text: prompt };
 
     let responseText = '';
     let lastError: any = null;
     let successfulKeyIndex = -1;
+    // Prioritize fast, high-availability gemini-3.1-flash-lite to avoid 503 high demand & 504 deadline timeouts
+    const CANDIDATE_MODELS = ['gemini-3.1-flash-lite', 'gemini-3.8-flash', 'gemini-flash-latest'];
 
-    // Multi-key rotation loop: automatically try next available key if one fails
-    for (let i = 0; i < apiKeys.length; i++) {
+    // Multi-key and multi-model rotation loop: automatically try next available key/model if one fails
+    keyLoop: for (let i = 0; i < apiKeys.length; i++) {
       const activeKey = apiKeys[i];
-      try {
-        const ai = new GoogleGenAI({
-          apiKey: activeKey,
-          httpOptions: {
-            headers: {
-              'User-Agent': 'aistudio-build'
-            }
-          }
-        });
-
-        const aiResponse = await ai.models.generateContent({
-          model: 'gemini-3.8-flash',
-          contents: { parts: [...imageParts, textPart] },
-        });
-
-        if (aiResponse && aiResponse.text) {
-          responseText = aiResponse.text;
-          successfulKeyIndex = i;
-          break; // Success!
+      const ai = new GoogleGenAI({
+        apiKey: activeKey,
+        httpOptions: {
+          headers: {
+            'User-Agent': 'aistudio-build'
+          },
+          timeout: 35000
         }
-      } catch (err: any) {
-        lastError = err;
-        console.warn(`Gemini Key #${i + 1} failed:`, err?.message || err);
+      });
 
-        // If there are more keys in the pool, try the next one
-        if (i < apiKeys.length - 1) {
-          console.log(`Rotating to Gemini Key #${i + 2}...`);
-          continue;
+      for (const candidateModel of CANDIDATE_MODELS) {
+        try {
+          const config: any = {
+            responseMimeType: 'application/json',
+          };
+          // For gemini-3.8-flash, minimize thinking latency to prevent HeadersTimeoutError
+          if (candidateModel.includes('3.8')) {
+            config.thinkingConfig = { thinkingLevel: ThinkingLevel.LOW };
+          }
+
+          const aiResponse = await ai.models.generateContent({
+            model: candidateModel,
+            contents: { parts: [...imageParts, textPart] },
+            config,
+          });
+
+          if (aiResponse && aiResponse.text) {
+            responseText = aiResponse.text;
+            successfulKeyIndex = i;
+            break keyLoop; // Success!
+          }
+        } catch (err: any) {
+          lastError = err;
+          console.warn(`Gemini Key #${i + 1} with model ${candidateModel} failed:`, err?.message || err);
         }
       }
     }
@@ -233,8 +245,7 @@ Important:
       });
     }
 
-    const cleanJson = responseText.replace(/```json\s*|```/g, '').trim();
-    const parsed = JSON.parse(cleanJson);
+    const parsed = safeParseLlmJson(responseText);
 
     return res.status(200).json({
       success: true,

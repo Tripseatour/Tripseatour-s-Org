@@ -53,32 +53,32 @@ export const Navbar: React.FC<NavbarProps> = ({
   return (
     <header className="sticky top-0 z-40 bg-white/95 backdrop-blur-md border-b border-sky-100 shadow-sm shadow-sky-900/5">
       {/* Top Banner Bar */}
-      <div className="bg-gradient-to-r from-sky-950 via-cyan-950 to-blue-950 text-slate-200 px-3 sm:px-4 py-1.5 text-xs font-medium border-b border-cyan-800/40">
-        <div className="max-w-7xl mx-auto flex items-center justify-between gap-2">
-          <div className="flex items-center gap-3">
-            <span className="inline-flex items-center gap-1.5 text-cyan-300 font-bold text-[10.5px] sm:text-xs">
+      <div className="bg-gradient-to-r from-sky-950 via-cyan-950 to-blue-950 text-slate-200 px-2.5 sm:px-4 py-1.5 text-xs font-medium border-b border-cyan-800/40 w-full overflow-hidden">
+        <div className="max-w-7xl mx-auto flex items-center justify-between gap-1.5 sm:gap-2 min-w-0">
+          <div className="flex items-center gap-2 min-w-0 shrink">
+            <span className="inline-flex items-center gap-1 text-cyan-300 font-bold text-[10px] sm:text-xs truncate">
               <ShieldCheck className="w-3.5 h-3.5 text-cyan-400 shrink-0" />
-              <span>{t.bestServiceGuarantee}</span>
+              <span className="truncate">{t.bestServiceGuarantee}</span>
             </span>
-            <span className="hidden sm:inline-flex items-center gap-1 text-sky-200/80 text-xs">
+            <span className="hidden md:inline-flex items-center gap-1 text-sky-200/80 text-xs shrink-0">
               ⚡ {t.instantConfirmation}
             </span>
           </div>
 
-          <div className="flex items-center gap-2.5 sm:gap-4 text-[11px]">
+          <div className="flex items-center gap-2 sm:gap-4 text-[10.5px] sm:text-[11px] shrink-0">
             <a
               href="tel:+66626816494"
-              className="inline-flex items-center gap-1 text-slate-200 hover:text-cyan-300 transition font-medium"
+              className="inline-flex items-center gap-1 text-slate-200 hover:text-cyan-300 transition font-medium shrink-0"
             >
-              <Phone className="w-3 h-3 text-cyan-400" />
+              <Phone className="w-3 h-3 text-cyan-400 shrink-0" />
               <span>062-681-6494</span>
             </a>
             <span className="text-cyan-800">|</span>
             <button
               onClick={onOpenLookup}
-              className="inline-flex items-center gap-1 text-cyan-300 hover:text-cyan-200 font-bold transition"
+              className="inline-flex items-center gap-1 text-cyan-300 hover:text-cyan-200 font-bold transition shrink-0"
             >
-              <Ticket className="w-3.5 h-3.5 text-cyan-400" />
+              <Ticket className="w-3.5 h-3.5 text-cyan-400 shrink-0" />
               <span>{t.checkTicketNavbar || t.checkStatus}</span>
             </button>
             <span className="text-cyan-800 hidden sm:inline">|</span>

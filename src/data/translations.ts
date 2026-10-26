@@ -143,7 +143,7 @@ export const translations: Record<Language, Record<string, string>> = {
     searching: 'กำลังค้นหา...',
     foundTicketsCount: 'พบ {count} ตั๋ว',
     foundBookingsTitle: 'พบรายการจองทั้งหมด {count} โปรแกรมทัวร์',
-    heroDirectBadge: 'เที่ยวเกาะภูเก็ต ล่องเรือยอชท์ ราคาตรง ไม่ผ่านเอเจ้นท์',
+    heroDirectBadge: 'เที่ยวเกาะภูเก็ต ล่องเรือยอชท์ เรือสปีดโบ้ท',
     heroMainTitle1: 'จองทัวร์เที่ยวเกาะ',
     heroMainTitle2: 'ทะเลภูเก็ต',
     checkTicketNavbar: 'เช็คตั๋ว',

@@ -1,0 +1,89 @@
+[
+  {
+    "id": "sup-1792743963575",
+    "name": "GreenView Tour",
+    "code": "SURINGV",
+    "phone": "",
+    "notes": "เกาะสุรินทร์",
+    "isActive": true
+  },
+  {
+    "id": "sup-1792743939663",
+    "name": "Nikorn Marine",
+    "code": "NKMARINE",
+    "phone": "",
+    "notes": "เกาะเฮ เกาะราชา",
+    "isActive": true
+  },
+  {
+    "id": "sup-1792743848553",
+    "name": "Relax PhiPhi",
+    "code": "RELAXPHI",
+    "phone": "",
+    "notes": "เกาะพีพีออกสาย",
+    "isActive": true
+  },
+  {
+    "id": "sup-1792743821975",
+    "name": "P.H.Marine",
+    "code": "PHMARINE",
+    "phone": "",
+    "notes": "เกาะไข่ ครึ่งวัน เต็มวัน",
+    "isActive": true
+  },
+  {
+    "id": "sup-1792743788272",
+    "name": "Phi Phi Natthicha Marine",
+    "code": "NATTHICHA",
+    "phone": "",
+    "isActive": true
+  },
+  {
+    "id": "sup-1792743396698",
+    "name": "Golden Region Travel",
+    "code": "GOLDRT",
+    "phone": "",
+    "notes": "เการาชา เกาะเฮ",
+    "isActive": true
+  },
+  {
+    "id": "sup-1",
+    "name": "บริษัท พีพี ซีสตาร์ อันดามัน จำกัด (SeaStar Andaman)",
+    "code": "SEASTAR",
+    "phone": "",
+    "address": "88/12 หมู่ 5 ต.รัษฎา อ.เมือง จ.ภูเก็ต 83000",
+    "notes": "ผู้ให้บริการเรือสปีดโบ๊ท VIP ไปเกาะพีพี และเกาะไข่",
+    "isActive": true,
+    "createdAt": "2026-01-10"
+  },
+  {
+    "id": "sup-2",
+    "name": "บริษัท รายา พรินเซส ทัวร์ จำกัด (Raya Princess Tour)",
+    "code": "RAYAPIN",
+    "phone": "",
+    "address": "45/99 หมู่ 1 ต.ฉลอง อ.เมือง จ.ภูเก็ต 83130",
+    "notes": "เชี่ยวชาญเส้นทางเกาะราชาใหญ่ เกาะราชาน้อย และเกาะเฮ",
+    "isActive": true,
+    "createdAt": "2026-01-12"
+  },
+  {
+    "id": "sup-3",
+    "name": "บริษัท ภูเก็ต สปีดโบ๊ท มารีน่า จำกัด (Phuket Speedboat Marina)",
+    "code": "PHKBOAT",
+    "phone": "",
+    "address": "12/4 ท่าเรือรอยัลภูเก็ตมารีน่า ต.เกาะแก้ว จ.ภูเก็ต",
+    "notes": "บริการเรือยอชท์แคททามารันและเรือสปีดโบ๊ทเหมาลำชมพระอาทิตย์ตก",
+    "isActive": true,
+    "createdAt": "2026-01-15"
+  },
+  {
+    "id": "sup-4",
+    "name": "บริษัท เจมส์บอนด์ มารีน ทัวร์ จำกัด (James Bond Marine Tours)",
+    "code": "JMBOND",
+    "phone": "",
+    "address": "108/5 หมู่ 2 ต.คลองเคียน อ.ตะกั่วทุ่ง จ.พังงา",
+    "notes": "นำเที่ยวอ่าวพังงา เกาะปันหยี และเกาะเจมส์บอนด์ พายเรือแคนู",
+    "isActive": true,
+    "createdAt": "2026-01-20"
+  }
+]

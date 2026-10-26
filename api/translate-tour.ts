@@ -1,4 +1,29 @@
-import { GoogleGenAI } from '@google/genai';
+import { GoogleGenAI, ThinkingLevel } from '@google/genai';
+import { safeParseLlmJson } from '../src/utils/llmJsonParser';
+
+function getGeminiApiKeys(): string[] {
+  const keys: string[] = [];
+  const addKey = (k?: string) => {
+    if (!k || typeof k !== 'string') return;
+    k.split(/[\n,]/).forEach(item => {
+      const clean = item.trim();
+      if (clean && !clean.includes('MY_GEMINI_API_KEY') && !keys.includes(clean)) {
+        keys.push(clean);
+      }
+    });
+  };
+
+  addKey(process.env.GEMINI_API_KEYS);
+  addKey(process.env.VITE_GEMINI_API_KEYS);
+  addKey(process.env.GEMINI_API_KEY);
+  addKey(process.env.VITE_GEMINI_API_KEY);
+  addKey(process.env.GEMINI_API_KEY_2);
+  addKey(process.env.GEMINI_API_KEY_3);
+  addKey(process.env.GEMINI_API_KEY_4);
+  addKey(process.env.GEMINI_API_KEY_5);
+
+  return keys;
+}
 
 export default async function handler(req: any, res: any) {
   // CORS configuration for Vercel Serverless Function
@@ -42,19 +67,11 @@ export default async function handler(req: any, res: any) {
       translatedItinerary: undefined as any
     };
 
-    const apiKey = process.env.GEMINI_API_KEY || process.env.VITE_GEMINI_API_KEY;
-    if (apiKey && !apiKey.includes('MY_GEMINI_API_KEY')) {
-      try {
-        const ai = new GoogleGenAI({
-          apiKey,
-          httpOptions: {
-            headers: {
-              'User-Agent': 'aistudio-build'
-            }
-          }
-        });
+    const apiKeys = getGeminiApiKeys();
+    const CANDIDATE_MODELS = ['gemini-3.1-flash-lite', 'gemini-3.8-flash', 'gemini-flash-latest'];
+    let translatedJsonStr = '';
 
-        const prompt = `You are a professional travel localization assistant for Trip Sea Tour Phuket.
+    const prompt = `You are a professional travel localization assistant for Trip Sea Tour Phuket.
 Translate this Thai tour listing into English (EN), Simplified Chinese (ZH), and Russian (RU).
 Make the translations attractive, natural, and accurate for tourism websites.
 
@@ -89,25 +106,50 @@ Return ONLY valid JSON in this exact structure without markdown formatting or ba
   ]
 }`;
 
-        const aiResponse = await ai.models.generateContent({
-          model: 'gemini-3.8-flash',
-          contents: prompt,
+    if (apiKeys.length > 0) {
+      keyLoop: for (let i = 0; i < apiKeys.length; i++) {
+        const activeKey = apiKeys[i];
+        const ai = new GoogleGenAI({
+          apiKey: activeKey,
+          httpOptions: {
+            headers: {
+              'User-Agent': 'aistudio-build'
+            },
+            timeout: 25000
+          }
         });
 
-        const responseText = aiResponse.text || '';
-        const cleanJson = responseText.replace(/```json\s*|```/g, '').trim();
-        const parsed = JSON.parse(cleanJson);
-        result = { ...result, ...parsed };
-      } catch (aiErr) {
-        console.warn('AI translation warning, using fallback translation format:', aiErr);
-        result.titleEN = titleTH;
-        result.titleZH = titleTH;
-        result.titleRU = titleTH;
-        result.descEN = descTH || '';
-        result.descZH = descTH || '';
-        result.descRU = descTH || '';
+        for (const candidateModel of CANDIDATE_MODELS) {
+          try {
+            const config: any = {
+              responseMimeType: 'application/json',
+            };
+            if (candidateModel.includes('3.8')) {
+              config.thinkingConfig = { thinkingLevel: ThinkingLevel.LOW };
+            }
+
+            const aiResponse = await ai.models.generateContent({
+              model: candidateModel,
+              contents: prompt,
+              config,
+            });
+
+            if (aiResponse && aiResponse.text) {
+              translatedJsonStr = aiResponse.text;
+              break keyLoop;
+            }
+          } catch (modelErr: any) {
+            console.warn(`Translation Key #${i + 1} with ${candidateModel} warning:`, modelErr?.message || modelErr);
+          }
+        }
       }
+    }
+
+    if (translatedJsonStr) {
+      const parsed = safeParseLlmJson(translatedJsonStr, {});
+      result = { ...result, ...parsed };
     } else {
+      // Fallback
       result.titleEN = titleTH;
       result.titleZH = titleTH;
       result.titleRU = titleTH;

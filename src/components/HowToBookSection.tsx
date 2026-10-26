@@ -715,17 +715,17 @@ export const HowToBookSection: React.FC<HowToBookSectionProps> = ({
             <h4 className="font-extrabold text-amber-300 flex items-center gap-1.5 text-sm">
               <Clock className="w-4 h-4 text-amber-400" />
               <span>
-                {currentLang === 'TH' ? 'เลื่อนวันเดินทางฟรี ล่วงหน้า 24 ชั่วโมง' :
-                 currentLang === 'ZH' ? '出发前24小时免费改期' :
-                 currentLang === 'RU' ? 'Бесплатный перенос за 24 часа' :
-                 'Free Date Change up to 24 Hours in Advance'}
+                {currentLang === 'TH' ? 'ชำระล่วงหน้า & เลื่อน/ยกเลิกก่อน 18:00 น.' :
+                 currentLang === 'ZH' ? '预付与改期/取消政策（截止18:00）' :
+                 currentLang === 'RU' ? 'Оплата и правила отмены/переноса (до 18:00)' :
+                 'Advance Payment & Reschedule/Cancel Policy (Before 18:00)'}
               </span>
             </h4>
             <p className="text-slate-300 leading-relaxed text-[11px]">
-              {currentLang === 'TH' ? 'ติดภารกิจ หรือต้องการเปลี่ยนแผนเที่ยว? แจ้งทีมงานแอดมินล่วงหน้าอย่างน้อย 24 ชั่วโมงก่อนวันเดินทาง สามารถขอเลื่อนวันเดินทางได้ฟรี ไม่มีค่าธรรมเนียมใดๆ เพิ่มเติม' :
-               currentLang === 'ZH' ? '临时行程有变？只需在出行前至少24小时联系我们客服，即可免费申请调整出行日期，绝无任何额外手续费。' :
-               currentLang === 'RU' ? 'Изменились планы? Сообщите нам за 24 часа до поездки, и мы бесплатно перенесем дату без штрафов.' :
-               'Need to change plans? Simply notify our support team at least 24 hours prior to travel date to reschedule for free with no penalty fees.'}
+              {currentLang === 'TH' ? 'ชำระล่วงหน้าก่อนวันเดินทางไม่เกิน 1 วัน สามารถแจ้งเลื่อนวันเดินทางหรือยกเลิกได้ล่วงหน้าก่อนวันเดินทาง 1 วัน ไม่เกินเวลา 18:00 น. (หากเลยกำหนดเวลา 18:00 น. ขอสงวนสิทธิ์งดคืนเงินทุกกรณี)' :
+               currentLang === 'ZH' ? '须在出行前至少1天完成预付。如需改期或取消，须在出行前1天 18:00 前通知客服。若超过 18:00 截止时间，概不退款。' :
+               currentLang === 'RU' ? 'Предоплата производится за 1 день до поездки. Перенос или отмена возможны за 1 день до даты поездки до 18:00. После 18:00 возврат средств не производится.' :
+               'Advance payment required at least 1 day prior to travel date. Rescheduling or cancellation is allowed up to 1 day before travel date before 18:00 (6:00 PM). Strictly no refunds if past the deadline.'}
             </p>
           </div>
         </div>

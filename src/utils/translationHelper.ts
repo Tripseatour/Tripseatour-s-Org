@@ -164,7 +164,7 @@ export async function translateTourData(params: {
       })
     });
 
-    if (res.ok) {
+    if (res.ok && res.headers.get('content-type')?.includes('application/json')) {
       const data = await res.json();
       if (data && data.titleEN && data.titleEN !== titleTH) {
         return {

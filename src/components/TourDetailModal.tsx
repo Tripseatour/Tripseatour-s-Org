@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { X, Star, Clock, MapPin, CheckCircle, XCircle, Calendar, ShieldCheck, QrCode, ArrowRight, UserCheck, ShoppingCart, Check, AlertCircle, MessageCircle } from 'lucide-react';
 import { Tour, Language, Review, AppSettings } from '../types';
 import { translations } from '../data/translations';
+import { getZoneDisplayName, getEffectivePickupZones } from '../utils/pickupZoneHelper';
 
 interface TourDetailModalProps {
   tour: Tour | null;
@@ -37,6 +38,10 @@ export const TourDetailModal: React.FC<TourDetailModalProps> = ({
   const included = tour.included[currentLang] || tour.included.TH;
 
   const tourReviews = reviews.filter(r => r.tourId === tour.id);
+
+  const effectiveZones = getEffectivePickupZones(tour);
+  const freeZones = effectiveZones.filter(z => z.isFree || z.extraFee === 0);
+  const paidZones = effectiveZones.filter(z => !z.isFree && z.extraFee > 0);
 
   return (
     <div className="fixed inset-0 z-50 bg-slate-950/80 backdrop-blur-md flex items-center justify-center p-2 sm:p-4 overflow-y-auto animate-in fade-in duration-200">
@@ -121,7 +126,11 @@ export const TourDetailModal: React.FC<TourDetailModalProps> = ({
               <ShieldCheck className="w-5 h-5 text-emerald-600 shrink-0" />
               <div>
                 <span className="text-[11px] text-slate-400 block">{t.pickupIncluded}</span>
-                <span className="font-bold text-emerald-700 text-xs">{t.hotelFreeZone}</span>
+                <span className="font-bold text-emerald-700 text-xs truncate max-w-[200px] block" title={freeZones.map(z => getZoneDisplayName(z, currentLang)).join(', ')}>
+                  {freeZones.length > 0
+                    ? freeZones.slice(0, 3).map(z => getZoneDisplayName(z, currentLang)).join('/') + (freeZones.length > 3 ? '...' : '')
+                    : t.hotelFreeZone}
+                </span>
               </div>
             </div>
           </div>
@@ -190,23 +199,59 @@ export const TourDetailModal: React.FC<TourDetailModalProps> = ({
               </h4>
             </div>
             <p className="text-[11px] text-slate-300 leading-relaxed pl-7">
-              {currentLang === 'TH' ? '• หากเรือไม่สามารถออกได้เนื่องจากสภาพอากาศหรือคลื่นลมมรสุม ทางบริษัทคืนเงิน 100% หรือเลื่อนวันให้ทันที\n• แจ้งเปลี่ยนวันเดินทางล่วงหน้า 24 ชั่วโมง โดยไม่มีค่าธรรมเนียมเพิ่มเติม' :
-               currentLang === 'EN' ? '• 100% Full Refund or instant rescheduling if boats cannot depart due to severe weather/monsoon.\n• Free date changes up to 24 hours prior to trip date with zero penalty fees.' :
-               currentLang === 'ZH' ? '• 若因恶劣天气导致船只取消，全额100%退款或免费为您改期。\n• 出发前24小时内可免费申请改期，无任何附加费用。' :
-               '• 100% возврат средств при cancellation из-за погоды. Бесплатный перенос даты за 24 часа.'}
+              {currentLang === 'TH' ? '• ชำระล่วงหน้าก่อนวันเดินทางไม่เกิน 1 วัน\n• เลื่อนวันเดินทางหรือยกเลิกได้ล่วงหน้าก่อนวันเดินทาง 1 วัน ไม่เกินเวลา 18:00 น. (หากเลยกำหนดงดคืนเงินทุกกรณี)\n• กรณีคลื่นลมมรสุมหรือเรือออกไม่ได้เนื่องจากสภาพอากาศ ทางบริษัทคืนเงินเต็มจำนวน 100% หรือเลื่อนวันเดินทางให้ทันที' :
+               currentLang === 'EN' ? '• Advance payment required at least 1 day prior to travel date.\n• Reschedule or cancellation permitted up to 1 day prior before 18:00 (No refund past deadline).\n• 100% Full Refund or instant date change if boats cannot depart due to monsoon/severe weather.' :
+               currentLang === 'ZH' ? '• 须在出行前至少1天完成预付。\n• 出行前1天 18:00 前可免费改期或取消（超过18:00概不退款）。\n• 如遇恶劣天气/风浪无法出海，100%全额退款或免费改期。' :
+               '• Предоплата производится за 1 день до поездки.\n• Перенос или отмена до 18:00 за 1 день до поездки (после 18:00 возврат не производится).\n• 100% возврат средств при cancellation из-за шторма.'}
             </p>
           </div>
 
           {/* Pickup Zones */}
-          <div className="bg-slate-50 border border-slate-200 p-4 rounded-2xl space-y-1.5">
-            <h4 className="font-bold text-slate-900 text-xs">{t.pickupZoneFreeTitle}</h4>
-            <div className="flex flex-wrap gap-1.5">
-              {tour.pickupAreas.map((zone) => (
-                <span key={zone} className="bg-white border border-slate-200 text-slate-700 text-[11px] font-medium px-2.5 py-1 rounded-lg">
-                  📍 {zone}
-                </span>
-              ))}
+          <div className="bg-slate-50 border border-slate-200 p-4 rounded-2xl space-y-3">
+            <div>
+              <h4 className="font-bold text-slate-900 text-xs mb-1.5 flex items-center gap-1.5">
+                <MapPin className="w-4 h-4 text-emerald-600" />
+                <span>{t.pickupZoneFreeTitle}</span>
+              </h4>
+              <div className="flex flex-wrap gap-1.5">
+                {freeZones.length > 0 ? (
+                  freeZones.map((z) => (
+                    <span key={z.id || z.zoneName} className="bg-white border border-emerald-300 text-emerald-800 text-[11px] font-semibold px-2.5 py-1 rounded-lg flex items-center gap-1 shadow-2xs">
+                      <span>📍 {getZoneDisplayName(z, currentLang)}</span>
+                      <span className="text-[9.5px] bg-emerald-100 text-emerald-700 font-bold px-1.5 py-0.2 rounded">
+                        {currentLang === 'TH' ? 'ฟรี' : currentLang === 'ZH' ? '免费' : 'Free'}
+                      </span>
+                    </span>
+                  ))
+                ) : (
+                  <span className="text-slate-500 text-xs">-</span>
+                )}
+              </div>
             </div>
+
+            {paidZones.length > 0 && (
+              <div className="pt-2 border-t border-slate-200/80">
+                <h5 className="font-bold text-amber-900 text-xs mb-1.5 flex items-center gap-1.5">
+                  <MapPin className="w-4 h-4 text-amber-600" />
+                  <span>
+                    {currentLang === 'TH' ? 'พื้นที่นอกโซน (มีค่าบริการรถรับ-ส่งเพิ่มเติม):' :
+                     currentLang === 'ZH' ? '跨区域接送 (需另加付接送费):' :
+                     currentLang === 'RU' ? 'Дополнительные зоны трансфера (с доплатой):' :
+                     'Out-of-zone areas (surcharge applies):'}
+                  </span>
+                </h5>
+                <div className="flex flex-wrap gap-1.5">
+                  {paidZones.map((z) => (
+                    <span key={z.id || z.zoneName} className="bg-amber-50/80 border border-amber-300 text-amber-900 text-[11px] font-medium px-2.5 py-1 rounded-lg flex items-center gap-1 shadow-2xs">
+                      <span>📍 {getZoneDisplayName(z, currentLang)}</span>
+                      <span className="text-[10px] bg-amber-200/90 text-amber-900 font-extrabold px-1.5 py-0.2 rounded font-mono">
+                        +฿{z.extraFee} {currentLang === 'TH' ? '/ท่าน' : currentLang === 'ZH' ? '/人' : '/guest'}
+                      </span>
+                    </span>
+                  ))}
+                </div>
+              </div>
+            )}
           </div>
 
           {/* Tour Reviews inside modal */}

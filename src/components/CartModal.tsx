@@ -11,6 +11,7 @@ import { translations } from '../data/translations';
 import { generatePromptPayQRDataUrl } from '../utils/promptpay';
 import { TicketVoucher } from './TicketVoucher';
 import { supabaseApi } from '../lib/supabase';
+import { DEFAULT_PHUKET_PICKUP_ZONES, getEffectivePickupZones, getZoneDisplayName, getZoneTransferStatusLabel } from '../utils/pickupZoneHelper';
 
 interface CartModalProps {
   isOpen: boolean;
@@ -569,14 +570,12 @@ export const CartModal: React.FC<CartModalProps> = ({
                         onChange={(e) => setCommonZone(e.target.value)}
                         className="w-full bg-white border border-teal-300 rounded-xl px-3 py-2 text-xs font-medium focus:ring-2 focus:ring-teal-500 outline-hidden"
                       >
-                        <option value="Patong">ป่าตอง (Patong) - Free</option>
-                        <option value="Kata">กะตะ (Kata) - Free</option>
-                        <option value="Karon">กะรน (Karon) - Free</option>
-                        <option value="Phuket Town">ตัวเมืองภูเก็ต (Phuket Town) - Free</option>
-                        <option value="Rawai">ราไวย์ (Rawai)</option>
-                        <option value="Kamala">กมลา (Kamala)</option>
-                        <option value="Bangtao">บางเทา / ลากูน่า (Bangtao / Laguna)</option>
-                        <option value="Airport">สนามบิน / ไม้ขาว (Maikhao / Airport)</option>
+                        {DEFAULT_PHUKET_PICKUP_ZONES.map((z) => {
+                          const isFree = z.isFree || z.extraFee === 0;
+                          const name = getZoneDisplayName(z, currentLang);
+                          const statusText = getZoneTransferStatusLabel(isFree, z.extraFee, currentLang);
+                          return <option key={z.id} value={z.zoneName}>{`${name} (${statusText})`}</option>;
+                        })}
                       </select>
                     </div>
                   </div>
@@ -717,18 +716,16 @@ export const CartModal: React.FC<CartModalProps> = ({
                               {t.pickupZone}
                             </label>
                             <select
-                              value={item.pickupZone || 'Patong'}
+                              value={item.pickupZone || (getEffectivePickupZones(item.tour)[0]?.zoneName ?? 'Patong')}
                               onChange={(e) => onUpdateCartItem(item.id, { pickupZone: e.target.value })}
                               className="w-full bg-slate-50 border border-slate-200 rounded-lg px-2.5 py-1 text-xs focus:bg-white focus:ring-2 focus:ring-teal-500 outline-hidden"
                             >
-                              <option value="Patong">ป่าตอง (Patong) - Free</option>
-                              <option value="Kata">กะตะ (Kata) - Free</option>
-                              <option value="Karon">กะรน (Karon) - Free</option>
-                              <option value="Phuket Town">ตัวเมืองภูเก็ต (Phuket Town) - Free</option>
-                              <option value="Rawai">ราไวย์ (Rawai)</option>
-                              <option value="Kamala">กมลา (Kamala)</option>
-                              <option value="Bangtao">บางเทา / ลากูน่า</option>
-                              <option value="Airport">สนามบิน / ไม้ขาว</option>
+                              {getEffectivePickupZones(item.tour).map((z) => {
+                                const isFree = z.isFree || z.extraFee === 0;
+                                const name = getZoneDisplayName(z, currentLang);
+                                const statusText = getZoneTransferStatusLabel(isFree, z.extraFee, currentLang);
+                                return <option key={z.id || z.zoneName} value={z.zoneName}>{`${name} (${statusText})`}</option>;
+                              })}
                             </select>
                           </div>
                         </div>

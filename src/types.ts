@@ -28,9 +28,20 @@ export interface Supplier {
   createdAt?: string;
 }
 
+export interface PickupZoneConfig {
+  id: string;
+  zoneName: string;
+  isFree: boolean; // true = ฟรี (Free Transfer), false = เสียค่าบริการเพิ่ม (Extra Surcharge)
+  extraFee: number; // THB per guest or per transfer
+}
+
 export interface TourAddon {
   id: string;
-  name: string; // e.g. "เดินทางไปท่าเรือเอง (ลด -200 บาท/ท่าน)"
+  name: string | Record<Language, string>; // Multilingual name support
+  nameTH?: string;
+  nameEN?: string;
+  nameZH?: string;
+  nameRU?: string;
   priceAdjustment: number; // e.g. -200 for discount, +500 for extra charge
   enabled?: boolean;
 }
@@ -61,6 +72,7 @@ export interface Tour {
   duration: Record<Language, string>;
   location: string;
   pickupAreas: string[];
+  pickupZoneConfigs?: PickupZoneConfig[]; // การตั้งค่าโซนรับส่ง ฟรี/ชำระเพิ่ม รายโปรแกรมทัวร์
   included: Record<Language, string[]>;
   excluded?: Record<Language, string[]>;
   itinerary: TourItinerary[];
@@ -86,6 +98,7 @@ export interface CartItem {
   selectedAddons?: TourAddon[];
   pickupHotel?: string;
   pickupZone?: string;
+  pickupZoneFee?: number;
   roomNumber?: string;
   specialRequests?: string;
 }
@@ -112,6 +125,7 @@ export interface Booking {
   pickupTime?: string;
   pickupHotel: string;
   pickupZone: string;
+  pickupZoneFee?: number;
   roomNumber?: string;
   sendBackHotel?: string;
   specialRequests?: string;

@@ -5,10 +5,11 @@ import {
   Upload, FileImage, CheckCircle2, AlertCircle, RefreshCw, FileText, Camera, 
   ScanLine, Loader2, ArrowRight, Layers, ImagePlus, Star, Images
 } from 'lucide-react';
-import { Tour, TourItinerary, Language, Supplier, TourAddon } from '../types';
+import { Tour, TourItinerary, Language, Supplier, TourAddon, PickupZoneConfig } from '../types';
 import { normalizeTours } from '../utils/tourNormalizer';
 import { compressImageBase64 } from '../utils/storage';
 import { translateTourData } from '../utils/translationHelper';
+import { getEffectivePickupZones, DEFAULT_PHUKET_PICKUP_ZONES } from '../utils/pickupZoneHelper';
 
 export interface AiTourImageItem {
   id: string;
@@ -82,6 +83,7 @@ export const EditTourModal: React.FC<EditTourModalProps> = ({
   const [isVisible, setIsVisible] = useState<boolean>(true);
   const [activeLangTab, setActiveLangTab] = useState<'TH' | 'EN' | 'ZH' | 'RU'>('TH');
   const [isTranslating, setIsTranslating] = useState<boolean>(false);
+  const [isSaving, setIsSaving] = useState<boolean>(false);
 
   // Included Items Checklist State
   const [includedItemsTH, setIncludedItemsTH] = useState<string[]>([]);
@@ -94,17 +96,47 @@ export const EditTourModal: React.FC<EditTourModalProps> = ({
   const [highlightsTH, setHighlightsTH] = useState<string[]>([]);
   const [customHighlightInput, setCustomHighlightInput] = useState('');
 
-  // Tour Addons State
+  // Tour Addons State (Multilingual Support)
   const [tourAddons, setTourAddons] = useState<TourAddon[]>([
-    { id: 'addon-1', name: 'เดินทางไปท่าเรือเอง (ลด -200 บาท/ท่าน)', priceAdjustment: -200, enabled: true }
+    {
+      id: 'addon-1',
+      name: {
+        TH: 'เดินทางไปท่าเรือเอง (ลด -200 บาท/ท่าน)',
+        EN: 'Travel to pier by own (Discount -200 THB/guest)',
+        ZH: '自行前往码头 (每人优惠 -200 泰铢)',
+        RU: 'Добраться до пирса самостоятельно (Скидка -200 бат/чел)'
+      },
+      nameTH: 'เดินทางไปท่าเรือเอง (ลด -200 บาท/ท่าน)',
+      nameEN: 'Travel to pier by own (Discount -200 THB/guest)',
+      nameZH: '自行前往码头 (每人优惠 -200 泰铢)',
+      nameRU: 'Добраться до пирса самостоятельно (Скидка -200 бат/чел)',
+      priceAdjustment: -200,
+      enabled: true
+    }
   ]);
+
+  const getAddonNameByLang = (addon: TourAddon, lang: Language): string => {
+    if (!addon) return '';
+    if (typeof addon.name === 'object' && addon.name !== null) {
+      return (addon.name as Record<Language, string>)[lang] || '';
+    }
+    if (lang === 'EN' && addon.nameEN) return addon.nameEN;
+    if (lang === 'ZH' && addon.nameZH) return addon.nameZH;
+    if (lang === 'RU' && addon.nameRU) return addon.nameRU;
+    if (lang === 'TH' && (addon.nameTH || typeof addon.name === 'string')) return addon.nameTH || (addon.name as string);
+    return typeof addon.name === 'string' ? addon.name : '';
+  };
 
   const handleAddTourAddon = () => {
     setTourAddons(prev => [
       ...prev,
       {
-        id: `addon-${Date.now()}`,
-        name: '',
+        id: `addon-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`,
+        name: { TH: '', EN: '', ZH: '', RU: '' },
+        nameTH: '',
+        nameEN: '',
+        nameZH: '',
+        nameRU: '',
         priceAdjustment: -200,
         enabled: true
       }
@@ -113,6 +145,41 @@ export const EditTourModal: React.FC<EditTourModalProps> = ({
 
   const handleUpdateTourAddon = (index: number, field: keyof TourAddon, value: any) => {
     setTourAddons(prev => prev.map((item, idx) => idx === index ? { ...item, [field]: value } : item));
+  };
+
+  const handleUpdateTourAddonLang = (index: number, lang: Language, textVal: string) => {
+    setTourAddons(prev => prev.map((item, idx) => {
+      if (idx !== index) return item;
+      const prevObj = typeof item.name === 'object' && item.name !== null
+        ? item.name
+        : { TH: typeof item.name === 'string' ? item.name : '', EN: item.nameEN || '', ZH: item.nameZH || '', RU: item.nameRU || '' };
+      const nextNameObj = { ...prevObj, [lang]: textVal };
+      return {
+        ...item,
+        name: nextNameObj,
+        ...(lang === 'TH' ? { nameTH: textVal } : {}),
+        ...(lang === 'EN' ? { nameEN: textVal } : {}),
+        ...(lang === 'ZH' ? { nameZH: textVal } : {}),
+        ...(lang === 'RU' ? { nameRU: textVal } : {})
+      };
+    }));
+  };
+
+  const handleAutoTranslateAddon = (index: number) => {
+    const item = tourAddons[index];
+    if (!item) return;
+    const th = getAddonNameByLang(item, 'TH');
+    const discount = Math.abs(item.priceAdjustment || 200);
+
+    if (th.includes('ท่าเรือเอง') || th.includes('เดินทางไปท่าเรือ') || th.includes('ไปท่าเรือ')) {
+      handleUpdateTourAddonLang(index, 'EN', `Travel to pier by own (Discount -${discount} THB/guest)`);
+      handleUpdateTourAddonLang(index, 'ZH', `自行前往码头 (每人优惠 -${discount} 泰铢)`);
+      handleUpdateTourAddonLang(index, 'RU', `Добраться до пирса самостоятельно (Скидка -${discount} бат/чел)`);
+    } else if (th) {
+      handleUpdateTourAddonLang(index, 'EN', `${th} (${item.priceAdjustment < 0 ? `Discount -${discount}` : `+${discount}`} THB)`);
+      handleUpdateTourAddonLang(index, 'ZH', `${th} (${item.priceAdjustment < 0 ? `优惠 -${discount}` : `+${discount}`} 泰铢)`);
+      handleUpdateTourAddonLang(index, 'RU', `${th} (${item.priceAdjustment < 0 ? `Скидка -${discount}` : `+${discount}`} бат)`);
+    }
   };
 
   const handleDeleteTourAddon = (index: number) => {
@@ -130,6 +197,81 @@ export const EditTourModal: React.FC<EditTourModalProps> = ({
   const [isDraggingImage, setIsDraggingImage] = useState<boolean>(false);
   const [isAiSectionCollapsed, setIsAiSectionCollapsed] = useState<boolean>(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const fileInputCoverRef = useRef<HTMLInputElement>(null);
+
+  // Pickup Zones & Surcharges State
+  const [pickupZoneConfigs, setPickupZoneConfigs] = useState<PickupZoneConfig[]>([]);
+  const [customZoneName, setCustomZoneName] = useState('');
+  const [customZoneFee, setCustomZoneFee] = useState<number>(200);
+  const [customZoneIsFree, setCustomZoneIsFree] = useState<boolean>(false);
+
+  const handleToggleZoneFree = (zoneId: string) => {
+    setPickupZoneConfigs(prev => prev.map(z => {
+      if (z.id !== zoneId) return z;
+      const nextFree = !z.isFree;
+      return {
+        ...z,
+        isFree: nextFree,
+        extraFee: nextFree ? 0 : (z.extraFee > 0 ? z.extraFee : 200)
+      };
+    }));
+  };
+
+  const handleUpdateZoneFee = (zoneId: string, fee: number) => {
+    setPickupZoneConfigs(prev => prev.map(z => {
+      if (z.id !== zoneId) return z;
+      const numFee = Math.max(0, fee);
+      return {
+        ...z,
+        extraFee: numFee,
+        isFree: numFee === 0
+      };
+    }));
+  };
+
+  const handleUpdateZoneName = (zoneId: string, name: string) => {
+    setPickupZoneConfigs(prev => prev.map(z => {
+      if (z.id !== zoneId) return z;
+      return {
+        ...z,
+        zoneName: name
+      };
+    }));
+  };
+
+  const handleAddCustomZone = () => {
+    if (!customZoneName.trim()) return;
+    const newId = `zone-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`;
+    setPickupZoneConfigs(prev => [
+      ...prev,
+      {
+        id: newId,
+        zoneName: customZoneName.trim(),
+        isFree: customZoneIsFree || customZoneFee === 0,
+        extraFee: customZoneIsFree ? 0 : customZoneFee
+      }
+    ]);
+    setCustomZoneName('');
+    setCustomZoneFee(200);
+    setCustomZoneIsFree(false);
+  };
+
+  const handleRemoveZone = (zoneId: string) => {
+    setPickupZoneConfigs(prev => prev.filter(z => z.id !== zoneId));
+  };
+
+  const handleResetDefaultZones = () => {
+    setPickupZoneConfigs(JSON.parse(JSON.stringify(DEFAULT_PHUKET_PICKUP_ZONES)));
+  };
+
+  const handleCoverFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (e.target.files && e.target.files[0]) {
+      const file = e.target.files[0];
+      const processed = await readFileAsOptimizedBase64(file);
+      const compressed = await compressImageBase64(processed.base64, 1000, 0.8);
+      setImageUrl(compressed);
+    }
+  };
 
   // Load existing tour data if editing
   useEffect(() => {
@@ -138,6 +280,7 @@ export const EditTourModal: React.FC<EditTourModalProps> = ({
     setAiScanSuccess(false);
     setAiScanSummary(null);
     setAiScanError(null);
+    setPickupZoneConfigs(getEffectivePickupZones(tour));
 
     if (tour) {
       setTitleTH(tour.title?.TH || '');
@@ -361,7 +504,7 @@ export const EditTourModal: React.FC<EditTourModalProps> = ({
     setOriginalPriceForeignChild(Number(originalPriceChild) + 400);
   };
 
-  // Helper: Read and optimize image to Base64 (resizing very large images for fast processing)
+  // Helper: Read and optimize image to lightweight compressed Base64 for rapid AI analysis
   const readFileAsOptimizedBase64 = (file: File): Promise<{ base64: string; mimeType: string; name: string; sizeBytes: number }> => {
     return new Promise((resolve) => {
       const reader = new FileReader();
@@ -369,7 +512,8 @@ export const EditTourModal: React.FC<EditTourModalProps> = ({
         const rawData = e.target?.result as string;
         const img = new Image();
         img.onload = () => {
-          const MAX_DIM = 1800;
+          // Downscale to max 1280px dimension (optimal for high-speed AI flyer reading)
+          const MAX_DIM = 1280;
           let width = img.width;
           let height = img.height;
           if (width > MAX_DIM || height > MAX_DIM) {
@@ -380,16 +524,17 @@ export const EditTourModal: React.FC<EditTourModalProps> = ({
               width = Math.round((width * MAX_DIM) / height);
               height = MAX_DIM;
             }
-            const canvas = document.createElement('canvas');
-            canvas.width = width;
-            canvas.height = height;
-            const ctx = canvas.getContext('2d');
-            if (ctx) {
-              ctx.drawImage(img, 0, 0, width, height);
-              const optimized = canvas.toDataURL('image/jpeg', 0.88);
-              resolve({ base64: optimized, mimeType: 'image/jpeg', name: file.name, sizeBytes: file.size });
-              return;
-            }
+          }
+          const canvas = document.createElement('canvas');
+          canvas.width = width;
+          canvas.height = height;
+          const ctx = canvas.getContext('2d');
+          if (ctx) {
+            ctx.drawImage(img, 0, 0, width, height);
+            const optimized = canvas.toDataURL('image/jpeg', 0.80);
+            const approxBytes = Math.round((optimized.length * 3) / 4);
+            resolve({ base64: optimized, mimeType: 'image/jpeg', name: file.name, sizeBytes: approxBytes });
+            return;
           }
           resolve({ base64: rawData, mimeType: file.type || 'image/jpeg', name: file.name, sizeBytes: file.size });
         };
@@ -516,20 +661,32 @@ export const EditTourModal: React.FC<EditTourModalProps> = ({
         }),
       });
 
-      if (!res.ok) {
+      const contentType = res.headers.get('content-type') || '';
+      if (!res.ok || !contentType.includes('application/json')) {
         let errorMsg = '';
-        try {
-          const errJson = await res.json();
-          errorMsg = errJson.error || errJson.message || errJson.details || '';
-        } catch (_) {
-          // Response is not JSON
+        if (contentType.includes('application/json')) {
+          try {
+            const errJson = await res.json();
+            errorMsg = errJson.error || errJson.message || errJson.details || '';
+          } catch (_) {
+            // Response is not JSON
+          }
+        } else {
+          try {
+            const rawText = await res.text();
+            if (rawText.includes('504') || rawText.includes('Timeout') || rawText.includes('timed out')) {
+              errorMsg = 'การเชื่อมต่อหมดเวลา (Timeout) กรุณาลองใหม่อีกครั้ง';
+            } else if (rawText.includes('413') || rawText.includes('Payload Too Large')) {
+              errorMsg = 'ขนาดรูปภาพใหญ่เกินไป กรุณาเลือกลดขนาดรูปภาพ';
+            }
+          } catch (_) {}
         }
 
         if (!errorMsg) {
           if (res.status === 404) {
-            errorMsg = 'ไม่พบ Endpoint /api/extract-tour-from-image (404 Not Found) - กำลังซิงค์ไฟล์ API ไปยัง Vercel';
+            errorMsg = 'ไม่พบ Endpoint /api/extract-tour-from-image (404 Not Found)';
           } else if (res.status === 429) {
-            errorMsg = 'โควต้าการใช้งาน Gemini AI ชั่วคราวเต็ม (Rate Limit) กรุณารอสักครู่ (1-2 นาที) แล้วลองใหม่อีกครั้ง หรือโควต้ารายวันจะรีเซ็ตเวลา 14:00 - 15:00 น.';
+            errorMsg = 'โควต้าการใช้งาน Gemini AI ชั่วคราวเต็ม (Rate Limit) กรุณารอสักครู่ (1-2 นาที) แล้วลองใหม่อีกครั้ง';
           } else if (res.status === 503) {
             errorMsg = 'เซิร์ฟเวอร์ Gemini AI กำลังมีผู้ใช้งานหนาแน่นชั่วคราว (High demand) กรุณาลองใหม่อีกครั้งใน 1-2 นาที';
           } else {
@@ -620,7 +777,11 @@ export const EditTourModal: React.FC<EditTourModalProps> = ({
       );
     } catch (err: any) {
       console.error('Scan error:', err);
-      setAiScanError(err.message || 'เกิดข้อผิดพลาดในการวิเคราะห์รูปภาพ กรุณาลองใหม่อีกครั้ง');
+      let friendlyMsg = err?.message || 'เกิดข้อผิดพลาดในการวิเคราะห์รูปภาพ กรุณาลองใหม่อีกครั้ง';
+      if (friendlyMsg.includes('JSON') || friendlyMsg.includes('SyntaxError') || friendlyMsg.includes('Expected')) {
+        friendlyMsg = 'ระบบตรวจพบรูปแบบข้อความไม่สมบูรณ์จาก AI ระบบได้กู้คืนและปรับปรุงการอ่านแล้ว กรุณากดปุ่มสแกนใหม่อีกครั้ง';
+      }
+      setAiScanError(friendlyMsg);
     } finally {
       setIsAiScanning(false);
     }
@@ -629,86 +790,130 @@ export const EditTourModal: React.FC<EditTourModalProps> = ({
   // Save submit handler
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (isSaving) return;
 
-    const catLabel = categoryLabelsMap[category] || { TH: 'ทัวร์ภูเก็ต', EN: 'Phuket Tour', ZH: '普吉行程', RU: 'Тур на Пхукете' };
+    setIsSaving(true);
+    try {
+      const catLabel = categoryLabelsMap[category] || { TH: 'ทัวร์ภูเก็ต', EN: 'Phuket Tour', ZH: '普吉行程', RU: 'Тур на Пхукете' };
 
-    let finalImageUrl = imageUrl || 'https://images.unsplash.com/photo-1537996194471-e657df975ab4?auto=format&fit=crop&q=80&w=1000';
-    if (finalImageUrl.startsWith('data:image')) {
-      finalImageUrl = await compressImageBase64(finalImageUrl, 900, 0.75);
+      let finalImageUrl = imageUrl || 'https://images.unsplash.com/photo-1537996194471-e657df975ab4?auto=format&fit=crop&q=80&w=1000';
+      if (finalImageUrl.startsWith('data:image')) {
+        finalImageUrl = await compressImageBase64(finalImageUrl, 900, 0.75);
+      }
+
+      const selectedSup = suppliers.find(s => s.id === supplierId);
+      const generatedId = tour?.id || `tour-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`;
+      const generatedSlug = tour?.slug || generatedId;
+
+      const mappedAddons = tourAddons.filter(a => {
+        const th = getAddonNameByLang(a, 'TH');
+        return th.trim().length > 0;
+      }).map(a => {
+        const th = getAddonNameByLang(a, 'TH');
+        let en = getAddonNameByLang(a, 'EN');
+        let zh = getAddonNameByLang(a, 'ZH');
+        let ru = getAddonNameByLang(a, 'RU');
+        const discount = Math.abs(a.priceAdjustment || 200);
+
+        // Fallback auto translation for pier transfer
+        if ((!en || en === th) && (th.includes('ท่าเรือเอง') || th.includes('เดินทางไปท่าเรือ'))) {
+          en = `Travel to pier by own (Discount -${discount} THB/guest)`;
+          zh = `自行前往码头 (每人优惠 -${discount} 泰铢)`;
+          ru = `Добраться до пирса самостоятельно (Скидка -${discount} бат/чел)`;
+        }
+
+        return {
+          id: a.id || `addon-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`,
+          name: {
+            TH: th,
+            EN: en || th,
+            ZH: zh || en || th,
+            RU: ru || en || th
+          },
+          nameTH: th,
+          nameEN: en || th,
+          nameZH: zh || en || th,
+          nameRU: ru || en || th,
+          priceAdjustment: Number(a.priceAdjustment) || 0,
+          enabled: a.enabled !== false
+        };
+      });
+
+      const rawTour: Tour = {
+        id: generatedId,
+        slug: generatedSlug,
+        title: {
+          TH: titleTH,
+          EN: titleEN || titleTH,
+          ZH: titleZH || titleEN || titleTH,
+          RU: titleRU || titleEN || titleTH
+        },
+        category,
+        categoryLabel: {
+          TH: catLabel.TH,
+          EN: catLabel.EN,
+          ZH: catLabel.ZH,
+          RU: catLabel.RU
+        },
+        supplierId: supplierId || undefined,
+        supplierName: selectedSup?.name || undefined,
+        description: {
+          TH: descTH,
+          EN: descEN || descTH,
+          ZH: descZH || descEN || descTH,
+          RU: descRU || descEN || descTH
+        },
+        duration: {
+          TH: durationTH,
+          EN: durationEN || durationTH,
+          ZH: durationZH || durationEN || durationTH,
+          RU: durationRU || durationEN || durationTH
+        },
+        location,
+        priceAdult: Number(priceAdult),
+        priceChild: Number(priceChild),
+        costAdult: Number(costAdult),
+        costChild: Number(costChild),
+        originalPriceAdult: Number(originalPriceAdult),
+        originalPriceChild: Number(originalPriceChild),
+        priceForeignAdult: Number(priceForeignAdult),
+        priceForeignChild: Number(priceForeignChild),
+        costForeignAdult: Number(costForeignAdult),
+        costForeignChild: Number(costForeignChild),
+        originalPriceForeignAdult: Number(originalPriceForeignAdult),
+        originalPriceForeignChild: Number(originalPriceForeignChild),
+        images: [finalImageUrl],
+        included: {
+          TH: includedItemsTH,
+          EN: includedItemsTH,
+          ZH: includedItemsTH,
+          RU: includedItemsTH
+        },
+        itinerary: itinerarySteps,
+        highlights: {
+          TH: highlightsTH.length ? highlightsTH : [titleTH],
+          EN: highlightsTH.length ? highlightsTH : [titleEN || titleTH],
+          ZH: highlightsTH.length ? highlightsTH : [titleZH || titleEN || titleTH],
+          RU: highlightsTH.length ? highlightsTH : [titleRU || titleEN || titleTH]
+        },
+        pickupZoneConfigs,
+        pickupAreas: pickupZoneConfigs.map(z => z.zoneName),
+        rating: tour?.rating || 4.9,
+        reviewCount: tour?.reviewCount || 35,
+        tags: [catLabel.TH, 'ภูเก็ต', 'ดำน้ำ'],
+        isVisible,
+        isAvailable: isVisible,
+        addons: mappedAddons
+      };
+
+      const normalizedList = normalizeTours([rawTour]);
+      const payload = normalizedList[0] || rawTour;
+
+      await onSave(payload);
+      onClose();
+    } finally {
+      setIsSaving(false);
     }
-
-    const selectedSup = suppliers.find(s => s.id === supplierId);
-
-    const rawTour: Partial<Tour> = {
-      ...(tour ? { id: tour.id, slug: tour.slug } : {}),
-      title: {
-        TH: titleTH,
-        EN: titleEN || titleTH,
-        ZH: titleZH || titleEN || titleTH,
-        RU: titleRU || titleEN || titleTH
-      },
-      category,
-      categoryLabel: {
-        TH: catLabel.TH,
-        EN: catLabel.EN,
-        ZH: catLabel.ZH,
-        RU: catLabel.RU
-      },
-      supplierId: supplierId || undefined,
-      supplierName: selectedSup?.name || undefined,
-      description: {
-        TH: descTH,
-        EN: descEN || descTH,
-        ZH: descZH || descEN || descTH,
-        RU: descRU || descEN || descTH
-      },
-      duration: {
-        TH: durationTH,
-        EN: durationEN || durationTH,
-        ZH: durationZH || durationEN || durationTH,
-        RU: durationRU || durationEN || durationTH
-      },
-      location,
-      priceAdult: Number(priceAdult),
-      priceChild: Number(priceChild),
-      costAdult: Number(costAdult),
-      costChild: Number(costChild),
-      originalPriceAdult: Number(originalPriceAdult),
-      originalPriceChild: Number(originalPriceChild),
-      priceForeignAdult: Number(priceForeignAdult),
-      priceForeignChild: Number(priceForeignChild),
-      costForeignAdult: Number(costForeignAdult),
-      costForeignChild: Number(costForeignChild),
-      originalPriceForeignAdult: Number(originalPriceForeignAdult),
-      originalPriceForeignChild: Number(originalPriceForeignChild),
-      images: [finalImageUrl],
-      included: {
-        TH: includedItemsTH,
-        EN: includedItemsTH,
-        ZH: includedItemsTH,
-        RU: includedItemsTH
-      },
-      itinerary: itinerarySteps,
-      highlights: {
-        TH: highlightsTH.length ? highlightsTH : [titleTH],
-        EN: highlightsTH.length ? highlightsTH : [titleEN || titleTH],
-        ZH: highlightsTH.length ? highlightsTH : [titleZH || titleEN || titleTH],
-        RU: highlightsTH.length ? highlightsTH : [titleRU || titleEN || titleTH]
-      },
-      pickupAreas: ['Patong', 'Kata', 'Karon', 'Phuket Town', 'Rawai', 'Chalong', 'Kamala'],
-      rating: tour?.rating || 4.9,
-      reviewCount: tour?.reviewCount || 35,
-      tags: [catLabel.TH, 'ภูเก็ต', 'ดำน้ำ'],
-      isVisible,
-      isAvailable: isVisible,
-      addons: tourAddons.filter(a => a.name.trim().length > 0)
-    };
-
-    const normalizedList = normalizeTours([rawTour as Tour]);
-    const payload = normalizedList[0] || rawTour;
-
-    await onSave(payload);
-    onClose();
   };
 
   return (
@@ -1598,16 +1803,79 @@ export const EditTourModal: React.FC<EditTourModalProps> = ({
               </div>
             </div>
 
-            <div>
-              <label className="font-bold text-slate-300 block mb-1">รูปภาพหลัก (Image URL)</label>
-              <input
-                type="url"
-                required
-                value={imageUrl}
-                onChange={(e) => setImageUrl(e.target.value)}
-                placeholder="https://images.unsplash.com/..."
-                className="w-full bg-slate-900 border border-slate-700 rounded-xl p-2.5 text-white font-mono text-[11px]"
-              />
+            {/* TOUR COVER PHOTO EDITOR */}
+            <div className="bg-slate-900/90 border border-slate-700/80 p-4 rounded-2xl space-y-3 shadow-inner">
+              <div className="flex items-center justify-between">
+                <label className="font-extrabold text-amber-300 text-xs flex items-center gap-1.5 uppercase tracking-wider">
+                  <ImageIcon className="w-4 h-4 text-amber-400" />
+                  <span>🖼️ รูปภาพหน้าปกทัวร์หลัก (Main Tour Cover Photo)</span>
+                </label>
+                <span className="text-[10px] text-slate-400 bg-slate-800 px-2 py-0.5 rounded-full">
+                  แก้ไขเปลี่ยนได้ตลอดเวลา
+                </span>
+              </div>
+
+              {/* Live Preview Box & Actions */}
+              <div className="grid grid-cols-1 sm:grid-cols-12 gap-3 items-center">
+                <div className="sm:col-span-4 relative aspect-[4/3] rounded-xl overflow-hidden border-2 border-slate-700 bg-slate-950 group shadow-md">
+                  {imageUrl ? (
+                    <img
+                      src={imageUrl}
+                      alt="Tour Cover Preview"
+                      className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-200"
+                    />
+                  ) : (
+                    <div className="w-full h-full flex flex-col items-center justify-center text-slate-500 text-xs gap-1">
+                      <ImageIcon className="w-8 h-8 text-slate-600" />
+                      <span>ยังไม่ได้เลือกรูปหน้าปก</span>
+                    </div>
+                  )}
+                  <div className="absolute top-2 left-2 bg-slate-900/80 backdrop-blur-sm text-amber-300 text-[10px] font-black px-2 py-0.5 rounded border border-amber-500/40">
+                    รูปหน้าปกหลัก
+                  </div>
+                </div>
+
+                <div className="sm:col-span-8 space-y-2.5">
+                  <input
+                    ref={fileInputCoverRef}
+                    type="file"
+                    accept="image/png,image/jpeg,image/jpg,image/webp"
+                    className="hidden"
+                    onChange={handleCoverFileUpload}
+                  />
+
+                  <div className="flex flex-wrap gap-2">
+                    <button
+                      type="button"
+                      onClick={() => fileInputCoverRef.current?.click()}
+                      className="bg-amber-500 hover:bg-amber-400 text-slate-950 font-black px-3.5 py-2 rounded-xl text-xs transition shadow-md flex items-center gap-1.5 cursor-pointer"
+                    >
+                      <Camera className="w-4 h-4" />
+                      <span>📷 อัปโหลดรูปหน้าปกใหม่ (เลือกจากมือถือ/คอม)</span>
+                    </button>
+
+                    {aiImages.length > 0 && (
+                      <span className="text-[11px] text-indigo-300 flex items-center gap-1">
+                        (หรือคลิกเลือก "ตั้งเป็นหน้าปก" ใน AI Gallery ด้านบน)
+                      </span>
+                    )}
+                  </div>
+
+                  <div>
+                    <label className="text-[10px] text-slate-400 block mb-0.5 font-medium">
+                      หรือใส่ลิงก์รูปภาพจากเว็บ (Image URL)
+                    </label>
+                    <input
+                      type="url"
+                      required
+                      value={imageUrl}
+                      onChange={(e) => setImageUrl(e.target.value)}
+                      placeholder="https://images.unsplash.com/..."
+                      className="w-full bg-slate-950 border border-slate-700 rounded-xl p-2.5 text-white font-mono text-[11px] focus:ring-2 focus:ring-amber-500"
+                    />
+                  </div>
+                </div>
+              </div>
             </div>
 
             <div>
@@ -1834,32 +2102,191 @@ export const EditTourModal: React.FC<EditTourModalProps> = ({
                     </button>
                   </div>
 
-                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
-                    <div className="sm:col-span-2">
-                      <label className="text-[10px] text-slate-400 block mb-0.5">ชื่อออฟชั่นเสริม (เช่น เดินทางไปท่าเรือเอง)</label>
+                  <div className="grid grid-cols-1 sm:grid-cols-12 gap-2.5">
+                    <div className="sm:col-span-5">
+                      <div className="flex items-center justify-between mb-0.5">
+                        <label className="text-[10px] text-slate-400 font-medium">ชื่อออฟชั่นเสริม (ภาษาไทย 🇹🇭)</label>
+                        <button
+                          type="button"
+                          onClick={() => handleAutoTranslateAddon(idx)}
+                          className="text-[10px] text-emerald-400 hover:text-emerald-300 flex items-center gap-1 cursor-pointer"
+                          title="แปลชื่อภาษาอังกฤษ จีน และรัสเซียอัตโนมัติ"
+                        >
+                          <Sparkles className="w-3 h-3" />
+                          <span>แปลอัตโนมัติ</span>
+                        </button>
+                      </div>
                       <input
                         type="text"
-                        value={addon.name}
-                        onChange={(e) => handleUpdateTourAddon(idx, 'name', e.target.value)}
-                        placeholder="เช่น เดินทางไปท่าเรือเอง (ลด -200 บาท/ท่าน)"
-                        className="w-full bg-slate-950 border border-slate-700 rounded-lg p-2 text-white text-xs font-bold"
+                        value={getAddonNameByLang(addon, 'TH')}
+                        onChange={(e) => handleUpdateTourAddonLang(idx, 'TH', e.target.value)}
+                        placeholder="เช่น เดินทางไปท่าเรือเอง"
+                        className="w-full bg-slate-950 border border-slate-700 rounded-lg p-2 text-white text-xs font-bold focus:border-emerald-500 outline-none"
                       />
                     </div>
 
-                    <div>
-                      <label className="text-[10px] text-slate-400 block mb-0.5">ราคาปรับเปลี่ยนต่อท่าน (บาท)</label>
+                    <div className="sm:col-span-4">
+                      <label className="text-[10px] text-slate-400 font-medium block mb-0.5">ชื่อภาษาอังกฤษ (English 🇬🇧)</label>
+                      <input
+                        type="text"
+                        value={getAddonNameByLang(addon, 'EN')}
+                        onChange={(e) => handleUpdateTourAddonLang(idx, 'EN', e.target.value)}
+                        placeholder="เช่น Travel to pier by own"
+                        className="w-full bg-slate-950 border border-slate-700 rounded-lg p-2 text-white text-xs focus:border-emerald-500 outline-none"
+                      />
+                    </div>
+
+                    <div className="sm:col-span-3">
+                      <label className="text-[10px] text-slate-400 font-medium block mb-0.5">ราคาปรับต่อท่าน (บาท)</label>
                       <input
                         type="number"
                         value={addon.priceAdjustment}
                         onChange={(e) => handleUpdateTourAddon(idx, 'priceAdjustment', Number(e.target.value))}
                         placeholder="-200 หรือ 500"
-                        className="w-full bg-slate-950 border border-slate-700 rounded-lg p-2 text-cyan-300 text-xs font-bold"
+                        className="w-full bg-slate-950 border border-slate-700 rounded-lg p-2 text-cyan-300 text-xs font-bold focus:border-cyan-500 outline-none"
                       />
-                      <span className="text-[9px] text-slate-500 mt-0.5 block">ติดลบ (-) คือส่วนลด, บวก (+) คือเพิ่มราคา</span>
+                      <span className="text-[9px] text-slate-500 mt-0.5 block">ลบ (-) คือส่วนลด, บวก (+) คือเพิ่ม</span>
                     </div>
                   </div>
                 </div>
               ))}
+            </div>
+          </div>
+
+          {/* SECTION 5: Pickup Transfer Zones & Surcharges */}
+          <div className="bg-slate-950/60 p-4 rounded-2xl border border-slate-800 space-y-3">
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <h4 className="font-bold text-amber-300 text-xs uppercase tracking-wider flex items-center gap-1.5">
+                <MapPin className="w-4 h-4 text-amber-400" />
+                <span>5. ตั้งค่าพื้นที่รับ-ส่งโรงแรม & ค่าบริการเพิ่ม (Pickup Zones & Extra Surcharges)</span>
+              </h4>
+
+              <button
+                type="button"
+                onClick={handleResetDefaultZones}
+                className="bg-slate-800 hover:bg-slate-700 text-slate-300 font-semibold px-3 py-1 rounded-xl text-[11px] transition flex items-center gap-1 cursor-pointer"
+                title="รีเซ็ตเป็นโซนมาตรฐานของภูเก็ต"
+              >
+                <RefreshCw className="w-3 h-3 text-cyan-400" />
+                <span>รีเซ็ตโซนมาตรฐาน</span>
+              </button>
+            </div>
+
+            <p className="text-[11px] text-slate-400 leading-relaxed">
+              กำหนดว่าโรงแรมในเขตพื้นที่ใดรับ-ส่งฟรี และโซนใดต้องชำระค่าบริการรถรับ-ส่งเพิ่ม (เช่น หาดไม้ขาว, หาดในยาง, แหลมพันวา):
+            </p>
+
+            {/* List of Zone Configs */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 pt-1">
+              {pickupZoneConfigs.map((zone) => (
+                <div
+                  key={zone.id}
+                  className={`p-3 rounded-xl border flex flex-col justify-between gap-2 transition ${
+                    zone.isFree
+                      ? 'bg-emerald-950/30 border-emerald-500/40 text-emerald-100'
+                      : 'bg-amber-950/30 border-amber-500/50 text-amber-100'
+                  }`}
+                >
+                  <div className="flex items-center justify-between gap-2">
+                    <div className="flex-1 flex items-center gap-1.5 min-w-0">
+                      <MapPin className={`w-3.5 h-3.5 shrink-0 ${zone.isFree ? 'text-emerald-400' : 'text-amber-400'}`} />
+                      <input
+                        type="text"
+                        value={zone.zoneName}
+                        onChange={(e) => handleUpdateZoneName(zone.id, e.target.value)}
+                        placeholder="ชื่อพื้นที่/โซนรับส่ง..."
+                        className="w-full bg-slate-900 border border-slate-700 focus:border-amber-400 rounded-lg px-2 py-1 text-white text-xs font-bold outline-none"
+                      />
+                    </div>
+
+                    <button
+                      type="button"
+                      onClick={() => handleRemoveZone(zone.id)}
+                      className="text-slate-500 hover:text-rose-400 p-1 transition cursor-pointer shrink-0"
+                      title="ลบโซนนี้"
+                    >
+                      <Trash2 className="w-3.5 h-3.5" />
+                    </button>
+                  </div>
+
+                  <div className="flex items-center justify-between gap-2 pt-1 border-t border-slate-800/80">
+                    <button
+                      type="button"
+                      onClick={() => handleToggleZoneFree(zone.id)}
+                      className={`text-[10px] font-extrabold px-2.5 py-1 rounded-lg border transition cursor-pointer ${
+                        zone.isFree
+                          ? 'bg-emerald-500/20 text-emerald-300 border-emerald-500/50 hover:bg-emerald-500/30'
+                          : 'bg-amber-500/20 text-amber-300 border-amber-500/50 hover:bg-amber-500/30'
+                      }`}
+                    >
+                      {zone.isFree ? '✅ รับ-ส่งฟรี (Free)' : '💰 มีค่าบริการเพิ่ม'}
+                    </button>
+
+                    {!zone.isFree && (
+                      <div className="flex items-center gap-1">
+                        <span className="text-[10px] text-slate-400 font-bold">+฿</span>
+                        <input
+                          type="number"
+                          value={zone.extraFee}
+                          onChange={(e) => handleUpdateZoneFee(zone.id, Number(e.target.value))}
+                          className="w-16 bg-slate-900 border border-amber-500/60 rounded-lg px-2 py-0.5 text-amber-300 text-xs font-black text-right focus:ring-1 focus:ring-amber-400"
+                          placeholder="200"
+                        />
+                        <span className="text-[10px] text-slate-400 font-medium">/ท่าน</span>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              ))}
+            </div>
+
+            {/* Add Custom Zone Form */}
+            <div className="bg-slate-900/80 p-3 rounded-xl border border-slate-800 space-y-2 mt-2">
+              <span className="text-[11px] font-bold text-slate-300 block">
+                + เพิ่มพื้นที่ / โซนรับ-ส่งใหม่ (Custom Pickup Zone)
+              </span>
+
+              <div className="flex flex-wrap items-center gap-2">
+                <input
+                  type="text"
+                  placeholder="ชื่อเขต/หาด เช่น หาดราไวย์ หรือ นครศรีธรรมราช..."
+                  value={customZoneName}
+                  onChange={(e) => setCustomZoneName(e.target.value)}
+                  className="flex-1 min-w-[160px] bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-white text-xs"
+                />
+
+                <label className="flex items-center gap-1.5 bg-slate-950 px-3 py-2 rounded-xl border border-slate-700 text-xs font-semibold text-slate-300 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={customZoneIsFree}
+                    onChange={(e) => setCustomZoneIsFree(e.target.checked)}
+                    className="rounded text-emerald-500 focus:ring-emerald-500"
+                  />
+                  <span>รับ-ส่งฟรี</span>
+                </label>
+
+                {!customZoneIsFree && (
+                  <div className="flex items-center gap-1 bg-slate-950 px-2.5 py-1.5 rounded-xl border border-amber-500/50">
+                    <span className="text-[11px] text-slate-400">+฿</span>
+                    <input
+                      type="number"
+                      value={customZoneFee}
+                      onChange={(e) => setCustomZoneFee(Number(e.target.value))}
+                      className="w-16 bg-slate-900 border border-slate-700 rounded-lg px-2 py-0.5 text-amber-300 text-xs font-bold text-right"
+                    />
+                    <span className="text-[10px] text-slate-400">/ท่าน</span>
+                  </div>
+                )}
+
+                <button
+                  type="button"
+                  onClick={handleAddCustomZone}
+                  disabled={!customZoneName.trim()}
+                  className="bg-amber-500 hover:bg-amber-400 text-slate-950 font-extrabold px-3.5 py-2 rounded-xl text-xs transition disabled:opacity-40 cursor-pointer"
+                >
+                  + เพิ่มโซน
+                </button>
+              </div>
             </div>
           </div>
 

@@ -3,11 +3,12 @@ import path from 'path';
 import fs from 'fs';
 import { createClient } from '@supabase/supabase-js';
 import { GoogleGenAI } from '@google/genai';
-import { initialTours, initialBookings, initialReviews, initialCustomers, initialSettings } from './src/data/mockData';
+import { initialTours, initialBookings, initialReviews, initialCustomers, initialSettings, mockSuppliers } from './src/data/mockData';
 import { normalizeTours } from './src/utils/tourNormalizer';
-import { Tour, Booking, Review, Customer, AppSettings, LineNotificationLog, SalesStats, AdminUser } from './src/types';
+import { Tour, Booking, Review, Customer, AppSettings, LineNotificationLog, SalesStats, AdminUser, Supplier } from './src/types';
 import extractTourHandler from './api/extract-tour-from-image';
 import translateTourHandler from './api/translate-tour';
+import { safeParseLlmJson } from './src/utils/llmJsonParser';
 
 const app = express();
 const PORT = 3000;
@@ -89,7 +90,8 @@ const ai = new GoogleGenAI({
   httpOptions: {
     headers: {
       'User-Agent': 'aistudio-build'
-    }
+    },
+    timeout: 25000
   }
 });
 
@@ -112,6 +114,7 @@ let tours: Tour[] = (() => {
 let bookings: Booking[] = readLocalFile<Booking[]>('bookings.json', [...initialBookings]);
 let reviews: Review[] = readLocalFile<Review[]>('reviews.json', [...initialReviews]);
 let customers: Customer[] = readLocalFile<Customer[]>('customers.json', [...initialCustomers]);
+let suppliers: Supplier[] = readLocalFile<Supplier[]>('suppliers.json', [...mockSuppliers]);
 let settings: AppSettings = readLocalFile<AppSettings>('settings.json', { ...initialSettings });
 let detectedLineGroups: Array<{ groupId: string; groupName?: string; lastSeen: string }> = [
   {
@@ -295,6 +298,22 @@ async function loadStateFromSupabase() {
   } catch (e) {
     console.warn('Could not load live chat sessions from Supabase:', e);
   }
+
+  // 7. Suppliers
+  try {
+    const { data: kvSuppliers } = await supabase.from('app_store').select('value').eq('key', 'suppliers').maybeSingle();
+    if (kvSuppliers && kvSuppliers.value !== undefined && kvSuppliers.value !== null) {
+      try {
+        const loaded = JSON.parse(kvSuppliers.value);
+        if (Array.isArray(loaded) && loaded.length > 0) {
+          suppliers = loaded;
+          saveLocalFile('suppliers.json', suppliers);
+        }
+      } catch (e) {}
+    }
+  } catch (e) {
+    console.warn('Could not load suppliers from Supabase:', e);
+  }
 }
 
 let syncMetadata = {
@@ -304,11 +323,12 @@ let syncMetadata = {
     bookings: new Date().toISOString(),
     reviews: new Date().toISOString(),
     customers: new Date().toISOString(),
+    suppliers: new Date().toISOString(),
     settings: new Date().toISOString()
   }
 };
 
-export function updateSyncMetadata(key?: 'tours' | 'bookings' | 'reviews' | 'customers' | 'settings') {
+export function updateSyncMetadata(key?: 'tours' | 'bookings' | 'reviews' | 'customers' | 'suppliers' | 'settings') {
   syncMetadata.version++;
   const iso = new Date().toISOString();
   if (key) {
@@ -318,11 +338,12 @@ export function updateSyncMetadata(key?: 'tours' | 'bookings' | 'reviews' | 'cus
     syncMetadata.lastUpdatedAt.bookings = iso;
     syncMetadata.lastUpdatedAt.reviews = iso;
     syncMetadata.lastUpdatedAt.customers = iso;
+    syncMetadata.lastUpdatedAt.suppliers = iso;
     syncMetadata.lastUpdatedAt.settings = iso;
   }
 }
 
-async function persistState(key: 'tours' | 'bookings' | 'settings' | 'reviews' | 'customers') {
+async function persistState(key: 'tours' | 'bookings' | 'settings' | 'reviews' | 'customers' | 'suppliers') {
   updateSyncMetadata(key);
 
   // 1. Always save to local file on disk for 100% permanent persistence
@@ -338,6 +359,8 @@ async function persistState(key: 'tours' | 'bookings' | 'settings' | 'reviews' |
       saveLocalFile('reviews.json', reviews);
     } else if (key === 'customers') {
       saveLocalFile('customers.json', customers);
+    } else if (key === 'suppliers') {
+      saveLocalFile('suppliers.json', suppliers);
     }
   } catch (localErr) {
     console.warn(`Local file save error for ${key}:`, localErr);
@@ -352,6 +375,7 @@ async function persistState(key: 'tours' | 'bookings' | 'settings' | 'reviews' |
     if (key === 'settings') val = JSON.stringify(settings);
     if (key === 'reviews') val = JSON.stringify(reviews);
     if (key === 'customers') val = JSON.stringify(customers);
+    if (key === 'suppliers') val = JSON.stringify(suppliers);
 
     const { error: kvError } = await supabase.from('app_store').upsert({ key, value: val, updated_at: new Date().toISOString() }, { onConflict: 'key' });
     if (kvError) {
@@ -567,7 +591,7 @@ async function checkAndSend24hReminders() {
           `👤 ลูกค้า: ${booking.customerName} (${booking.customerPhone})\n` +
           `📍 ทัวร์: ${booking.tourTitle}\n` +
           `📅 วันเดินทาง: ${booking.travelDate}\n` +
-          `🏨 โรงแรมรับส่ง: ${booking.pickupHotel} (ห้อง ${booking.roomNumber || 'ยังไม่ระบุ'})\n` +
+          `🏨 โรงแรมรับส่ง: ${booking.pickupHotel}${booking.roomNumber ? ` (ห้อง ${booking.roomNumber})` : ''}\n` +
           `👥 จำนวน: ผู้ใหญ่ ${booking.adults} / เด็ก ${booking.children}\n` +
           `📌 สถานะ: ยืนยันเรียบร้อยแล้ว (พร้อมต้อนรับลูกค้า!)\n` +
           `🌐 เว็บไซต์: ${SITE_URL}`;
@@ -604,15 +628,29 @@ app.get('/api/tours/deleted-ids', (req, res) => {
 });
 
 app.post('/api/tours', async (req, res) => {
+  const tourId = req.body.id || `tour-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`;
   const newTour: Tour = {
     ...req.body,
-    id: `tour-${Date.now()}`,
-    slug: req.body.slug || `tour-${Date.now()}`
+    id: tourId,
+    slug: req.body.slug || tourId
   };
-  tours.unshift(newTour);
-  tours = normalizeTours(tours).filter(t => !deletedTourIds.has(t.id) && !deletedTourIds.has(t.slug));
+
+  // Untombstone if it was previously in deletedTourIds
+  deletedTourIds.delete(newTour.id);
+  if (newTour.slug) deletedTourIds.delete(newTour.slug);
+  saveLocalFile('deleted_tour_ids.json', Array.from(deletedTourIds));
+
+  // Check if tour already exists by id or titleTH to prevent duplicates
+  const existingIdx = tours.findIndex(t => t.id === newTour.id || (t.title?.TH && t.title.TH === newTour.title?.TH));
+  if (existingIdx !== -1) {
+    tours[existingIdx] = { ...tours[existingIdx], ...newTour };
+  } else {
+    tours.unshift(newTour);
+  }
+
+  tours = normalizeTours(tours).filter(t => !deletedTourIds.has(t.id));
   await persistState('tours');
-  res.json({ ...tours[0], version: syncMetadata.version });
+  res.json({ ...(existingIdx !== -1 ? tours[existingIdx] : newTour), version: syncMetadata.version });
 });
 
 app.put('/api/tours/:id', async (req, res) => {
@@ -649,14 +687,22 @@ app.delete('/api/tours/:id', async (req, res) => {
   });
 });
 
-// Save all tours in batch / overwrite all tours
+// Save all tours in batch / overwrite all tours (e.g. from JSON import / restore)
 app.post('/api/tours/save-all', async (req, res) => {
   try {
     const incomingTours = req.body?.tours || req.body;
     if (!Array.isArray(incomingTours)) {
       return res.status(400).json({ error: 'tours payload must be an array' });
     }
-    tours = normalizeTours(incomingTours).filter(t => !deletedTourIds.has(t.id) && !deletedTourIds.has(t.slug));
+
+    // Untombstone all incoming tours from deleted list (explicitly imported or restored by user)
+    incomingTours.forEach((t: any) => {
+      if (t.id) deletedTourIds.delete(t.id);
+      if (t.slug) deletedTourIds.delete(t.slug);
+    });
+    saveLocalFile('deleted_tour_ids.json', Array.from(deletedTourIds));
+
+    tours = normalizeTours(incomingTours);
     await persistState('tours');
     res.json({
       success: true,
@@ -692,273 +738,209 @@ app.post('/api/tours/reset-default', async (req, res) => {
   }
 });
 
-// AI Automatic Tour Translation endpoint for Admin
-app.post('/api/translate-tour', async (req, res) => {
-  try {
-    const { titleTH, descTH, durationTH, highlightsTH, category, itinerarySteps } = req.body;
-    if (!titleTH) {
-      return res.status(400).json({ error: 'titleTH is required' });
-    }
+// --- Suppliers API (CRUD & Bulk JSON Backup / Restore) ---
+app.get('/api/suppliers', (req, res) => {
+  res.json(suppliers);
+});
 
-    let result: any = {
-      titleEN: '',
-      titleZH: '',
-      titleRU: '',
-      descEN: '',
-      descZH: '',
-      descRU: '',
-      durationEN: '08:00 AM - 05:00 PM (Full Day)',
-      durationZH: '08:00 - 17:00 (全天)',
-      durationRU: '08:00 - 17:00 (Полный день)',
-      highlightsEN: [] as string[],
-      highlightsZH: [] as string[],
-      highlightsRU: [] as string[],
-      translatedItinerary: undefined as any
-    };
+app.post('/api/suppliers', async (req, res) => {
+  const newSup: Supplier = {
+    id: req.body.id || `sup-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`,
+    name: req.body.name || 'ซัพพลายเออร์ใหม่',
+    code: req.body.code || `SUP-${Math.floor(100 + Math.random() * 900)}`,
+    contactPerson: req.body.contactPerson,
+    phone: req.body.phone || '',
+    email: req.body.email,
+    lineId: req.body.lineId,
+    address: req.body.address,
+    bankName: req.body.bankName,
+    accountNo: req.body.accountNo,
+    accountName: req.body.accountName,
+    bankAccount: req.body.bankAccount,
+    notes: req.body.notes,
+    isActive: req.body.isActive !== false,
+    createdAt: req.body.createdAt || new Date().toISOString().split('T')[0]
+  };
 
-    try {
-      const prompt = `You are a professional travel localization assistant for Trip Sea Tour Phuket.
-Translate this Thai tour listing into English (EN), Simplified Chinese (ZH), and Russian (RU).
-Make the translations attractive, natural, and accurate for tourism websites.
+  const existingIdx = suppliers.findIndex(s => s.id === newSup.id || (s.code && s.code === newSup.code));
+  if (existingIdx !== -1) {
+    suppliers[existingIdx] = { ...suppliers[existingIdx], ...newSup };
+  } else {
+    suppliers.unshift(newSup);
+  }
 
-Thai Data:
-- Tour Title: "${titleTH}"
-- Description: "${descTH || ''}"
-- Duration: "${durationTH || 'เต็มวัน (08:00 - 17:00)'}"
-- Highlights: ${JSON.stringify(highlightsTH || [])}
-- Category: "${category || 'island'}"
-- Itinerary Steps: ${JSON.stringify(itinerarySteps || [])}
+  await persistState('suppliers');
+  res.json({ ...(existingIdx !== -1 ? suppliers[existingIdx] : newSup), version: syncMetadata.version });
+});
 
-Return ONLY valid JSON in this exact structure without markdown formatting or backticks:
-{
-  "titleEN": "English title",
-  "titleZH": "Chinese title (Simplified)",
-  "titleRU": "Russian title",
-  "descEN": "English description",
-  "descZH": "Chinese description",
-  "descRU": "Russian description",
-  "durationEN": "English duration",
-  "durationZH": "Chinese duration",
-  "durationRU": "Russian duration",
-  "highlightsEN": ["Highlight 1", "Highlight 2"],
-  "highlightsZH": ["亮点 1", "亮点 2"],
-  "highlightsRU": ["Пункт 1", "Пункт 2"],
-  "translatedItinerary": [
-    {
-      "time": "07:30 - 08:30",
-      "title": { "TH": "...", "EN": "...", "ZH": "...", "RU": "..." },
-      "description": { "TH": "...", "EN": "...", "ZH": "...", "RU": "..." }
-    }
-  ]
-}`;
-
-      const aiResponse = await ai.models.generateContent({
-        model: 'gemini-3.8-flash',
-        contents: prompt,
-      });
-
-      const responseText = aiResponse.text || '';
-      const cleanJson = responseText.replace(/```json\s*|```/g, '').trim();
-      const parsed = JSON.parse(cleanJson);
-      result = { ...result, ...parsed };
-    } catch (aiErr) {
-      console.warn('AI translation failed, using fallback translation format:', aiErr);
-      result.titleEN = titleTH;
-      result.titleZH = titleTH;
-      result.titleRU = titleTH;
-      result.descEN = descTH || '';
-      result.descZH = descTH || '';
-      result.descRU = descTH || '';
-    }
-
-    res.json(result);
-  } catch (err: any) {
-    console.error('Translation route error:', err);
-    res.status(500).json({ error: err?.message || 'Translation error' });
+app.put('/api/suppliers/:id', async (req, res) => {
+  const { id } = req.params;
+  const index = suppliers.findIndex(s => s.id === id);
+  if (index !== -1) {
+    suppliers[index] = { ...suppliers[index], ...req.body };
+    await persistState('suppliers');
+    res.json({ ...suppliers[index], version: syncMetadata.version });
+  } else {
+    res.status(404).json({ error: 'Supplier not found' });
   }
 });
 
-// AI Tour Extraction from Flyer / Image(s) endpoint for Admin (Single or Multiple Images)
-app.post('/api/extract-tour-from-image', async (req, res) => {
+app.delete('/api/suppliers/:id', async (req, res) => {
+  const { id } = req.params;
+  suppliers = suppliers.filter(s => s.id !== id);
+  await persistState('suppliers');
+  res.json({ success: true, id, version: syncMetadata.version });
+});
+
+app.post('/api/suppliers/save-all', async (req, res) => {
   try {
-    const { images, imageBase64, mimeType } = req.body;
-    
-    // Normalize into array of images
-    const rawImages: Array<{ imageBase64: string; mimeType?: string }> = [];
-
-    if (Array.isArray(images) && images.length > 0) {
-      images.forEach((item: any) => {
-        if (typeof item === 'string' && item.trim()) {
-          rawImages.push({ imageBase64: item });
-        } else if (item && typeof item === 'object' && item.imageBase64) {
-          rawImages.push({
-            imageBase64: item.imageBase64,
-            mimeType: item.mimeType || 'image/jpeg'
-          });
-        }
-      });
-    } else if (imageBase64) {
-      rawImages.push({ imageBase64, mimeType: mimeType || 'image/jpeg' });
+    const incoming = req.body?.suppliers || req.body;
+    if (!Array.isArray(incoming)) {
+      return res.status(400).json({ error: 'suppliers payload must be an array' });
     }
-
-    if (rawImages.length === 0) {
-      return res.status(400).json({ error: 'At least one image is required for AI tour extraction' });
-    }
-
-    // Limit to maximum 10 images
-    const selectedImages = rawImages.slice(0, 10);
-
-    const imageParts: any[] = [];
-    selectedImages.forEach((img) => {
-      let cleanBase64 = img.imageBase64;
-      let detectedMime = img.mimeType || 'image/jpeg';
-      if (cleanBase64.includes('base64,')) {
-        const match = cleanBase64.match(/^data:([^;]+);base64,(.+)$/);
-        if (match) {
-          detectedMime = match[1] || detectedMime;
-          cleanBase64 = match[2];
-        }
-      }
-
-      imageParts.push({
-        inlineData: {
-          mimeType: detectedMime,
-          data: cleanBase64,
-        },
-      });
+    suppliers = incoming;
+    await persistState('suppliers');
+    res.json({
+      success: true,
+      count: suppliers.length,
+      suppliers,
+      version: syncMetadata.version,
+      lastUpdatedAt: syncMetadata.lastUpdatedAt.suppliers
     });
+  } catch (err: any) {
+    console.error('Save all suppliers error:', err);
+    res.status(500).json({ error: err?.message || 'Failed to save all suppliers' });
+  }
+});
 
-    const prompt = `You are an expert travel operations manager and itinerary specialist for Trip Sea Tour Phuket (a premier tour agency in Phuket, Thailand).
-Analyze the provided tour brochure / flyer / timetable / poster image(s) thoroughly (${imageParts.length} page/image provided). 
-These images may contain multiple pages of a tour program, such as:
-1) Cover / Title / Overview page
-2) Pricing & Inclusions table
-3) Detailed Time Schedule / Itinerary timetable
-4) Pickup zones, conditions, and what to bring
-
-Carefully correlate, cross-reference, and synthesize ALL details across ALL uploaded images into a single cohesive, structured JSON.
-
-Read all Thai and English text, pricing, schedules, highlights, destinations, inclusions, terms, and notes visible across all images.
-If any text is in Thai, extract it accurately and also generate high quality English (EN), Simplified Chinese (ZH), and Russian (RU) translations for multi-language fields.
-If specific prices are not explicitly written in the image, provide reasonable, realistic Phuket market rates (e.g., priceAdult: 1500-2500 THB, child ~70%).
-
-Output ONLY a valid JSON object matching this exact schema (no markdown, no backticks, no extra text):
-{
-  "titleTH": "ชื่อโปรแกรมทัวร์ภาษาไทย เช่น ทัวร์เกาะพีพี อ่าวมาหยา เกาะไข่ สปีดโบ๊ท",
-  "titleEN": "Tour Title in English",
-  "titleZH": "Tour Title in Simplified Chinese",
-  "titleRU": "Tour Title in Russian",
-  "category": "island",
-  "location": "สถานที่ เช่น เกาะพีพี - อ่าวมาหยา - เกาะไข่ หรือ ภูเก็ต / พังงา",
-  "durationTH": "ระยะเวลา เช่น เต็มวัน (08:00 - 17:00)",
-  "durationEN": "Full Day (08:00 AM - 05:00 PM)",
-  "durationZH": "全天 (08:00 - 17:00)",
-  "durationRU": "Полный день (08:00 - 17:00)",
-  "priceAdult": 1800,
-  "priceChild": 1200,
-  "originalPriceAdult": 2500,
-  "originalPriceChild": 1700,
-  "costAdult": 1150,
-  "costChild": 780,
-  "descTH": "คำอธิบายโปรแกรมทัวร์อย่างละเอียด น่าดึงดูดใจ และครบถ้วน (ภาษาไทย)",
-  "descEN": "Detailed and engaging tour description in English",
-  "descZH": "Chinese tour description",
-  "descRU": "Russian tour description",
-  "highlightsTH": [
-    "ไฮไลท์ 1 ที่ระบุในรูปภาพ",
-    "ไฮไลท์ 2",
-    "ไฮไลท์ 3",
-    "ไฮไลท์ 4"
-  ],
-  "includedItemsTH": [
-    "รถรับ-ส่งโรงแรม",
-    "อาหารกลางวัน และเครื่องดื่ม",
-    "อุปกรณ์ดำน้ำตื้นและเสื้อชูชีพ",
-    "ประกันอุบัติเหตุการเดินทาง",
-    "ไกด์นำเที่ยวมืออาชีพ"
-  ],
-  "itinerarySteps": [
-    {
-      "time": "07:30 - 08:30",
-      "title": {
-        "TH": "รถรับจากโรงแรมที่พัก สู่ท่าเรือ",
-        "EN": "Hotel pickup and transfer to pier",
-        "ZH": "酒店接送至码头",
-        "RU": "Трансфер из отеля к причалу"
-      },
-      "description": {
-        "TH": "เช็คอิน รับประทานอาหารว่าง ชา กาแฟ รับฟังบรรยายสรุป",
-        "EN": "Check-in, light refreshments, and briefing",
-        "ZH": "登记、享用茶点并听取安全讲解",
-        "RU": "Регистрация, легкий перекус и инструктаж"
-      }
+// --- Bulk Save Bookings API (for JSON Import & Restore) ---
+app.post('/api/bookings/save-all', async (req, res) => {
+  try {
+    const incoming = req.body?.bookings || req.body;
+    if (!Array.isArray(incoming)) {
+      return res.status(400).json({ error: 'bookings payload must be an array' });
     }
-  ],
-  "supplierName": "ชื่อบริษัทเรือหรือซัพพลายเออร์ถ้ามี",
-  "notes": "ข้อความสำคัญเพิ่มเติม หรือสิ่งที่ควรนำมาด้วย"
-}
+    bookings = incoming;
+    await persistState('bookings');
+    res.json({
+      success: true,
+      count: bookings.length,
+      bookings,
+      version: syncMetadata.version,
+      lastUpdatedAt: syncMetadata.lastUpdatedAt.bookings
+    });
+  } catch (err: any) {
+    console.error('Save all bookings error:', err);
+    res.status(500).json({ error: err?.message || 'Failed to save all bookings' });
+  }
+});
 
-Important:
-- "category" must be strictly one of: "island", "sunset", "yacht", "eco", "sightseeing"
-- Prices must be numbers (THB currency)
-- Ensure all itinerary steps visible in the timetable are extracted accurately in chronological order with start/end times.`;
+// --- Universal Full-System Backup & Restore Endpoints ---
+app.get('/api/backup/full-export', (req, res) => {
+  const timestamp = new Date().toISOString();
+  const backupBundle = {
+    system: 'Trip Sea Tour Phuket',
+    version: '2.0',
+    exportedAt: timestamp,
+    counts: {
+      tours: tours.length,
+      suppliers: suppliers.length,
+      customers: customers.length,
+      bookings: bookings.length,
+      reviews: reviews.length
+    },
+    data: {
+      tours,
+      suppliers,
+      customers,
+      bookings,
+      reviews,
+      settings
+    }
+  };
 
-    const textPart = { text: prompt };
+  res.setHeader('Content-Type', 'application/json');
+  res.setHeader('Content-Disposition', `attachment; filename="tripseatour_full_backup_${timestamp.split('T')[0]}.json"`);
+  res.json(backupBundle);
+});
 
-    const apiKeys = getGeminiApiKeys();
-    let responseText = '';
-    let lastError: any = null;
-    let successfulKeyIndex = -1;
-
-    for (let i = 0; i < apiKeys.length; i++) {
-      const activeKey = apiKeys[i];
-      try {
-        const genClient = new GoogleGenAI({
-          apiKey: activeKey,
-          httpOptions: {
-            headers: {
-              'User-Agent': 'aistudio-build'
-            }
-          }
-        });
-
-        const aiResponse = await genClient.models.generateContent({
-          model: 'gemini-3.8-flash',
-          contents: { parts: [...imageParts, textPart] },
-        });
-
-        if (aiResponse && aiResponse.text) {
-          responseText = aiResponse.text;
-          successfulKeyIndex = i;
-          break;
-        }
-      } catch (err: any) {
-        lastError = err;
-        console.warn(`Server Gemini Key #${i + 1} failed:`, err?.message || err);
-        if (i < apiKeys.length - 1) {
-          console.log(`Rotating to Gemini Key #${i + 2}...`);
-          continue;
-        }
-      }
+app.post('/api/backup/full-import', async (req, res) => {
+  try {
+    const bundle = req.body?.data || req.body;
+    if (!bundle || typeof bundle !== 'object') {
+      return res.status(400).json({ error: 'Invalid backup bundle format' });
     }
 
-    if (!responseText) {
-      throw new Error(lastError?.message || 'AI extraction failed across all configured keys');
+    const restoredCounts: Record<string, number> = {};
+
+    // 1. Tours
+    if (Array.isArray(bundle.tours)) {
+      bundle.tours.forEach((t: any) => {
+        if (t.id) deletedTourIds.delete(t.id);
+        if (t.slug) deletedTourIds.delete(t.slug);
+      });
+      saveLocalFile('deleted_tour_ids.json', Array.from(deletedTourIds));
+      tours = normalizeTours(bundle.tours);
+      await persistState('tours');
+      restoredCounts.tours = tours.length;
     }
 
-    const cleanJson = responseText.replace(/```json\s*|```/g, '').trim();
-    const parsed = JSON.parse(cleanJson);
+    // 2. Suppliers
+    if (Array.isArray(bundle.suppliers)) {
+      suppliers = bundle.suppliers;
+      await persistState('suppliers');
+      restoredCounts.suppliers = suppliers.length;
+    }
+
+    // 3. Customers
+    if (Array.isArray(bundle.customers)) {
+      customers = bundle.customers;
+      await persistState('customers');
+      restoredCounts.customers = customers.length;
+    }
+
+    // 4. Bookings
+    if (Array.isArray(bundle.bookings)) {
+      bookings = bundle.bookings;
+      await persistState('bookings');
+      restoredCounts.bookings = bookings.length;
+    }
+
+    // 5. Reviews
+    if (Array.isArray(bundle.reviews)) {
+      reviews = bundle.reviews;
+      await persistState('reviews');
+      restoredCounts.reviews = reviews.length;
+    }
+
+    // 6. Settings
+    if (bundle.settings && typeof bundle.settings === 'object' && bundle.settings.promptPayId) {
+      settings = { ...settings, ...bundle.settings };
+      await persistState('settings');
+      restoredCounts.settings = 1;
+    }
 
     res.json({
       success: true,
-      data: parsed,
-      imageCount: imageParts.length,
-      usedKeyIndex: successfulKeyIndex
+      message: 'กู้คืนข้อมูลสำรองทั้งระบบเรียบร้อยแล้ว',
+      restoredCounts,
+      version: syncMetadata.version,
+      timestamp: new Date().toISOString()
     });
   } catch (err: any) {
-    console.error('Extract tour from image error:', err);
-    res.status(500).json({ error: err?.message || 'Failed to extract tour from image' });
+    console.error('Full import error:', err);
+    res.status(500).json({ error: err?.message || 'Failed to restore full backup' });
   }
+});
+
+// AI Automatic Tour Translation endpoint for Admin
+app.all('/api/translate-tour', async (req, res) => {
+  return translateTourHandler(req, res);
+});
+
+// AI Tour Extraction from Flyer / Image(s) endpoint for Admin (Single or Multiple Images)
+app.all('/api/extract-tour-from-image', async (req, res) => {
+  return extractTourHandler(req, res);
 });
 
 
@@ -1121,7 +1103,7 @@ app.put('/api/bookings/:id/status', async (req, res) => {
       `📅 วันเดินทาง: ${booking.travelDate}\n` +
       `⏰ เวลานัดรับ: ${booking.pickupTime || '07:30 - 08:00 น.'}\n` +
       `👤 ผู้เดินทาง: ${booking.customerName} (${booking.customerPhone})\n` +
-      `🏨 โรงแรมที่รับ: ${booking.pickupHotel} (ห้อง: ${booking.roomNumber || 'ยังไม่ระบุ'} / โซน: ${booking.pickupZone || 'ทั่วไป'})\n` +
+      `🏨 โรงแรมที่รับ: ${booking.pickupHotel}${booking.roomNumber ? ` (ห้อง: ${booking.roomNumber})` : ''} (โซน: ${booking.pickupZone || 'ทั่วไป'})\n` +
       `👥 จำนวน: ผู้ใหญ่ ${booking.adults} ท่าน / เด็ก ${booking.children || 0} ท่าน / ทารก ${booking.infants || 0} ท่าน\n` +
       `💰 ยอดชำระสุทธิ: ฿${booking.totalAmount.toLocaleString()} (ชำระผ่าน PromptPay แล้ว)\n` +
       `═════════════════════════\n` +
@@ -1492,7 +1474,17 @@ function generateSmartFallbackReply(message: string, language: string = 'TH'): s
       `2️⃣ **กรอกข้อมูลผู้เดินทาง**: ระบุชื่อ, เบอร์โทร และชื่อโรงแรมที่พักในภูเก็ตสำหรับให้รถตู้ไปรับ\n` +
       `3️⃣ **สแกนจ่ายผ่าน PromptPay QR**: สแกนจ่ายได้ทุกแอปธนาคาร ยอดเงินตรง สะดวก รวดเร็ว ไม่มีค่าธรรมเนียม\n` +
       `4️⃣ **แนบสลิป รับ E-Ticket ทันที**: ระบบจะตรวจสอบและออกตั๋ว Voucher อิเล็กทรอนิกส์พร้อมส่งแจ้งเตือนเข้า LINE ทันทีค่ะ\n\n` +
+      `📌 **กำหนดชำระและเลื่อน/ยกเลิก**: ชำระล่วงหน้าก่อนวันเดินทางไม่เกิน 1 วัน / สามารถเลื่อนวันเดินทางหรือยกเลิกได้ล่วงหน้าก่อนวันเดินทาง 1 วัน ไม่เกินเวลา 18:00 น. (หากเกินเวลา 18:00 น. ของวันก่อนเดินทาง ขอสงวนสิทธิ์งดคืนเงินทุกกรณีค่ะ)\n\n` +
       `💬 หรือหากสะดวกจองผ่านแอดมิน ทัก LINE ได้ที่: **${lineOa}** ได้ตลอด 24 ชม. ค่ะ`;
+  }
+
+  // 4.5. Cancellation & Reschedule Policy
+  if (lower.includes('ยกเลิก') || lower.includes('เลื่อน') || lower.includes('คืนเงิน') || lower.includes('cancel') || lower.includes('reschedule') || lower.includes('refund') || lower.includes('18:00') || lower.includes('18.00')) {
+    return `📌 **นโยบายการชำระเงิน การเลื่อนวันเดินทาง และการยกเลิกการจองค่ะ**:\n\n` +
+      `1️⃣ **กำหนดชำระเงิน**: ชำระเงินล่วงหน้าก่อนวันเดินทางอย่างน้อย/ไม่เกิน 1 วัน\n` +
+      `2️⃣ **การเลื่อนวันเดินทางหรือยกเลิก**: สามารถแจ้งเลื่อนวันเดินทางหรือยกเลิกการจองได้ล่วงหน้าก่อนวันเดินทาง 1 วัน **ไม่เกินเวลา 18:00 น.**\n` +
+      `3️⃣ **หากเลยกำหนดเวลา**: หากแจ้งเลื่อนหรือยกเลิกเลยเวลา 18:00 น. ของวันก่อนเดินทาง ทางบริษัทขอสงวนสิทธิ์ **งดคืนเงินทุกกรณี** ค่ะ\n` +
+      `4️⃣ **กรณีคลื่นลมมรสุม**: หากเรือไม่สามารถออกจากฝั่งได้เนื่องจากสภาพอากาศหรือคำสั่งจากทางราชการ ยินดีคืนเงินเต็มจำนวน 100% หรือปรับเลื่อนวันเดินทางให้ทันทีค่ะ!`;
   }
 
   // 5. Hotel Transfer & Pickup Time
@@ -1543,14 +1535,6 @@ function generateSmartFallbackReply(message: string, language: string = 'TH'): s
     `ท่านสามารถคลิกดูรายละเอียดและกด **"จองทัวร์"** บนหน้าเว็บได้ทันที หรือสอบถามเจ้าหน้าที่ทาง LINE: **${lineOa}** (โทร **${phone}**) ได้ตลอด 24 ชม. เลยนะคะ!`;
 }
 
-// AI Tour Extraction & Translation endpoints
-app.all('/api/extract-tour-from-image', async (req, res) => {
-  return extractTourHandler(req, res);
-});
-
-app.all('/api/translate-tour', async (req, res) => {
-  return translateTourHandler(req, res);
-});
 
 app.post('/api/chat', async (req, res) => {
   const { message = '', language = 'TH' } = req.body || {};
@@ -1598,13 +1582,22 @@ YOUR INSTRUCTIONS:
 - Keep replies well-structured with neat markdown bullet points, bold highlights, and friendly emojis.
 - Recommend specific tour packages with exact prices when requested.`;
 
-      const response = await ai.models.generateContent({
-        model: 'gemini-3.8-flash',
-        contents: `${systemInstruction}\n\nUser Question: ${message}`,
-      });
+      let aiText = '';
+      for (const m of ['gemini-3.1-flash-lite', 'gemini-3.8-flash']) {
+        try {
+          const response = await ai.models.generateContent({
+            model: m,
+            contents: `${systemInstruction}\n\nUser Question: ${message}`,
+          });
+          if (response && response.text) {
+            aiText = response.text;
+            break;
+          }
+        } catch (_) {}
+      }
 
-      if (response && response.text) {
-        return res.json({ reply: response.text });
+      if (aiText) {
+        return res.json({ reply: aiText });
       }
     } catch (aiErr: any) {
       console.warn('Gemini API call warning (falling back to smart local knowledge base):', aiErr?.message || aiErr);
@@ -1945,6 +1938,27 @@ app.delete('/api/customers/:id', async (req, res) => {
   res.json({ success: true, id, version: syncMetadata.version, message: 'Customer deleted successfully' });
 });
 
+app.post('/api/customers/save-all', async (req, res) => {
+  try {
+    const incoming = req.body?.customers || req.body;
+    if (!Array.isArray(incoming)) {
+      return res.status(400).json({ error: 'customers payload must be an array' });
+    }
+    customers = incoming;
+    await persistState('customers');
+    res.json({
+      success: true,
+      count: customers.length,
+      customers,
+      version: syncMetadata.version,
+      lastUpdatedAt: syncMetadata.lastUpdatedAt.customers
+    });
+  } catch (err: any) {
+    console.error('Save all customers error:', err);
+    res.status(500).json({ error: err?.message || 'Failed to save all customers' });
+  }
+});
+
 // --- Stats Dashboard ---
 app.get('/api/stats', (req, res) => {
   const totalRevenue = bookings
@@ -2039,8 +2053,13 @@ app.post('/api/sync', async (req, res) => {
       await persistState('customers');
       updated = true;
     }
+    if (Array.isArray(req.body.suppliers)) {
+      suppliers = req.body.suppliers;
+      await persistState('suppliers');
+      updated = true;
+    }
 
-    res.json({ success: true, updated, settings, toursCount: tours.length, bookingsCount: bookings.length });
+    res.json({ success: true, updated, settings, toursCount: tours.length, bookingsCount: bookings.length, suppliersCount: suppliers.length });
   } catch (err) {
     console.error('Error in /api/sync:', err);
     res.status(500).json({ error: 'Failed to sync state' });
@@ -2463,7 +2482,7 @@ app.post('/api/line/send-reminder/:id', async (req, res) => {
     `👤 ลูกค้า: ${booking.customerName} (${booking.customerPhone})\n` +
     `📍 ทัวร์: ${booking.tourTitle}\n` +
     `📅 วันเดินทาง: ${booking.travelDate}\n` +
-    `🏨 โรงแรมรับส่ง: ${booking.pickupHotel} (ห้อง ${booking.roomNumber || 'ยังไม่ระบุ'})\n` +
+    `🏨 โรงแรมรับส่ง: ${booking.pickupHotel}${booking.roomNumber ? ` (ห้อง ${booking.roomNumber})` : ''}\n` +
     `👥 จำนวน: ผู้ใหญ่ ${booking.adults} / เด็ก ${booking.children}\n` +
     `📌 สถานะ: ยืนยันเรียบร้อยแล้ว (พร้อมต้อนรับลูกค้า!)`;
 
@@ -2474,8 +2493,9 @@ app.post('/api/line/send-reminder/:id', async (req, res) => {
   res.json({ success: true, logItem, booking });
 });
 
-app.get('/api/line/logs', (req, res) => {
-  res.json(lineLogs);
+// Ensure any unhandled /api/* route returns clean JSON (never fall through to SPA HTML)
+app.all('/api/*', (req, res) => {
+  res.status(404).json({ error: `Endpoint not found: ${req.method} ${req.path}` });
 });
 
 // Vite & Static file serving

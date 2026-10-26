@@ -1,10 +1,12 @@
 import React, { useState, useEffect } from 'react';
-import { X, Calendar, Users, MapPin, QrCode, Upload, CheckCircle2, ShieldCheck, FileText, Phone, Mail, User, AlertCircle, ArrowRight, Loader2, Sparkles, Check, MessageCircle } from 'lucide-react';
+import { X, Calendar, Users, MapPin, QrCode, Upload, CheckCircle2, ShieldCheck, FileText, Phone, Mail, User, AlertCircle, ArrowRight, Loader2, Sparkles, Check, MessageCircle, Clock } from 'lucide-react';
 import { Tour, Booking, Language, AppSettings } from '../types';
 import { translations } from '../data/translations';
 import { generatePromptPayQRDataUrl } from '../utils/promptpay';
 import { TicketVoucher } from './TicketVoucher';
 import { supabaseApi } from '../lib/supabase';
+import { getAddonDisplayName, getAddonAdjustmentText } from '../utils/addonHelper';
+import { getEffectivePickupZones, getZoneExtraFeePerGuest, getZoneDisplayName, getZoneTransferStatusLabel } from '../utils/pickupZoneHelper';
 
 interface BookingModalProps {
   tour: Tour | null;
@@ -34,8 +36,11 @@ export const BookingModal: React.FC<BookingModalProps> = ({
   const [infants, setInfants] = useState(0);
 
   const [pickupHotel, setPickupHotel] = useState('');
-  const [pickupZone, setPickupZone] = useState('Patong');
-  const [roomNumber, setRoomNumber] = useState('');
+  const [pickupZone, setPickupZone] = useState(() => {
+    const zones = tour ? getEffectivePickupZones(tour) : [];
+    return zones.length > 0 ? zones[0].zoneName : 'Patong';
+  });
+  const [roomNumber] = useState('');
   const [specialRequests, setSpecialRequests] = useState('');
 
   const [customerName, setCustomerName] = useState('');
@@ -56,17 +61,32 @@ export const BookingModal: React.FC<BookingModalProps> = ({
     return (tour?.addons || []).filter(a => a.enabled !== false).map(a => a.id);
   });
 
-  // Price Calculation according to Nationality / Rate Category & Add-ons
+  // Pickup Zones & Extra Surcharges
+  const effectivePickupZones = tour ? getEffectivePickupZones(tour) : [];
+  const zoneExtraFeePerGuest = getZoneExtraFeePerGuest(effectivePickupZones, pickupZone);
+  const totalPickupZoneFee = zoneExtraFeePerGuest * (Number(adults) + Number(children));
+
+  // Price Calculation according to Nationality / Rate Category, Add-ons & Pickup Zone Fee
   const priceAdult = isForeigner && tour?.priceForeignAdult ? tour.priceForeignAdult : (tour?.priceAdult || 0);
   const priceChild = isForeigner && tour?.priceForeignChild ? tour.priceForeignChild : (tour?.priceChild || 0);
   const totalGuests = Number(adults) + Number(children);
   const basePrice = (Number(adults) * priceAdult) + (Number(children) * priceChild);
   const addonAdjustment = (tour?.addons || []).filter(a => selectedAddonIds.includes(a.id)).reduce((sum, a) => sum + (Number(a.priceAdjustment || 0) * totalGuests), 0);
-  const totalAmount = Math.max(0, basePrice + addonAdjustment);
+  const totalAmount = Math.max(0, basePrice + addonAdjustment + totalPickupZoneFee);
 
   const toggleAddonSelection = (id: string) => {
     setSelectedAddonIds(prev => prev.includes(id) ? prev.filter(i => i !== id) : [...prev, id]);
   };
+
+  // Keep pickupZone in sync with tour's configured zones
+  useEffect(() => {
+    if (effectivePickupZones.length > 0) {
+      const match = effectivePickupZones.find(z => z.zoneName.toLowerCase().trim() === pickupZone.toLowerCase().trim());
+      if (!match) {
+        setPickupZone(effectivePickupZones[0].zoneName);
+      }
+    }
+  }, [tour?.id]);
 
   // Generate PromptPay QR Data URL
   useEffect(() => {
@@ -118,6 +138,7 @@ export const BookingModal: React.FC<BookingModalProps> = ({
         travelDate,
         pickupHotel,
         pickupZone,
+        pickupZoneFee: totalPickupZoneFee,
         roomNumber,
         specialRequests,
         adults,
@@ -162,6 +183,7 @@ export const BookingModal: React.FC<BookingModalProps> = ({
           travelDate,
           pickupHotel,
           pickupZone: pickupZone || 'General Zone',
+          pickupZoneFee: totalPickupZoneFee,
           roomNumber,
           specialRequests,
           adults: Number(adults) || 1,
@@ -381,7 +403,7 @@ export const BookingModal: React.FC<BookingModalProps> = ({
                   <p className="text-[11px] text-slate-600 mt-0.5">
                     {isForeigner
                       ? '🌍 ราคาชาวต่างชาติ (รวมค่าธรรมเนียมอุทยานต่างชาติแล้ว)'
-                      : '🇹🇭 ราคาสำหรับสัญชาติไทย (แสดงบัตรประชาชนในวันเดินทาง)'}
+                      : '🇹🇭 ราคาสำหรับสัญชาติไทย (แสดงตั๋วในวันเดินทาง)'}
                   </p>
                 </div>
 
@@ -483,15 +505,20 @@ export const BookingModal: React.FC<BookingModalProps> = ({
               {tour.addons && tour.addons.length > 0 && (
                 <div className="bg-emerald-50/80 border border-emerald-200 p-3.5 rounded-2xl space-y-2">
                   <span className="font-extrabold text-emerald-950 text-xs flex items-center gap-1.5">
-                    <span>⚙️ ออฟชั่นเสริม / ส่วนลดพิเศษ (Optional Add-ons)</span>
+                    <span>⚙️ {currentLang === 'TH' ? 'ออฟชั่นเสริม / ส่วนลดพิเศษ' : currentLang === 'ZH' ? '附加选项与优惠' : currentLang === 'RU' ? 'Дополнительные опции и скидки' : 'Optional Add-ons & Discounts'}</span>
                   </span>
                   <p className="text-[11px] text-slate-600">
-                    เลือกออฟชั่นเสริมเพิ่มเติม เช่น เดินทางไปท่าเรือเองเพื่อรับส่วนลด:
+                    {currentLang === 'TH' ? 'เลือกออฟชั่นเสริมเพิ่มเติม เช่น เดินทางไปท่าเรือเองเพื่อรับส่วนลด:' :
+                     currentLang === 'ZH' ? '请选择附加服务或自驾前往码头优惠：' :
+                     currentLang === 'RU' ? 'Выберите опции (например, трансфер самостоятельно со скидкой):' :
+                     'Select optional add-ons or self-transfer to get discounts:'}
                   </p>
                   <div className="space-y-2 pt-1">
                     {tour.addons.map((addon) => {
                       const isSelected = selectedAddonIds.includes(addon.id);
                       const adj = addon.priceAdjustment * totalGuests;
+                      const displayName = getAddonDisplayName(addon, currentLang);
+                      const adjText = getAddonAdjustmentText(addon.priceAdjustment, currentLang);
                       return (
                         <button
                           key={addon.id}
@@ -510,9 +537,9 @@ export const BookingModal: React.FC<BookingModalProps> = ({
                               {isSelected && <Check className="w-3 h-3 stroke-[3]" />}
                             </div>
                             <div>
-                              <div className="font-bold text-xs">{addon.name}</div>
+                              <div className="font-bold text-xs">{displayName}</div>
                               <div className={`text-[10px] ${isSelected ? 'text-emerald-300' : 'text-slate-500'}`}>
-                                {addon.priceAdjustment < 0 ? `ส่วนลด ${addon.priceAdjustment} บาท/ท่าน` : `เพิ่ม ${addon.priceAdjustment} บาท/ท่าน`}
+                                {adjText.label}
                               </div>
                             </div>
                           </div>
@@ -549,35 +576,41 @@ export const BookingModal: React.FC<BookingModalProps> = ({
                   />
                 </div>
 
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                  <div>
-                    <label className="font-bold text-slate-700 text-xs block mb-1">
-                      {t.pickupZone}
-                    </label>
-                    <select
-                      value={pickupZone}
-                      onChange={(e) => setPickupZone(e.target.value)}
-                      className="w-full bg-slate-50 border border-slate-300 text-slate-900 rounded-xl px-3 py-2 text-xs focus:ring-2 focus:ring-cyan-500"
-                    >
-                      {tour.pickupAreas.map((area) => (
-                        <option key={area} value={area}>{area}</option>
-                      ))}
-                    </select>
-                  </div>
-
-                  <div>
-                    <label className="font-bold text-slate-700 text-xs block mb-1">
-                      {t.roomNumber}
-                    </label>
-                    <input
-                      type="text"
-                      placeholder={currentLang === 'TH' ? 'เช่น Room 304 (ถ้าทราบ)' : currentLang === 'ZH' ? '例如 304房 (选填)' : 'e.g. Room 304 (optional)'}
-                      value={roomNumber}
-                      onChange={(e) => setRoomNumber(e.target.value)}
-                      className="w-full bg-slate-50 border border-slate-300 text-slate-900 rounded-xl px-3 py-2 text-xs focus:ring-2 focus:ring-cyan-500"
-                    />
-                  </div>
+                <div>
+                  <label className="font-bold text-slate-700 text-xs block mb-1">
+                    {t.pickupZone}
+                  </label>
+                  <select
+                    value={pickupZone}
+                    onChange={(e) => setPickupZone(e.target.value)}
+                    className="w-full bg-slate-50 border border-slate-300 text-slate-900 rounded-xl px-3 py-2 text-xs font-semibold focus:ring-2 focus:ring-cyan-500"
+                  >
+                    {effectivePickupZones.map((z) => {
+                      const isFree = z.isFree || z.extraFee === 0;
+                      const zoneNameDisplay = getZoneDisplayName(z, currentLang);
+                      const statusText = getZoneTransferStatusLabel(isFree, z.extraFee, currentLang);
+                      const labelText = `${zoneNameDisplay} (${statusText})`;
+                      return <option key={z.id || z.zoneName} value={z.zoneName}>{labelText}</option>;
+                    })}
+                  </select>
                 </div>
+
+                {totalPickupZoneFee > 0 && (
+                  <div className="bg-amber-50 border border-amber-300 p-2.5 rounded-xl flex items-center justify-between text-xs text-amber-900 font-medium animate-in fade-in">
+                    <span className="flex items-center gap-1.5 font-bold">
+                      <MapPin className="w-4 h-4 text-amber-600 shrink-0" />
+                      <span>
+                        {currentLang === 'TH' ? `ค่าบริการรถรับ-ส่งนอกโซน (${getZoneDisplayName(pickupZone, currentLang)}): +฿${zoneExtraFeePerGuest}/ท่าน` :
+                         currentLang === 'ZH' ? `${getZoneDisplayName(pickupZone, currentLang)} 区域外接送服务费: +฿${zoneExtraFeePerGuest}/人` :
+                         currentLang === 'RU' ? `Доплата за трансфер (${getZoneDisplayName(pickupZone, currentLang)}): +฿${zoneExtraFeePerGuest}/гостя` :
+                         `Pickup zone surcharge for ${getZoneDisplayName(pickupZone, currentLang)}: +฿${zoneExtraFeePerGuest}/guest`}
+                      </span>
+                    </span>
+                    <span className="font-extrabold text-amber-800 font-mono">
+                      +฿{totalPickupZoneFee.toLocaleString()}
+                    </span>
+                  </div>
+                )}
               </div>
             </div>
           )}
@@ -768,7 +801,9 @@ export const BookingModal: React.FC<BookingModalProps> = ({
                         </span>
                       </div>
                       <span className="text-[10px] text-slate-400 block mt-1">
-                        ({t.adult} {adults} x ฿{tour.priceAdult.toLocaleString()} {children > 0 ? `+ ${t.child} ${children} x ฿${tour.priceChild.toLocaleString()}` : ''})
+                        ({t.adult} {adults} x ฿{priceAdult.toLocaleString()} {children > 0 ? `+ ${t.child} ${children} x ฿${priceChild.toLocaleString()}` : ''}
+                        {totalPickupZoneFee > 0 ? ` + ${currentLang === 'TH' ? 'ค่ารถโซน' : currentLang === 'ZH' ? '接送费' : currentLang === 'RU' ? 'Трансфер' : 'Transfer'} ${getZoneDisplayName(pickupZone, currentLang)} ฿${totalPickupZoneFee.toLocaleString()}` : ''}
+                        {addonAdjustment !== 0 ? ` ${addonAdjustment > 0 ? '+' : ''}ออฟชั่น ฿${addonAdjustment.toLocaleString()}` : ''})
                       </span>
                     </div>
 
@@ -782,6 +817,39 @@ export const BookingModal: React.FC<BookingModalProps> = ({
                     </div>
                   </div>
                 </div>
+              </div>
+
+              {/* Payment Deadline & Cancellation Policy Notice */}
+              <div className="bg-amber-50/90 border-2 border-amber-300/80 rounded-2xl p-3.5 text-xs text-amber-950 space-y-1.5 shadow-sm">
+                <div className="flex items-center gap-2 font-bold text-amber-900">
+                  <Clock className="w-4 h-4 text-amber-600 shrink-0" />
+                  <span>
+                    {currentLang === 'TH' ? 'เงื่อนไขการชำระเงิน และ เลื่อน/ยกเลิกวันเดินทาง' :
+                     currentLang === 'EN' ? 'Payment Terms, Reschedule & Cancellation Policy' :
+                     currentLang === 'ZH' ? '付款与取消/改期政策' :
+                     'Условия оплаты, переноса и отмены'}
+                  </span>
+                </div>
+                <ul className="text-[11.5px] leading-relaxed text-amber-900 space-y-1 pl-5 list-disc font-medium">
+                  <li>
+                    {currentLang === 'TH' ? 'ชำระเงินล่วงหน้าก่อนวันเดินทางอย่างน้อย 1 วัน' :
+                     currentLang === 'EN' ? 'Advance payment required at least 1 day prior to travel date.' :
+                     currentLang === 'ZH' ? '须在出行前至少1天完成预付。' :
+                     'Предоплата производится не менее чем за 1 день до даты поездки.'}
+                  </li>
+                  <li>
+                    {currentLang === 'TH' ? 'สามารถแจ้งเลื่อนวันเดินทางหรือยกเลิกได้ล่วงหน้าก่อนวันเดินทาง 1 วัน ไม่เกินเวลา 18:00 น.' :
+                     currentLang === 'EN' ? 'Reschedule or cancel up to 1 day prior to travel date before 18:00 (6:00 PM).' :
+                     currentLang === 'ZH' ? '改期或取消须在出行前1天 18:00 前联系客服。' :
+                     'Перенос или отмена возможны за 1 день до поездки до 18:00.'}
+                  </li>
+                  <li className="font-bold text-rose-700">
+                    {currentLang === 'TH' ? 'หากเกินกำหนดเวลา 18:00 น. ขอสงวนสิทธิ์งดคืนเงินทุกกรณี' :
+                     currentLang === 'EN' ? 'No refunds will be issued under any circumstances past the 18:00 deadline.' :
+                     currentLang === 'ZH' ? '超过 18:00 截止时间后，概不退款。' :
+                     'После 18:00 возврат средств не производится ни при каких обстоятельствах.'}
+                  </li>
+                </ul>
               </div>
 
               {/* Upload Slip Section */}

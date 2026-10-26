@@ -294,11 +294,12 @@ export default function App() {
       }
 
       // 2. Fetch latest from server APIs
-      const [resTours, resBookings, resReviews, resCustomers, resSettings, resLogs] = await Promise.all([
+      const [resTours, resBookings, resReviews, resCustomers, resSuppliers, resSettings, resLogs] = await Promise.all([
         fetch('/api/tours', { cache: 'no-store' }).catch(() => null),
         fetch('/api/bookings', { cache: 'no-store' }).catch(() => null),
         fetch('/api/reviews', { cache: 'no-store' }).catch(() => null),
         fetch('/api/customers', { cache: 'no-store' }).catch(() => null),
+        fetch('/api/suppliers', { cache: 'no-store' }).catch(() => null),
         fetch('/api/settings', { cache: 'no-store' }).catch(() => null),
         fetch('/api/line/logs', { cache: 'no-store' }).catch(() => null)
       ]);
@@ -307,12 +308,14 @@ export default function App() {
       let serverBookings: Booking[] | null = null;
       let serverReviews: Review[] | null = null;
       let serverCustomers: Customer[] | null = null;
+      let serverSuppliers: Supplier[] | null = null;
       let serverSettings: AppSettings | null = null;
 
       if (resTours && resTours.ok) serverTours = await resTours.json().catch(() => null);
       if (resBookings && resBookings.ok) serverBookings = await resBookings.json().catch(() => null);
       if (resReviews && resReviews.ok) serverReviews = await resReviews.json().catch(() => null);
       if (resCustomers && resCustomers.ok) serverCustomers = await resCustomers.json().catch(() => null);
+      if (resSuppliers && resSuppliers.ok) serverSuppliers = await resSuppliers.json().catch(() => null);
       if (resSettings && resSettings.ok) serverSettings = await resSettings.json().catch(() => null);
       if (resLogs && resLogs.ok) {
         const logs = await resLogs.json().catch(() => null);
@@ -383,6 +386,10 @@ export default function App() {
       if (serverCustomers && Array.isArray(serverCustomers)) {
         setCustomers(serverCustomers);
         safeSetLocalStorage('tst_customers', serverCustomers);
+      }
+      if (serverSuppliers && Array.isArray(serverSuppliers)) {
+        setSuppliers(serverSuppliers);
+        safeSetLocalStorage('tst_suppliers', serverSuppliers);
       }
       if (serverSettings && serverSettings.promptPayId) {
         setSettings(serverSettings);
@@ -472,6 +479,11 @@ export default function App() {
       if (sortBy === 'priceLow') return a.priceAdult - b.priceAdult;
       if (sortBy === 'priceHigh') return b.priceAdult - a.priceAdult;
       if (sortBy === 'rating') return b.rating - a.rating;
+
+      const orderA = a.sortOrder !== undefined ? a.sortOrder : 999;
+      const orderB = b.sortOrder !== undefined ? b.sortOrder : 999;
+      if (orderA !== orderB) return orderA - orderB;
+
       return (b.isFeatured ? 1 : 0) - (a.isFeatured ? 1 : 0);
     });
 
@@ -556,7 +568,7 @@ export default function App() {
       `👤 ลูกค้า: ${newBooking.customerName} (${newBooking.customerPhone})\n` +
       `💰 ยอดชำระ: ฿${newBooking.totalAmount.toLocaleString()}\n` +
       `📅 วันเดินทาง: ${newBooking.travelDate}\n` +
-      `🏨 โรงแรมรับ: ${newBooking.pickupHotel} (ห้อง ${newBooking.roomNumber || '-'})\n` +
+      `🏨 โรงแรมรับ: ${newBooking.pickupHotel}${newBooking.roomNumber ? ` (ห้อง ${newBooking.roomNumber})` : ''}\n` +
       `👥 จำนวน: ผู้ใหญ่ ${newBooking.adults} ท่าน / เด็ก ${newBooking.children || 0} ท่าน\n` +
       `💳 สถานะ: ${newBooking.paymentStatus === 'slip_uploaded' ? 'แนบสลิปแล้ว (รอตรวจ)' : 'รอชำระเงิน'}\n` +
       `🎟️ ตั๋ว E-Ticket และสลิปโอนเงินแนบมาในรูปภาพด้านบน`;
@@ -827,19 +839,43 @@ export default function App() {
   const handleAddTour = async (newTour: Tour) => {
     try {
       lastMutationTimeRef.current = Date.now();
-      const nextTours = [newTour, ...tours];
-      setTours(nextTours);
-      safeSetLocalStorage('tst_tours', nextTours);
+      const tourId = newTour.id || `tour-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`;
+      const stableTour: Tour = {
+        ...newTour,
+        id: tourId,
+        slug: newTour.slug || tourId
+      };
+
+      // Un-tombstone if it was previously in deleted list
+      setDeletedTourIds(prev => {
+        const next = prev.filter(d => d !== stableTour.id && d !== stableTour.slug);
+        safeSetLocalStorage('tst_deleted_tour_ids', next);
+        return next;
+      });
+
+      // Avoid duplicates by id or title
+      let nextTours: Tour[] = [];
+      setTours(prev => {
+        const exists = prev.some(t => t.id === stableTour.id || (t.title?.TH && t.title.TH === stableTour.title?.TH));
+        if (exists) {
+          nextTours = prev.map(t => (t.id === stableTour.id || (t.title?.TH && t.title.TH === stableTour.title?.TH)) ? stableTour : t);
+        } else {
+          nextTours = [stableTour, ...prev];
+        }
+        safeSetLocalStorage('tst_tours', nextTours);
+        return nextTours;
+      });
+
       showToast('🏝️ เพิ่มโปรแกรมทัวร์ใหม่เรียบร้อย');
 
       // Sync to Supabase
-      supabaseApi.saveTours(nextTours).catch(() => {});
+      supabaseApi.saveTours(nextTours.length > 0 ? nextTours : [stableTour, ...tours.filter(t => t.id !== stableTour.id)]).catch(() => {});
 
       // Sync to Express API
       const res = await fetch('/api/tours', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(newTour),
+        body: JSON.stringify(stableTour),
       }).catch(() => null);
       if (res && res.ok) {
         const data = await res.json().catch(() => ({}));
@@ -923,8 +959,13 @@ export default function App() {
   const handleSaveAllTours = async (toursToSave: Tour[]): Promise<boolean> => {
     try {
       lastMutationTimeRef.current = Date.now();
-      const filtered = toursToSave.filter(t => !deletedTourIds.includes(t.id) && !deletedTourIds.includes(t.slug));
-      const normalized = normalizeTours(filtered);
+      // Un-tombstone any incoming tours from deleted list (e.g. from JSON import / restore)
+      const incomingIds = new Set(toursToSave.map(t => t.id).concat(toursToSave.map(t => t.slug).filter(Boolean) as string[]));
+      const remainingDeletedIds = deletedTourIds.filter(id => !incomingIds.has(id));
+      setDeletedTourIds(remainingDeletedIds);
+      safeSetLocalStorage('tst_deleted_tour_ids', remainingDeletedIds);
+
+      const normalized = normalizeTours(toursToSave);
       setTours(normalized);
       safeSetLocalStorage('tst_tours', normalized);
 
@@ -974,6 +1015,162 @@ export default function App() {
     } catch (err) {
       console.error(err);
       showToast('⚠️ เกิดข้อผิดพลาดในการคืนค่าเริ่มต้น');
+    }
+  };
+
+  const handleSaveAllSuppliers = async (suppliersToSave: Supplier[]): Promise<boolean> => {
+    try {
+      lastMutationTimeRef.current = Date.now();
+      setSuppliers(suppliersToSave);
+      safeSetLocalStorage('tst_suppliers', suppliersToSave);
+
+      const res = await fetch('/api/suppliers/save-all', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ suppliers: suppliersToSave })
+      }).catch(() => null);
+
+      if (res && res.ok) {
+        const data = await res.json().catch(() => ({}));
+        if (data.version) lastServerVersionRef.current = data.version;
+      }
+
+      showToast(`🏢 บันทึกและสำรองข้อมูลซัพพลายเออร์ทั้งหมด (${suppliersToSave.length} บริษัท) เรียบร้อยแล้ว!`);
+      return true;
+    } catch (err) {
+      console.error('Save all suppliers error:', err);
+      showToast('⚠️ เกิดข้อผิดพลาดในการบันทึกข้อมูลซัพพลายเออร์');
+      return false;
+    }
+  };
+
+  const handleSaveAllCustomers = async (customersToSave: Customer[]): Promise<boolean> => {
+    try {
+      lastMutationTimeRef.current = Date.now();
+      setCustomers(customersToSave);
+      safeSetLocalStorage('tst_customers', customersToSave);
+
+      supabaseApi.saveCustomers(customersToSave).catch(() => {});
+
+      const res = await fetch('/api/customers/save-all', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ customers: customersToSave })
+      }).catch(() => null);
+
+      if (res && res.ok) {
+        const data = await res.json().catch(() => ({}));
+        if (data.version) lastServerVersionRef.current = data.version;
+      }
+
+      showToast(`👥 บันทึกและสำรองข้อมูลลูกค้าทั้งหมด (${customersToSave.length} ราย) เรียบร้อยแล้ว!`);
+      return true;
+    } catch (err) {
+      console.error('Save all customers error:', err);
+      showToast('⚠️ เกิดข้อผิดพลาดในการบันทึกข้อมูลลูกค้า');
+      return false;
+    }
+  };
+
+  const handleSaveAllBookings = async (bookingsToSave: Booking[]): Promise<boolean> => {
+    try {
+      lastMutationTimeRef.current = Date.now();
+      setBookings(bookingsToSave);
+      safeSetLocalStorage('tst_bookings', bookingsToSave);
+
+      supabaseApi.saveBookingsBackup(bookingsToSave).catch(() => {});
+
+      const res = await fetch('/api/bookings/save-all', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ bookings: bookingsToSave })
+      }).catch(() => null);
+
+      if (res && res.ok) {
+        const data = await res.json().catch(() => ({}));
+        if (data.version) lastServerVersionRef.current = data.version;
+      }
+
+      showToast(`🛍️ บันทึกและสำรองข้อมูลคำสั่งซื้อทั้งหมด (${bookingsToSave.length} รายการ) เรียบร้อยแล้ว!`);
+      return true;
+    } catch (err) {
+      console.error('Save all bookings error:', err);
+      showToast('⚠️ เกิดข้อผิดพลาดในการบันทึกข้อมูลคำสั่งซื้อ');
+      return false;
+    }
+  };
+
+  const handleRestoreFullBackup = async (rawBundle: any): Promise<boolean> => {
+    try {
+      lastMutationTimeRef.current = Date.now();
+      const bundle = rawBundle?.data || rawBundle;
+      if (!bundle || typeof bundle !== 'object') {
+        showToast('❌ รูปแบบไฟล์สำรองข้อมูลไม่ถูกต้อง');
+        return false;
+      }
+
+      // 1. Tours
+      if (Array.isArray(bundle.tours)) {
+        const incomingIds = new Set(bundle.tours.map((t: any) => t.id).concat(bundle.tours.map((t: any) => t.slug).filter(Boolean)));
+        setDeletedTourIds(prev => prev.filter(id => !incomingIds.has(id)));
+        const normalized = normalizeTours(bundle.tours);
+        setTours(normalized);
+        safeSetLocalStorage('tst_tours', normalized);
+        supabaseApi.saveTours(normalized).catch(() => {});
+      }
+
+      // 2. Suppliers
+      if (Array.isArray(bundle.suppliers)) {
+        setSuppliers(bundle.suppliers);
+        safeSetLocalStorage('tst_suppliers', bundle.suppliers);
+      }
+
+      // 3. Customers
+      if (Array.isArray(bundle.customers)) {
+        setCustomers(bundle.customers);
+        safeSetLocalStorage('tst_customers', bundle.customers);
+        supabaseApi.saveCustomers(bundle.customers).catch(() => {});
+      }
+
+      // 4. Bookings
+      if (Array.isArray(bundle.bookings)) {
+        setBookings(bundle.bookings);
+        safeSetLocalStorage('tst_bookings', bundle.bookings);
+        supabaseApi.saveBookingsBackup(bundle.bookings).catch(() => {});
+      }
+
+      // 5. Reviews
+      if (Array.isArray(bundle.reviews)) {
+        setReviews(bundle.reviews);
+        safeSetLocalStorage('tst_reviews', bundle.reviews);
+        supabaseApi.saveReviews(bundle.reviews).catch(() => {});
+      }
+
+      // 6. Settings
+      if (bundle.settings && bundle.settings.promptPayId) {
+        setSettings(bundle.settings);
+        safeSetLocalStorage('tst_settings', bundle.settings);
+        supabaseApi.saveSettings(bundle.settings).catch(() => {});
+      }
+
+      // Send to server
+      const res = await fetch('/api/backup/full-import', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ data: bundle })
+      }).catch(() => null);
+
+      if (res && res.ok) {
+        const data = await res.json().catch(() => ({}));
+        if (data.version) lastServerVersionRef.current = data.version;
+      }
+
+      showToast('🎉 กู้คืนข้อมูลสำรองทั้งระบบสำเร็จครบถ้วน!');
+      return true;
+    } catch (err) {
+      console.error('Full restore error:', err);
+      showToast('⚠️ เกิดข้อผิดพลาดในการกู้คืนข้อมูลทั้งระบบ');
+      return false;
     }
   };
 
@@ -1168,7 +1365,7 @@ export default function App() {
   const t = translations[currentLang];
 
   return (
-    <div className="min-h-screen bg-slate-100 text-slate-800 flex flex-col font-sans selection:bg-teal-600 selection:text-white">
+    <div className="min-h-screen bg-slate-100 text-slate-800 flex flex-col font-sans selection:bg-teal-600 selection:text-white max-w-full overflow-x-hidden">
       {/* Real-time Toast Notification */}
       {toastMessage && (
         <div className="fixed top-20 right-4 z-50 bg-slate-900 text-white px-4 py-3 rounded-2xl shadow-2xl border border-teal-500/50 flex items-center gap-2 text-xs font-semibold animate-in slide-in-from-right duration-300">
@@ -1240,6 +1437,10 @@ export default function App() {
           onAddSupplier={handleAddSupplier}
           onUpdateSupplier={handleUpdateSupplier}
           onDeleteSupplier={handleDeleteSupplier}
+          onSaveAllSuppliers={handleSaveAllSuppliers}
+          onSaveAllCustomers={handleSaveAllCustomers}
+          onSaveAllBookings={handleSaveAllBookings}
+          onRestoreFullBackup={handleRestoreFullBackup}
           onRefreshData={loadInitialData}
           onForceSync={handleForcePurgeAndSync}
         />
