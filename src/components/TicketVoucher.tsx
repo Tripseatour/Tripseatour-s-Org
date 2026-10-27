@@ -3,7 +3,7 @@ import { Download, CheckCircle2, QrCode, ShieldCheck, Sparkles } from 'lucide-re
 import { toPng } from 'html-to-image';
 import { Booking, AppSettings, Language } from '../types';
 import { getAddonDisplayName } from '../utils/addonHelper';
-import { getZoneDisplayName } from '../utils/pickupZoneHelper';
+
 import tripSeaLogo from '../assets/images/trip_sea_tour_logo_1786613886795.jpg';
 
 interface TicketVoucherProps {
@@ -225,7 +225,7 @@ export const TicketVoucher: React.FC<TicketVoucherProps> = ({
                 <div className="border-b border-slate-900 p-2 space-y-1 flex-1">
                   <div className="text-[9px] text-slate-500 font-bold uppercase leading-none">Pick up Hotel (รับโรงแรม)</div>
                   <div className="text-xs font-extrabold text-slate-900">
-                    🏨 {booking.pickupHotel} {booking.roomNumber ? `(ห้อง ${booking.roomNumber})` : ''} {booking.pickupZone ? `[โซน ${getZoneDisplayName(booking.pickupZone, (currentLang as Language) || 'TH')}${booking.pickupZoneFee ? ` +฿${booking.pickupZoneFee}` : ''}]` : ''}
+                    🏨 {booking.pickupHotel} {booking.roomNumber ? `(ห้อง ${booking.roomNumber})` : ''}
                   </div>
                 </div>
 
