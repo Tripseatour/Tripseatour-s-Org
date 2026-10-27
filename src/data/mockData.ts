@@ -2,6 +2,69 @@ import { Tour, Booking, Review, Customer, AppSettings, Supplier } from '../types
 
 export const mockSuppliers: Supplier[] = [
   {
+    id: 'sup-1793032576875',
+    name: 'SEE SEA SKY',
+    code: 'SSSPHUKET',
+    phone: '',
+    notes: 'เกาะไข่ เกาะเจมส์บอนด์',
+    isActive: true,
+    createdAt: '2026-02-01'
+  },
+  {
+    id: 'sup-1792743963575',
+    name: 'GreenView Tour',
+    code: 'SURINGV',
+    phone: '',
+    notes: 'เกาะสุรินทร์',
+    isActive: true,
+    createdAt: '2026-02-01'
+  },
+  {
+    id: 'sup-1792743939663',
+    name: 'Nikorn Marine',
+    code: 'NKMARINE',
+    phone: '',
+    notes: 'เกาะเฮ เกาะราชา',
+    isActive: true,
+    createdAt: '2026-02-01'
+  },
+  {
+    id: 'sup-1792743848553',
+    name: 'Relax PhiPhi',
+    code: 'RELAXPHI',
+    phone: '',
+    notes: 'เกาะพีพีออกสาย',
+    isActive: true,
+    createdAt: '2026-02-01'
+  },
+  {
+    id: 'sup-1792743821975',
+    name: 'P.H.Marine',
+    code: 'PHMARINE',
+    phone: '',
+    notes: 'เกาะไข่ ครึ่งวัน เต็มวัน',
+    isActive: true,
+    createdAt: '2026-02-01'
+  },
+  {
+    id: 'sup-1792743788272',
+    name: 'Phi Phi Natthicha Marine',
+    code: 'NATTHICHA',
+    phone: '',
+    notes: '',
+    isActive: true,
+    createdAt: '2026-02-01'
+  },
+  {
+    id: 'sup-1792743396698',
+    name: 'Golden Region Travel',
+    code: 'GOLDRT',
+    phone: '',
+    notes: 'เการาชา เกาะเฮ',
+    isActive: true,
+    createdAt: '2026-02-01'
+  },
+  {
     id: 'sup-1',
     name: 'บริษัท พีพี ซีสตาร์ อันดามัน จำกัด (SeaStar Andaman)',
     code: 'SEASTAR',

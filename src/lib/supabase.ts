@@ -1,5 +1,5 @@
 import { createClient, SupabaseClient } from '@supabase/supabase-js';
-import { Booking, Tour, Review, AppSettings, LineNotificationLog, Customer } from '../types';
+import { Booking, Tour, Review, AppSettings, LineNotificationLog, Customer, Supplier } from '../types';
 import { initialSettings } from '../data/mockData';
 
 // Retrieve Supabase environment variables
@@ -542,6 +542,41 @@ export const supabaseApi = {
       }
     } catch (e) {
       console.error('getCustomers error:', e);
+    }
+    return null;
+  },
+
+  // Save suppliers array to Supabase ('app_store' key 'suppliers')
+  async saveSuppliers(suppliers: Supplier[]): Promise<boolean> {
+    const client = getSupabase();
+    if (!client) return false;
+
+    try {
+      const { error } = await client.from('app_store').upsert({
+        key: 'suppliers',
+        value: JSON.stringify(suppliers),
+        updated_at: new Date().toISOString()
+      }, { onConflict: 'key' });
+      return !error;
+    } catch (e) {
+      console.error('Failed to save suppliers in app_store:', e);
+      return false;
+    }
+  },
+
+  // Get Suppliers from Supabase ('app_store' key 'suppliers')
+  async getSuppliers(): Promise<Supplier[] | null> {
+    const client = getSupabase();
+    if (!client) return null;
+
+    try {
+      const { data, error } = await client.from('app_store').select('value').eq('key', 'suppliers').maybeSingle();
+      if (data && data.value) {
+        const parsed = JSON.parse(data.value);
+        if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+      }
+    } catch (e) {
+      console.error('getSuppliers error:', e);
     }
     return null;
   }

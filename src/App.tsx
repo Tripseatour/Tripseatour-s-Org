@@ -134,16 +134,41 @@ export default function App() {
     safeSetLocalStorage('tst_suppliers', suppliers);
   }, [suppliers]);
 
-  const handleAddSupplier = (newSup: Supplier) => {
-    setSuppliers(prev => [newSup, ...prev]);
+  const handleAddSupplier = async (newSup: Supplier) => {
+    lastMutationTimeRef.current = Date.now();
+    const next = [newSup, ...suppliers.filter(s => s.id !== newSup.id)];
+    setSuppliers(next);
+    safeSetLocalStorage('tst_suppliers', next);
+    supabaseApi.saveSuppliers(next).catch(() => {});
+    fetch('/api/suppliers', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(newSup)
+    }).catch(() => {});
   };
 
-  const handleUpdateSupplier = (id: string, supData: Partial<Supplier>) => {
-    setSuppliers(prev => prev.map(s => s.id === id ? { ...s, ...supData } : s));
+  const handleUpdateSupplier = async (id: string, supData: Partial<Supplier>) => {
+    lastMutationTimeRef.current = Date.now();
+    const next = suppliers.map(s => s.id === id ? { ...s, ...supData } : s);
+    setSuppliers(next);
+    safeSetLocalStorage('tst_suppliers', next);
+    supabaseApi.saveSuppliers(next).catch(() => {});
+    fetch(`/api/suppliers/${id}`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(supData)
+    }).catch(() => {});
   };
 
-  const handleDeleteSupplier = (id: string) => {
-    setSuppliers(prev => prev.filter(s => s.id !== id));
+  const handleDeleteSupplier = async (id: string) => {
+    lastMutationTimeRef.current = Date.now();
+    const next = suppliers.filter(s => s.id !== id);
+    setSuppliers(next);
+    safeSetLocalStorage('tst_suppliers', next);
+    supabaseApi.saveSuppliers(next).catch(() => {});
+    fetch(`/api/suppliers/${id}`, {
+      method: 'DELETE'
+    }).catch(() => {});
   };
 
   const [settings, setSettings] = useState<AppSettings>(() => {
@@ -367,6 +392,15 @@ export default function App() {
           supabaseApi.saveReviews(initialReviews).catch(() => {});
         }
       }
+      if (serverSuppliers === null) {
+        const directSuppliers = await supabaseApi.getSuppliers();
+        if (directSuppliers !== null && directSuppliers.length > 0) {
+          serverSuppliers = directSuppliers;
+        } else {
+          serverSuppliers = mockSuppliers;
+          supabaseApi.saveSuppliers(mockSuppliers).catch(() => {});
+        }
+      }
 
       // Update state & replace localStorage cache authoritatively (excluding permanently deleted tours)
       if (serverTours && Array.isArray(serverTours)) {
@@ -414,6 +448,7 @@ export default function App() {
       localStorage.removeItem('tst_tours');
       localStorage.removeItem('tst_reviews');
       localStorage.removeItem('tst_settings');
+      localStorage.removeItem('tst_suppliers');
       lastServerVersionRef.current = -1;
       await loadInitialData(true);
       showToast('🔄 ล้างแคชเครื่องและรีเซ็ตข้อมูลจากฐานข้อมูลหลักเรียบร้อยแล้ว');
@@ -1023,6 +1058,8 @@ export default function App() {
       lastMutationTimeRef.current = Date.now();
       setSuppliers(suppliersToSave);
       safeSetLocalStorage('tst_suppliers', suppliersToSave);
+
+      supabaseApi.saveSuppliers(suppliersToSave).catch(() => {});
 
       const res = await fetch('/api/suppliers/save-all', {
         method: 'POST',

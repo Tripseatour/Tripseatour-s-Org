@@ -25,6 +25,14 @@
       "destination": "/api/send-line"
     },
     {
+      "source": "/api/suppliers/save-all",
+      "destination": "/api/suppliers?action=save-all"
+    },
+    {
+      "source": "/api/suppliers/:id",
+      "destination": "/api/suppliers?id=:id"
+    },
+    {
       "source": "/((?!api/).*)",
       "destination": "/index.html"
     }
