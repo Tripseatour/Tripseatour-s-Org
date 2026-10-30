@@ -17,7 +17,7 @@ import { CartModal } from './components/CartModal';
 import { PwaInstallPrompt } from './components/PwaInstallPrompt';
 import { LanguageSelectionModal } from './components/LanguageSelectionModal';
 
-import { Tour, Booking, Review, Customer, AppSettings, LineNotificationLog, Language, AdminUser, CartItem, Supplier } from './types';
+import { Tour, Booking, Review, Customer, AppSettings, LineNotificationLog, Language, AdminUser, CartItem, Supplier, VisitorAnalytics } from './types';
 import { Currency } from './utils/currency';
 import { translations } from './data/translations';
 import { initialTours, initialBookings, initialReviews, initialCustomers, initialSettings, mockSuppliers } from './data/mockData';
@@ -25,6 +25,7 @@ import { normalizeTours } from './utils/tourNormalizer';
 import { Compass, Sparkles, Filter, Ticket, QrCode, Phone, MessageCircle, ShieldCheck, Clock } from 'lucide-react';
 import { supabaseApi } from './lib/supabase';
 import { safeSetLocalStorage } from './utils/storage';
+import { trackPageView, fetchVisitorAnalytics } from './utils/visitorTracker';
 
 export default function App() {
   const [currentLang, setCurrentLang] = useState<Language>(() => {
@@ -217,6 +218,16 @@ export default function App() {
     setToastMessage(msg);
     setTimeout(() => setToastMessage(null), 4000);
   };
+
+  // Website Visitor Analytics State
+  const [visitorAnalytics, setVisitorAnalytics] = useState<VisitorAnalytics | null>(null);
+
+  const refreshVisitorAnalytics = useCallback(async () => {
+    const data = await fetchVisitorAnalytics();
+    if (data) {
+      setVisitorAnalytics(data);
+    }
+  }, []);
 
   // Cart Handlers
   const handleAddToCart = (tour: Tour) => {
@@ -467,6 +478,52 @@ export default function App() {
 
     return () => clearInterval(interval);
   }, [loadInitialData]);
+
+  // Track pageviews whenever activeView, detailTour, or bookingTour changes, with 15s real-time heartbeat
+  useEffect(() => {
+    let currentPage = activeView;
+    let pageTitle = 'หน้าแรก - ทริปซีทัวร์ ภูเก็ต';
+
+    if (bookingTour) {
+      currentPage = `booking/${bookingTour.id}`;
+      pageTitle = `กำลังจอง: ${bookingTour.title[currentLang] || bookingTour.title.TH}`;
+    } else if (detailTour) {
+      currentPage = `tour/${detailTour.slug || detailTour.id}`;
+      pageTitle = `ดูทัวร์: ${detailTour.title[currentLang] || detailTour.title.TH}`;
+    } else if (activeView === 'how-to-book') {
+      pageTitle = 'วิธีการจอง & ชำระเงิน';
+    } else if (activeView === 'about-me') {
+      pageTitle = 'เกี่ยวกับเรา & ใบอนุญาต ททท.';
+    } else if (activeView === 'admin') {
+      pageTitle = 'แดชบอร์ดแอดมิน';
+    }
+
+    trackPageView(currentPage, pageTitle);
+    refreshVisitorAnalytics();
+
+    // Active heartbeat every 15s to maintain 100% accurate Real-Time Online count
+    const pingTimer = setInterval(() => {
+      if (typeof document !== 'undefined' && document.visibilityState === 'visible') {
+        trackPageView(currentPage, pageTitle);
+        refreshVisitorAnalytics();
+      }
+    }, 15000);
+
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === 'visible') {
+        trackPageView(currentPage, pageTitle);
+        refreshVisitorAnalytics();
+      }
+    };
+
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+
+    return () => {
+      clearInterval(pingTimer);
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+    };
+  }, [activeView, detailTour, bookingTour, currentLang, refreshVisitorAnalytics]);
+
 
   // Helper to check if tour is half-day
   const isHalfDayTour = (t: Tour): boolean => {
@@ -1480,6 +1537,8 @@ export default function App() {
           onRestoreFullBackup={handleRestoreFullBackup}
           onRefreshData={loadInitialData}
           onForceSync={handleForcePurgeAndSync}
+          visitorAnalytics={visitorAnalytics}
+          onRefreshVisitorAnalytics={refreshVisitorAnalytics}
         />
       ) : (
         <main className="flex-1 space-y-12 pb-16">
@@ -1786,7 +1845,7 @@ export default function App() {
 
       {/* Footer */}
       <div className="no-print">
-        <Footer currentLang={currentLang} settings={settings} onNavigate={handleNavigate} />
+        <Footer currentLang={currentLang} settings={settings} visitorAnalytics={visitorAnalytics} onNavigate={handleNavigate} />
       </div>
 
       {/* Floating Cart Quick Bar (Visible when cart has items) */}

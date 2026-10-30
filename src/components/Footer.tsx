@@ -1,15 +1,16 @@
 import React from 'react';
-import { Compass, Phone, Mail, MapPin, MessageCircle, ShieldCheck, QrCode, Lock, Facebook } from 'lucide-react';
-import { Language, AppSettings } from '../types';
+import { Compass, Phone, Mail, MapPin, MessageCircle, ShieldCheck, QrCode, Lock, Facebook, Eye } from 'lucide-react';
+import { Language, AppSettings, VisitorAnalytics } from '../types';
 import { translations } from '../data/translations';
 
 interface FooterProps {
   currentLang: Language;
   settings: AppSettings;
+  visitorAnalytics?: VisitorAnalytics | null;
   onNavigate: (view: 'home' | 'how-to-book' | 'about-me' | 'admin') => void;
 }
 
-export const Footer: React.FC<FooterProps> = ({ currentLang, settings, onNavigate }) => {
+export const Footer: React.FC<FooterProps> = ({ currentLang, settings, visitorAnalytics, onNavigate }) => {
   const t = translations[currentLang];
 
   return (
@@ -174,8 +175,33 @@ export const Footer: React.FC<FooterProps> = ({ currentLang, settings, onNavigat
         </div>
 
         {/* Bottom Bar */}
-        <div className="pt-6 border-t border-slate-800 flex flex-col sm:flex-row items-center justify-between gap-4 text-xs text-slate-500">
+        <div className="pt-6 border-t border-slate-800 flex flex-col md:flex-row items-center justify-between gap-4 text-xs text-slate-500">
           <p>{t.copyright}</p>
+
+          {/* Live Visitor Counter Badge */}
+          {visitorAnalytics && (
+            <div className="inline-flex items-center gap-2.5 px-3 py-1 bg-slate-900/90 border border-slate-800 rounded-full text-[11px] text-slate-300 shadow-inner">
+              <span className="flex items-center gap-1.5 text-cyan-300">
+                <Eye className="w-3.5 h-3.5 text-cyan-400" />
+                <span>
+                  {currentLang === 'TH' ? 'ผู้เข้าชมเว็บไซต์:' :
+                   currentLang === 'ZH' ? '网站访问量:' :
+                   currentLang === 'RU' ? 'Просмотров:' : 'Total Visits:'}{' '}
+                  <strong className="text-white font-mono">{visitorAnalytics.totalPageviews.toLocaleString()}</strong>
+                </span>
+              </span>
+              <span className="w-1 h-1 rounded-full bg-slate-700"></span>
+              <span className="flex items-center gap-1.5 text-emerald-400 font-semibold">
+                <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>
+                <span>
+                  {currentLang === 'TH' ? 'ออนไลน์:' :
+                   currentLang === 'ZH' ? '在线:' :
+                   currentLang === 'RU' ? 'Онлайн:' : 'Online:'} {visitorAnalytics.activeNow || 1}
+                </span>
+              </span>
+            </div>
+          )}
+
           <div className="flex items-center gap-6">
             <span className="flex items-center gap-1 text-slate-400">
               <ShieldCheck className="w-4 h-4 text-emerald-400" />

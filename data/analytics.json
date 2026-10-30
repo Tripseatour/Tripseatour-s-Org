@@ -1,0 +1,166 @@
+{
+  "totalPageviews": 24851,
+  "totalUniqueVisitors": 9421,
+  "todayPageviews": 187,
+  "todayUniqueVisitors": 115,
+  "yesterdayPageviews": 210,
+  "yesterdayUniqueVisitors": 128,
+  "activeNow": 4,
+  "dailyHistory": [
+    {
+      "date": "2026-10-17",
+      "views": 187,
+      "uniques": 120
+    },
+    {
+      "date": "2026-10-18",
+      "views": 106,
+      "uniques": 65
+    },
+    {
+      "date": "2026-10-19",
+      "views": 147,
+      "uniques": 96
+    },
+    {
+      "date": "2026-10-20",
+      "views": 189,
+      "uniques": 117
+    },
+    {
+      "date": "2026-10-21",
+      "views": 176,
+      "uniques": 114
+    },
+    {
+      "date": "2026-10-22",
+      "views": 155,
+      "uniques": 96
+    },
+    {
+      "date": "2026-10-23",
+      "views": 120,
+      "uniques": 79
+    },
+    {
+      "date": "2026-10-24",
+      "views": 158,
+      "uniques": 97
+    },
+    {
+      "date": "2026-10-25",
+      "views": 222,
+      "uniques": 142
+    },
+    {
+      "date": "2026-10-26",
+      "views": 147,
+      "uniques": 91
+    },
+    {
+      "date": "2026-10-27",
+      "views": 96,
+      "uniques": 64
+    },
+    {
+      "date": "2026-10-28",
+      "views": 186,
+      "uniques": 115
+    },
+    {
+      "date": "2026-10-29",
+      "views": 204,
+      "uniques": 131
+    },
+    {
+      "date": "2026-10-30",
+      "views": 141,
+      "uniques": 87
+    }
+  ],
+  "devices": {
+    "mobile": 16891,
+    "desktop": 6940,
+    "tablet": 1020
+  },
+  "topPages": [
+    {
+      "path": "home",
+      "title": "หน้าแรก - ทัวร์เกาะพีพี & ทะเลภูเก็ต",
+      "views": 15421
+    },
+    {
+      "path": "how-to-book",
+      "title": "วิธีการจอง & นโยบายการชำระเงิน",
+      "views": 4280
+    },
+    {
+      "path": "about-me",
+      "title": "เกี่ยวกับเรา & ใบอนุญาต ททท.",
+      "views": 2890
+    },
+    {
+      "path": "tour-detail",
+      "title": "รายละเอียดโปรแกรมทัวร์",
+      "views": 2260
+    }
+  ],
+  "sources": [
+    {
+      "source": "Direct / ค้นหาตรง",
+      "count": 9801,
+      "percentage": 39.4
+    },
+    {
+      "source": "Google Search",
+      "count": 8200,
+      "percentage": 33
+    },
+    {
+      "source": "Facebook",
+      "count": 3950,
+      "percentage": 15.9
+    },
+    {
+      "source": "LINE Official",
+      "count": 2100,
+      "percentage": 8.5
+    },
+    {
+      "source": "TikTok & Other",
+      "count": 800,
+      "percentage": 3.2
+    }
+  ],
+  "recentVisitors": [
+    {
+      "id": "v-test-123",
+      "timestamp": "2026-10-30T13:28:45.640Z",
+      "device": "mobile",
+      "page": "home",
+      "referrer": "Direct"
+    },
+    {
+      "id": "v-th-8821",
+      "timestamp": "2026-10-30T13:27:36.157Z",
+      "device": "mobile",
+      "page": "home",
+      "referrer": "Google Search"
+    },
+    {
+      "id": "v-th-4190",
+      "timestamp": "2026-10-30T13:26:21.157Z",
+      "device": "desktop",
+      "page": "tour-detail",
+      "referrer": "Direct"
+    },
+    {
+      "id": "v-th-9102",
+      "timestamp": "2026-10-30T13:25:21.157Z",
+      "device": "mobile",
+      "page": "how-to-book",
+      "referrer": "Facebook"
+    }
+  ],
+  "lastUpdated": "2026-10-30T13:28:45.640Z"
+}

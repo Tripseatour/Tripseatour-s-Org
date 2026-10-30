@@ -1,5 +1,5 @@
 import { createClient, SupabaseClient } from '@supabase/supabase-js';
-import { Booking, Tour, Review, AppSettings, LineNotificationLog, Customer, Supplier } from '../types';
+import { Booking, Tour, Review, AppSettings, LineNotificationLog, Customer, Supplier, VisitorAnalytics } from '../types';
 import { initialSettings } from '../data/mockData';
 
 // Retrieve Supabase environment variables
@@ -577,6 +577,40 @@ export const supabaseApi = {
       }
     } catch (e) {
       console.error('getSuppliers error:', e);
+    }
+    return null;
+  },
+
+  // Save Visitor Analytics to Supabase ('app_store' key 'visitor_analytics')
+  async saveVisitorAnalytics(analytics: VisitorAnalytics): Promise<boolean> {
+    const client = getSupabase();
+    if (!client) return false;
+
+    try {
+      const { error } = await client.from('app_store').upsert({
+        key: 'visitor_analytics',
+        value: JSON.stringify(analytics),
+        updated_at: new Date().toISOString()
+      }, { onConflict: 'key' });
+      return !error;
+    } catch (e) {
+      console.error('Failed to save visitor_analytics in app_store:', e);
+      return false;
+    }
+  },
+
+  // Get Visitor Analytics from Supabase ('app_store' key 'visitor_analytics')
+  async getVisitorAnalytics(): Promise<VisitorAnalytics | null> {
+    const client = getSupabase();
+    if (!client) return null;
+
+    try {
+      const { data, error } = await client.from('app_store').select('value').eq('key', 'visitor_analytics').maybeSingle();
+      if (data && data.value) {
+        return JSON.parse(data.value);
+      }
+    } catch (e) {
+      console.error('getVisitorAnalytics error:', e);
     }
     return null;
   }

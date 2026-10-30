@@ -227,3 +227,85 @@ export interface SalesStats {
   statusBreakdown: { status: string; count: number }[];
   recentBookings: Booking[];
 }
+
+export interface DailyVisitorPoint {
+  date: string;
+  views: number;
+  uniques: number;
+}
+
+export interface LiveSession {
+  visitorId: string;
+  ipMasked?: string;
+  country?: string;
+  countryCode?: string;
+  city?: string;
+  device: 'mobile' | 'desktop' | 'tablet';
+  browser?: string;
+  os?: string;
+  screen?: string;
+  language?: string;
+  timezone?: string;
+  currentPage: string;
+  pageTitle?: string;
+  referrer: string;
+  firstSeen: string;
+  lastPing: string;
+  lastPingSecondsAgo: number;
+  pageviewsCount: number;
+}
+
+export interface VisitorAnalytics {
+  totalPageviews: number;
+  totalUniqueVisitors: number;
+  todayPageviews: number;
+  todayUniqueVisitors: number;
+  yesterdayPageviews: number;
+  yesterdayUniqueVisitors: number;
+  activeNow: number;
+  isRealModeOnly?: boolean;
+  liveSessions?: LiveSession[];
+  dailyHistory: DailyVisitorPoint[];
+  devices: {
+    mobile: number;
+    desktop: number;
+    tablet: number;
+  };
+  topPages: {
+    path: string;
+    title: string;
+    views: number;
+  }[];
+  sources: {
+    source: string;
+    count: number;
+    percentage: number;
+  }[];
+  recentVisitors: {
+    id: string;
+    timestamp: string;
+    device: 'mobile' | 'desktop' | 'tablet';
+    browser?: string;
+    os?: string;
+    country?: string;
+    city?: string;
+    page: string;
+    referrer: string;
+  }[];
+  lastUpdated?: string;
+}
+
+export interface VisitorPingPayload {
+  visitorId: string;
+  page: string;
+  title?: string;
+  referrer?: string;
+  device?: 'mobile' | 'desktop' | 'tablet';
+  browser?: string;
+  os?: string;
+  screen?: string;
+  language?: string;
+  timezone?: string;
+}
+
+

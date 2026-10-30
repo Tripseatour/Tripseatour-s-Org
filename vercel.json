@@ -33,6 +33,14 @@
       "destination": "/api/suppliers?id=:id"
     },
     {
+      "source": "/api/analytics/stats",
+      "destination": "/api/analytics?action=stats"
+    },
+    {
+      "source": "/api/analytics/ping",
+      "destination": "/api/analytics?action=ping"
+    },
+    {
       "source": "/((?!api/).*)",
       "destination": "/index.html"
     }
