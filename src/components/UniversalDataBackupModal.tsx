@@ -22,6 +22,12 @@ import {
 } from 'lucide-react';
 import { Tour, Supplier, Customer, Booking, Review, AppSettings } from '../types';
 import { normalizeTours } from '../utils/tourNormalizer';
+import { exportBookingsToCsv, exportCustomersToCsv, exportSuppliersToCsv, exportToursToCsv } from '../utils/excelExporter';
+import { initAuth, googleSignIn, logoutGoogle, getAccessToken } from '../lib/googleAuth';
+import { createAndSyncGoogleSpreadsheet, SyncToSheetsResult } from '../lib/googleSheetsSync';
+import { User } from 'firebase/auth';
+
+
 
 export type BackupTargetSection = 'all' | 'suppliers' | 'customers' | 'bookings' | 'tours';
 
@@ -63,7 +69,7 @@ export const UniversalDataBackupModal: React.FC<UniversalDataBackupModalProps> =
   onRefreshData
 }) => {
   const [activeSection, setActiveSection] = useState<BackupTargetSection>(initialSection);
-  const [activeTab, setActiveTab] = useState<'export' | 'import' | 'reset'>('export');
+  const [activeTab, setActiveTab] = useState<'export' | 'import' | 'google_sheets' | 'reset'>('export');
   const [importJsonText, setImportJsonText] = useState('');
   const [importMode, setImportMode] = useState<'replace' | 'merge'>('replace');
   const [parsedData, setParsedData] = useState<any | null>(null);
@@ -72,6 +78,77 @@ export const UniversalDataBackupModal: React.FC<UniversalDataBackupModalProps> =
   const [isCopied, setIsCopied] = useState(false);
   const [isExecuting, setIsExecuting] = useState(false);
   const [isConfirmResetOpen, setIsConfirmResetOpen] = useState(false);
+
+  // Google Sheets Integration States
+  const [googleUser, setGoogleUser] = useState<User | null>(null);
+  const [googleToken, setGoogleToken] = useState<string | null>(null);
+  const [isLoggingInGoogle, setIsLoggingInGoogle] = useState(false);
+  const [isSyncingSheets, setIsSyncingSheets] = useState(false);
+  const [sheetsResult, setSheetsResult] = useState<SyncToSheetsResult | null>(null);
+  const [sheetsError, setSheetsError] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (isOpen) {
+      initAuth(
+        (u, t) => {
+          setGoogleUser(u);
+          setGoogleToken(t);
+        },
+        () => {
+          setGoogleUser(null);
+          setGoogleToken(null);
+        }
+      );
+    }
+  }, [isOpen]);
+
+  const handleGoogleLogin = async () => {
+    setIsLoggingInGoogle(true);
+    setSheetsError(null);
+    try {
+      const res = await googleSignIn();
+      if (res) {
+        setGoogleUser(res.user);
+        setGoogleToken(res.accessToken);
+      }
+    } catch (err: any) {
+      console.error('Google login error:', err);
+      setSheetsError(`เข้าสู่ระบบ Google ไม่สำเร็จ: ${err?.message || 'ข้อผิดพลาดระบบ'}`);
+    } finally {
+      setIsLoggingInGoogle(false);
+    }
+  };
+
+  const handleSyncToGoogleSheets = async () => {
+    const token = googleToken || await getAccessToken();
+    if (!token) {
+      setSheetsError('กรุณาเข้าสู่ระบบด้วย Google ก่อนส่งออกไปยัง Google Sheets');
+      return;
+    }
+
+    const confirmed = window.confirm('ยืนยันสร้างสเปรดชีต Google Sheets ใหม่ใน Google Drive ของคุณ เพื่อสำรองข้อมูลทั้งหมดหรือไม่?');
+    if (!confirmed) return;
+
+    setIsSyncingSheets(true);
+    setSheetsError(null);
+    setSheetsResult(null);
+
+    try {
+      const res = await createAndSyncGoogleSpreadsheet(token, {
+        bookings,
+        customers,
+        suppliers,
+        tours
+      });
+      setSheetsResult(res);
+    } catch (err: any) {
+      console.error('Sheets sync error:', err);
+      setSheetsError(`สร้าง Google Sheets ไม่สำเร็จ: ${err?.message || 'โปรดตรวจสอบสิทธิ์ Google'}`);
+    } finally {
+      setIsSyncingSheets(false);
+    }
+  };
+
 
   useEffect(() => {
     if (isOpen) {
@@ -179,7 +256,27 @@ export const UniversalDataBackupModal: React.FC<UniversalDataBackupModalProps> =
     }
   };
 
+  const handleExportCsv = () => {
+    try {
+      if (activeSection === 'bookings' || activeSection === 'all') {
+        exportBookingsToCsv(bookings);
+      }
+      if (activeSection === 'customers' || activeSection === 'all') {
+        exportCustomersToCsv(customers);
+      }
+      if (activeSection === 'suppliers' || activeSection === 'all') {
+        exportSuppliersToCsv(suppliers);
+      }
+      if (activeSection === 'tours' || activeSection === 'all') {
+        exportToursToCsv(tours);
+      }
+    } catch (err) {
+      console.error('Export CSV error:', err);
+    }
+  };
+
   // Validate incoming import JSON based on target section
+
   const validateImportJson = (text: string) => {
     setValidationError(null);
     setValidationSuccessInfo(null);
@@ -499,6 +596,20 @@ export const UniversalDataBackupModal: React.FC<UniversalDataBackupModalProps> =
               <span>นำเข้า / กู้คืน (Import JSON)</span>
             </button>
 
+            <button
+              type="button"
+              onClick={() => setActiveTab('google_sheets')}
+              className={`px-4 py-2 rounded-xl text-xs font-bold transition flex items-center gap-1.5 cursor-pointer ${
+                activeTab === 'google_sheets'
+                  ? 'bg-slate-800 text-emerald-300 border border-emerald-500/50 shadow-sm font-black'
+                  : 'text-slate-400 hover:text-emerald-400'
+              }`}
+            >
+              <Sparkles className="w-3.5 h-3.5 text-emerald-400" />
+              <span>📊 ซิงค์ตรงกับ Google Sheets (Google Drive)</span>
+            </button>
+
+
             {activeSection === 'tours' && (
               <button
                 type="button"
@@ -550,12 +661,23 @@ export const UniversalDataBackupModal: React.FC<UniversalDataBackupModalProps> =
 
                   <button
                     type="button"
+                    onClick={handleExportCsv}
+                    className="bg-emerald-600 hover:bg-emerald-500 text-white font-extrabold px-4 py-2.5 rounded-xl text-xs transition flex items-center gap-2 cursor-pointer shadow-lg shadow-emerald-950/50 active:scale-95"
+                    title="ดาวน์โหลดเป็นไฟล์ตาราง CSV สามารถเปิดใน Google Sheets หรือ Microsoft Excel ได้ทันที"
+                  >
+                    <Download className="w-4 h-4 text-emerald-200" />
+                    <span>📊 ส่งออกตาราง CSV (Google Sheets / Excel)</span>
+                  </button>
+
+                  <button
+                    type="button"
                     onClick={handleDownloadJson}
                     className="bg-teal-600 hover:bg-teal-500 text-white font-extrabold px-4 py-2.5 rounded-xl text-xs transition flex items-center gap-2 cursor-pointer shadow-lg shadow-teal-950/50 active:scale-95"
                   >
                     <Download className="w-4 h-4" />
                     <span>ดาวน์โหลดไฟล์ JSON (.json)</span>
                   </button>
+
                 </div>
               </div>
 
@@ -699,7 +821,141 @@ export const UniversalDataBackupModal: React.FC<UniversalDataBackupModalProps> =
             </div>
           )}
 
-          {/* TAB 3: RESET TO DEFAULT (For tours) */}
+          {/* TAB 3: GOOGLE SHEETS DIRECT SYNC */}
+          {activeTab === 'google_sheets' && (
+            <div className="space-y-5 animate-in fade-in">
+              <div className="bg-gradient-to-r from-emerald-950/80 via-slate-900 to-emerald-950/80 border border-emerald-500/40 p-5 rounded-2xl space-y-3">
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 rounded-xl bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 flex items-center justify-center font-black shrink-0">
+                    <Sparkles className="w-5 h-5 text-emerald-400" />
+                  </div>
+                  <div>
+                    <h4 className="font-extrabold text-sm text-white flex items-center gap-2">
+                      <span>สำรองข้อมูลตรงไปยัง Google Sheets (Google Drive)</span>
+                      <span className="text-[10px] bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 px-2 py-0.5 rounded-full font-bold">
+                        100% Real Google Workspace API
+                      </span>
+                    </h4>
+                    <p className="text-xs text-slate-300 mt-1 leading-relaxed">
+                      ระบบจะสร้างไฟล์สเปรดชีตใหม่บน Google Drive ของคุณอัตโนมัติ โดยแยกเป็น 4 แท็บข้อมูลภาษาไทย (คำสั่งซื้อ, ลูกค้า CRM, เอเยนต์, โปรแกรมทัวร์)
+                    </p>
+                  </div>
+                </div>
+              </div>
+
+              {/* Google Authentication Box */}
+              <div className="bg-slate-950 border border-slate-800 p-5 rounded-2xl space-y-4">
+                <div className="flex items-center justify-between">
+                  <span className="font-bold text-xs text-slate-300">สถานะการเข้าสู่ระบบ Google Account:</span>
+                  {googleUser ? (
+                    <span className="bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 px-2.5 py-1 rounded-full text-xs font-bold flex items-center gap-1.5">
+                      <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400" />
+                      <span>เชื่อมต่อแล้ว: {googleUser.email || googleUser.displayName || 'Google Account'}</span>
+                    </span>
+                  ) : (
+                    <span className="bg-amber-500/20 text-amber-300 border border-amber-500/40 px-2.5 py-1 rounded-full text-xs font-bold">
+                      ยังไม่ได้เข้าสู่ระบบ
+                    </span>
+                  )}
+                </div>
+
+                {!googleUser ? (
+                  <div className="text-center space-y-3 py-2">
+                    <p className="text-xs text-slate-400">
+                      กรุณาเข้าสู่ระบบด้วย Google เพื่อมอบสิทธิ์ให้ระบบสร้างสเปรดชีตใหม่ใน Google Drive
+                    </p>
+                    <button
+                      type="button"
+                      onClick={handleGoogleLogin}
+                      disabled={isLoggingInGoogle}
+                      className="inline-flex items-center gap-3 bg-white hover:bg-slate-100 text-slate-900 font-bold px-5 py-2.5 rounded-xl text-xs transition shadow-lg cursor-pointer active:scale-95 disabled:opacity-50"
+                    >
+                      <svg className="w-4 h-4" viewBox="0 0 48 48">
+                        <path fill="#EA4335" d="M24 9.5c3.54 0 6.71 1.22 9.21 3.6l6.85-6.85C35.9 2.38 30.47 0 24 0 14.62 0 6.51 5.38 2.56 13.22l7.98 6.19C12.43 13.72 17.74 9.5 24 9.5z" />
+                        <path fill="#4285F4" d="M46.98 24.55c0-1.57-.15-3.09-.38-4.55H24v9.02h12.94c-.58 2.96-2.26 5.48-4.78 7.18l7.73 6c4.51-4.18 7.09-10.36 7.09-17.65z" />
+                        <path fill="#FBBC05" d="M10.53 28.59c-.48-1.45-.76-2.99-.76-4.59s.27-3.14.76-4.59l-7.98-6.19C.92 16.46 0 20.12 0 24c0 3.88.92 7.54 2.56 10.78l7.97-6.19z" />
+                        <path fill="#34A853" d="M24 48c6.48 0 11.93-2.13 15.89-5.81l-7.73-6c-2.15 1.45-4.92 2.3-8.16 2.3-6.26 0-11.57-4.22-13.47-9.91l-7.98 6.19C6.51 42.62 14.62 48 24 48z" />
+                      </svg>
+                      <span>{isLoggingInGoogle ? 'กำลังเข้าสู่ระบบ Google...' : 'เข้าสู่ระบบด้วย Google (Sign in with Google)'}</span>
+                    </button>
+                  </div>
+                ) : (
+                  <div className="space-y-3 pt-2">
+                    <div className="flex items-center justify-between bg-slate-900 p-3 rounded-xl border border-slate-800">
+                      <div className="flex items-center gap-2.5">
+                        {googleUser.photoURL ? (
+                          <img src={googleUser.photoURL} alt="Google Avatar" className="w-8 h-8 rounded-full border border-slate-700" />
+                        ) : (
+                          <div className="w-8 h-8 rounded-full bg-emerald-500/20 text-emerald-400 font-bold flex items-center justify-center text-xs">
+                            G
+                          </div>
+                        )}
+                        <div>
+                          <span className="font-bold text-white text-xs block">{googleUser.displayName || 'Google Account'}</span>
+                          <span className="text-[10px] text-slate-400 font-mono">{googleUser.email}</span>
+                        </div>
+                      </div>
+
+                      <button
+                        type="button"
+                        onClick={async () => {
+                          await logoutGoogle();
+                          setGoogleUser(null);
+                          setGoogleToken(null);
+                        }}
+                        className="text-[11px] text-rose-400 hover:underline font-bold"
+                      >
+                        ออกจากระบบ Google
+                      </button>
+                    </div>
+
+                    <button
+                      type="button"
+                      onClick={handleSyncToGoogleSheets}
+                      disabled={isSyncingSheets}
+                      className="w-full bg-emerald-600 hover:bg-emerald-500 text-white font-extrabold py-3.5 rounded-xl text-xs transition shadow-lg shadow-emerald-950/60 flex items-center justify-center gap-2 cursor-pointer disabled:opacity-50 active:scale-95"
+                    >
+                      <Sparkles className={`w-4 h-4 ${isSyncingSheets ? 'animate-spin' : ''}`} />
+                      <span>{isSyncingSheets ? 'กำลังสร้างและส่งออกข้อมูลไปยัง Google Sheets...' : '🚀 สร้างไฟล์ Google Sheets และส่งออกข้อมูลทันที'}</span>
+                    </button>
+                  </div>
+                )}
+
+                {sheetsError && (
+                  <div className="bg-rose-950/60 border border-rose-800 text-rose-300 p-3.5 rounded-xl flex items-start gap-2 text-xs">
+                    <AlertCircle className="w-4 h-4 text-rose-400 shrink-0 mt-0.5" />
+                    <span>{sheetsError}</span>
+                  </div>
+                )}
+
+                {sheetsResult && (
+                  <div className="bg-emerald-950/60 border border-emerald-500/50 text-emerald-300 p-4 rounded-2xl space-y-3 animate-in fade-in">
+                    <div className="flex items-center gap-2 font-bold text-xs sm:text-sm">
+                      <CheckCircle2 className="w-5 h-5 text-emerald-400 shrink-0" />
+                      <span>สร้างและส่งออกไฟล์ Google Sheets สำเร็จเรียบร้อยแล้ว! ({sheetsResult.createdTime})</span>
+                    </div>
+
+                    <p className="text-xs text-slate-300 leading-relaxed">
+                      ข้อมูลคำสั่งซื้อ, ลูกค้า CRM, ซัพพลายเออร์ และโปรแกรมทัวร์ ถูกส่งออกไปยัง Google Drive ของคุณเรียบร้อยแล้ว
+                    </p>
+
+                    <a
+                      href={sheetsResult.spreadsheetUrl}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="inline-flex items-center gap-2 bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-black px-4 py-2.5 rounded-xl text-xs shadow-md transition"
+                    >
+                      <span>🔗 คลิกที่นี่เพื่อเปิดดูสเปรดชีตใน Google Sheets</span>
+                      <ArrowRight className="w-4 h-4" />
+                    </a>
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
+
+          {/* TAB 4: RESET TO DEFAULT (For tours) */}
+
           {activeTab === 'reset' && activeSection === 'tours' && (
             <div className="space-y-4 animate-in fade-in">
               <div className="bg-rose-950/40 border border-rose-800/60 p-4 rounded-2xl space-y-2">
