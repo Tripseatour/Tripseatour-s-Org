@@ -1,8 +1,8 @@
 {
-  "totalPageviews": 24856,
-  "totalUniqueVisitors": 9422,
-  "todayPageviews": 5,
-  "todayUniqueVisitors": 1,
+  "totalPageviews": 24859,
+  "totalUniqueVisitors": 9423,
+  "todayPageviews": 8,
+  "todayUniqueVisitors": 2,
   "yesterdayPageviews": 187,
   "yesterdayUniqueVisitors": 115,
   "activeNow": 1,
@@ -74,20 +74,20 @@
     },
     {
       "date": "2026-11-05",
-      "views": 5,
-      "uniques": 1
+      "views": 8,
+      "uniques": 2
     }
   ],
   "devices": {
     "mobile": 16891,
     "desktop": 6940,
-    "tablet": 1025
+    "tablet": 1028
   },
   "topPages": [
     {
       "path": "home",
-      "title": "หน้าแรก - ทัวร์เกาะพีพี & ทะเลภูเก็ต",
-      "views": 15421
+      "title": "หน้าแรก - ทริปซีทัวร์ ภูเก็ต",
+      "views": 15424
     },
     {
       "path": "how-to-book",
@@ -118,7 +118,7 @@
     },
     {
       "source": "Google Search",
-      "count": 8205,
+      "count": 8208,
       "percentage": 33
     },
     {
@@ -138,6 +138,39 @@
     }
   ],
   "recentVisitors": [
+    {
+      "id": "v-eh61f3u-mvv0gpnb",
+      "timestamp": "2026-11-05T09:38:03.942Z",
+      "device": "tablet",
+      "browser": "Chrome",
+      "os": "Windows",
+      "country": "🇹🇭 ประเทศไทย",
+      "city": "Phuket / Bangkok",
+      "page": "home",
+      "referrer": "Google Search"
+    },
+    {
+      "id": "v-eh61f3u-mvv0gpnb",
+      "timestamp": "2026-11-05T09:37:51.442Z",
+      "device": "tablet",
+      "browser": "Chrome",
+      "os": "Windows",
+      "country": "🇹🇭 ประเทศไทย",
+      "city": "Phuket / Bangkok",
+      "page": "home",
+      "referrer": "Google Search"
+    },
+    {
+      "id": "v-eh61f3u-mvv0gpnb",
+      "timestamp": "2026-11-05T09:37:48.664Z",
+      "device": "tablet",
+      "browser": "Chrome",
+      "os": "Windows",
+      "country": "🇹🇭 ประเทศไทย",
+      "city": "Phuket / Bangkok",
+      "page": "home",
+      "referrer": "Google Search"
+    },
     {
       "id": "v-eh61f3u-mvv0gpnb",
       "timestamp": "2026-11-05T09:00:27.657Z",
@@ -222,7 +255,7 @@
       "referrer": "Facebook"
     }
   ],
-  "lastUpdated": "2026-11-05T09:00:27.657Z",
+  "lastUpdated": "2026-11-05T09:38:03.942Z",
   "liveSessions": [
     {
       "visitorId": "v-eh61f3u-mvv0gpnb",
@@ -236,13 +269,13 @@
       "screen": "861x488",
       "language": "th-TH",
       "timezone": "Asia/Bangkok",
-      "currentPage": "admin",
-      "pageTitle": "แดชบอร์ดแอดมิน",
+      "currentPage": "home",
+      "pageTitle": "หน้าแรก - ทริปซีทัวร์ ภูเก็ต",
       "referrer": "Google Search",
-      "firstSeen": "2026-11-05T08:59:56.893Z",
-      "lastPing": "2026-11-05T09:00:27.657Z",
+      "firstSeen": "2026-11-05T09:37:48.663Z",
+      "lastPing": "2026-11-05T09:38:03.942Z",
       "lastPingSecondsAgo": 0,
-      "pageviewsCount": 5
+      "pageviewsCount": 3
     }
   ]
 }
