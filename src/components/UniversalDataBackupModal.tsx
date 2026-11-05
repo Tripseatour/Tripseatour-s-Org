@@ -18,7 +18,8 @@ import {
   Ship,
   Sparkles,
   Save,
-  ArrowRight
+  ArrowRight,
+  ExternalLink
 } from 'lucide-react';
 import { Tour, Supplier, Customer, Booking, Review, AppSettings } from '../types';
 import { normalizeTours } from '../utils/tourNormalizer';
@@ -86,6 +87,9 @@ export const UniversalDataBackupModal: React.FC<UniversalDataBackupModalProps> =
   const [isSyncingSheets, setIsSyncingSheets] = useState(false);
   const [sheetsResult, setSheetsResult] = useState<SyncToSheetsResult | null>(null);
   const [sheetsError, setSheetsError] = useState<string | null>(null);
+  const [isUnauthorizedDomain, setIsUnauthorizedDomain] = useState(false);
+  const [copiedDomain, setCopiedDomain] = useState(false);
+  const currentHostname = typeof window !== 'undefined' ? window.location.hostname : '';
 
   useEffect(() => {
     if (isOpen) {
@@ -105,15 +109,25 @@ export const UniversalDataBackupModal: React.FC<UniversalDataBackupModalProps> =
   const handleGoogleLogin = async () => {
     setIsLoggingInGoogle(true);
     setSheetsError(null);
+    setIsUnauthorizedDomain(false);
     try {
       const res = await googleSignIn();
       if (res) {
         setGoogleUser(res.user);
         setGoogleToken(res.accessToken);
+        setIsUnauthorizedDomain(false);
       }
     } catch (err: any) {
       console.error('Google login error:', err);
-      setSheetsError(`เข้าสู่ระบบ Google ไม่สำเร็จ: ${err?.message || 'ข้อผิดพลาดระบบ'}`);
+      const isUnauth = err?.code === 'auth/unauthorized-domain' ||
+        err?.message?.includes('auth/unauthorized-domain') ||
+        err?.message?.includes('unauthorized-domain');
+      if (isUnauth) {
+        setIsUnauthorizedDomain(true);
+        setSheetsError(`โดเมน "${window.location.hostname}" ยังไม่ได้รับอนุญาตใน Firebase Authentication (auth/unauthorized-domain)`);
+      } else {
+        setSheetsError(`เข้าสู่ระบบ Google ไม่สำเร็จ: ${err?.message || 'ข้อผิดพลาดระบบ'}`);
+      }
     } finally {
       setIsLoggingInGoogle(false);
     }
@@ -980,6 +994,87 @@ export const UniversalDataBackupModal: React.FC<UniversalDataBackupModalProps> =
                   <div className="bg-rose-950/60 border border-rose-800 text-rose-300 p-3.5 rounded-xl flex items-start gap-2 text-xs">
                     <AlertCircle className="w-4 h-4 text-rose-400 shrink-0 mt-0.5" />
                     <span>{sheetsError}</span>
+                  </div>
+                )}
+
+                {isUnauthorizedDomain && (
+                  <div className="bg-amber-950/60 border-2 border-amber-500/60 text-amber-200 p-4 sm:p-5 rounded-2xl space-y-3.5 animate-in fade-in">
+                    <div className="flex items-start gap-3">
+                      <div className="w-10 h-10 rounded-xl bg-amber-500/20 text-amber-400 border border-amber-500/40 flex items-center justify-center font-black shrink-0">
+                        <AlertTriangle className="w-5 h-5 text-amber-400" />
+                      </div>
+                      <div className="flex-1">
+                        <h5 className="font-extrabold text-sm text-white flex items-center gap-2">
+                          <span>วิธีแก้: เพิ่มชื่อโดเมนใน Firebase Console (ใช้เวลาเพียง 30 วินาที)</span>
+                        </h5>
+                        <p className="text-xs text-amber-300/90 mt-1 leading-relaxed">
+                          เนื่องจาก Firebase มีระบบความปลอดภัยสูง จึงต้องระบุชื่อโดเมนของเว็บไซต์นี้ลงในรายการ <strong>Authorized domains</strong> ก่อน Google จึงจะอนุญาตให้เข้าสู่ระบบได้
+                        </p>
+                      </div>
+                    </div>
+
+                    {/* Current Domain Box with Copy Button */}
+                    <div className="bg-slate-900/90 border border-amber-500/30 p-3 rounded-xl flex flex-col sm:flex-row sm:items-center justify-between gap-2.5">
+                      <div className="flex items-center gap-2">
+                        <span className="text-xs text-slate-400 font-medium">โดเมนที่ต้องเพิ่ม:</span>
+                        <code className="text-xs font-mono font-bold bg-slate-950 text-amber-300 px-2.5 py-1 rounded-lg border border-amber-500/40 select-all">
+                          {currentHostname}
+                        </code>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          if (navigator?.clipboard) {
+                            navigator.clipboard.writeText(currentHostname);
+                            setCopiedDomain(true);
+                            setTimeout(() => setCopiedDomain(false), 3000);
+                          }
+                        }}
+                        className="inline-flex items-center justify-center gap-1.5 px-3 py-1.5 rounded-lg bg-amber-500 hover:bg-amber-400 text-slate-950 text-xs font-bold transition cursor-pointer"
+                      >
+                        {copiedDomain ? <Check className="w-3.5 h-3.5 text-slate-950" /> : <Copy className="w-3.5 h-3.5 text-slate-950" />}
+                        <span>{copiedDomain ? 'คัดลอกโดเมนแล้ว!' : 'คัดลอกชื่อโดเมน'}</span>
+                      </button>
+                    </div>
+
+                    {/* Step by step */}
+                    <div className="bg-slate-950/70 p-3.5 rounded-xl border border-slate-800 text-xs text-slate-300 space-y-2">
+                      <div className="font-bold text-white text-xs mb-1">ขั้นตอนการตั้งค่า (ทำเพียงครั้งเดียว):</div>
+                      <ol className="list-decimal list-inside space-y-1.5 text-slate-300">
+                        <li>
+                          เปิดไปที่{' '}
+                          <a
+                            href="https://console.firebase.google.com/project/gen-lang-client-0325240090/authentication/settings"
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="text-amber-400 hover:underline font-bold inline-flex items-center gap-1"
+                          >
+                            <span>Firebase Console ➔ Authentication ➔ Settings</span>
+                            <ExternalLink className="w-3 h-3" />
+                          </a>
+                        </li>
+                        <li>
+                          เลื่อนลงมาที่หัวข้อ <strong>"Authorized domains" (โดเมนที่ได้รับอนุญาต)</strong> แล้วคลิก <strong>"Add domain"</strong>
+                        </li>
+                        <li>
+                          วางโดเมน <code className="text-amber-300 font-mono font-bold">{currentHostname}</code> (และแนะนำเพิ่ม <code className="text-amber-300 font-mono font-bold">vercel.app</code> ไว้ด้วย) แล้วกด <strong>Save (บันทึก)</strong>
+                        </li>
+                        <li>
+                          กลับมาที่หน้านี้แล้วกดปุ่ม <strong>"เข้าสู่ระบบด้วย Google"</strong> ใหม่อีกครั้ง
+                        </li>
+                      </ol>
+                    </div>
+
+                    {/* Quick Alternatives */}
+                    <div className="pt-1 flex flex-col sm:flex-row items-center gap-2">
+                      <button
+                        type="button"
+                        onClick={() => setActiveTab('export')}
+                        className="w-full sm:w-auto flex-1 bg-slate-800 hover:bg-slate-700 text-slate-200 font-bold px-3 py-2 rounded-xl text-xs transition border border-slate-700 text-center cursor-pointer"
+                      >
+                        📥 หรือใช้ดาวน์โหลดสำรอง JSON (ทำได้ทันที ไม่ต้องตั้งค่า)
+                      </button>
+                    </div>
                   </div>
                 )}
 

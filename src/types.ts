@@ -84,6 +84,7 @@ export interface Tour {
   isAvailable?: boolean;
   isVisible?: boolean; // แสดงบนหน้าเว็บหรือไม่ (true = แสดง, false = ซ่อน/ไม่แสดง)
   addons?: TourAddon[]; // ออฟชั่นเสริมเปิด-ปิดได้ / ส่วนลดพิเศษ
+  sortOrder?: number; // ลำดับการแสดงผลทัวร์
 }
 
 export interface CartItem {
