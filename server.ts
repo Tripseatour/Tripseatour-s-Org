@@ -5,7 +5,7 @@ import { createClient } from '@supabase/supabase-js';
 import { GoogleGenAI } from '@google/genai';
 import { initialTours, initialBookings, initialReviews, initialCustomers, initialSettings, mockSuppliers } from './src/data/mockData';
 import { normalizeTours } from './src/utils/tourNormalizer';
-import { Tour, Booking, Review, Customer, AppSettings, LineNotificationLog, SalesStats, AdminUser, Supplier, VisitorAnalytics, DailyVisitorPoint, VisitorPingPayload } from './src/types';
+import { Tour, Booking, Review, Customer, AppSettings, LineNotificationLog, SalesStats, AdminUser, Supplier, VisitorAnalytics, DailyVisitorPoint, VisitorPingPayload, LiveSession } from './src/types';
 import extractTourHandler from './api/extract-tour-from-image';
 import translateTourHandler from './api/translate-tour';
 import { safeParseLlmJson } from './src/utils/llmJsonParser';
