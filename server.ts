@@ -5,8 +5,8 @@ import { GoogleGenAI } from '@google/genai';
 import { initialTours, initialBookings, initialReviews, initialCustomers, initialSettings, mockSuppliers } from './src/data/mockData';
 import { normalizeTours } from './src/utils/tourNormalizer';
 import { Tour, Booking, Review, Customer, AppSettings, LineNotificationLog, SalesStats, AdminUser, Supplier, VisitorAnalytics, DailyVisitorPoint, VisitorPingPayload, LiveSession } from './src/types';
-import extractTourHandler from './api/extract-tour-from-image';
-import translateTourHandler from './api/translate-tour';
+import extractTourHandler from './src/server-handlers/extract-tour-from-image';
+import translateTourHandler from './src/server-handlers/translate-tour';
 import { safeParseLlmJson } from './src/utils/llmJsonParser';
 
 const app = express();

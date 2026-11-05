@@ -1,5 +1,5 @@
 import { GoogleGenAI, ThinkingLevel } from '@google/genai';
-import { safeParseLlmJson } from '../src/utils/llmJsonParser';
+import { safeParseLlmJson } from '../utils/llmJsonParser';
 
 function getGeminiApiKeys(): string[] {
   const keys: string[] = [];
