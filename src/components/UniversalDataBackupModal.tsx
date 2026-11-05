@@ -919,17 +919,33 @@ export const UniversalDataBackupModal: React.FC<UniversalDataBackupModalProps> =
                         </div>
                       </div>
 
-                      <button
-                        type="button"
-                        onClick={async () => {
-                          await logoutGoogle();
-                          setGoogleUser(null);
-                          setGoogleToken(null);
-                        }}
-                        className="text-[11px] text-rose-400 hover:underline font-bold"
-                      >
-                        ออกจากระบบ Google
-                      </button>
+                      <div className="flex items-center gap-2">
+                        <button
+                          type="button"
+                          onClick={async () => {
+                            await logoutGoogle();
+                            setGoogleUser(null);
+                            setGoogleToken(null);
+                            setTimeout(() => {
+                              handleGoogleLogin();
+                            }, 100);
+                          }}
+                          className="px-2.5 py-1 rounded-lg bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 text-xs font-bold transition flex items-center gap-1 cursor-pointer"
+                        >
+                          <span>🔄 สลับ / เปลี่ยนบัญชี Google</span>
+                        </button>
+                        <button
+                          type="button"
+                          onClick={async () => {
+                            await logoutGoogle();
+                            setGoogleUser(null);
+                            setGoogleToken(null);
+                          }}
+                          className="text-[11px] text-rose-400 hover:underline font-bold ml-1"
+                        >
+                          ออกจากระบบ
+                        </button>
+                      </div>
                     </div>
 
                     {/* Real-time Sync Status Card */}
@@ -964,7 +980,7 @@ export const UniversalDataBackupModal: React.FC<UniversalDataBackupModalProps> =
                       </p>
 
                       {realtimeSyncInfo.spreadsheetUrl && (
-                        <div className="pt-1">
+                        <div className="pt-2 flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-t border-slate-800/80 mt-1">
                           <a
                             href={realtimeSyncInfo.spreadsheetUrl}
                             target="_blank"
@@ -974,6 +990,18 @@ export const UniversalDataBackupModal: React.FC<UniversalDataBackupModalProps> =
                             <span>🔗 เปิดสเปรดชีต Realtime ที่กำลังซิงค์อยู่ (Google Sheets)</span>
                             <ArrowRight className="w-3.5 h-3.5" />
                           </a>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              if (window.confirm('คุณต้องการยกเลิกการเชื่อมโยงสเปรดชีตนี้หรือไม่? (ไฟล์เดิมบน Google Drive จะยังคงอยู่ แต่ระบบจะไม่ซิงค์ไปยังไฟล์นี้อีกต่อไป)')) {
+                                setActiveSpreadsheetInfo(null, null, false);
+                                setRealtimeSyncInfo(getActiveSpreadsheetInfo());
+                              }
+                            }}
+                            className="text-[11px] text-slate-400 hover:text-rose-400 transition underline cursor-pointer"
+                          >
+                            ยกเลิกการเชื่อมโยงไฟล์นี้
+                          </button>
                         </div>
                       )}
                     </div>
