@@ -1,12 +1,8 @@
 import type { IncomingMessage, ServerResponse } from 'http';
-import { createClient } from '@supabase/supabase-js';
 
 const DEFAULT_CHANNEL_ACCESS_TOKEN = 'Na3ekdkIyTshDZwZItjOQGv4MXBqo/j6zzXfoES2K6Od6HEjLXDjookdpV5QzuUA6FqXknMZL3MwgiPNmupdAy9oZweKN5QKlTjdloODikwIgrlJEeyrWJW7vAzydq38jHDmKR1NZE58ji2oYNy9VwdB04t89/1O/w1cDnyilFU=';
 const DEFAULT_LINE_GROUP_ID = 'C1bb0d71ad5dbb960801dad6bd5208afa';
 const DEFAULT_DOMAIN = 'https://tripseatourphuket.vercel.app';
-
-const SUPABASE_URL = process.env.VITE_SUPABASE_URL || process.env.SUPABASE_URL || 'https://tljofqremlconawmtndd.supabase.co';
-const SUPABASE_ANON_KEY = process.env.VITE_SUPABASE_ANON_KEY || process.env.SUPABASE_ANON_KEY || 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InRsam9mcXJlbWxjb25hd210bmRkIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODY2MTE1MTYsImV4cCI6MjEwMjE4NzUxNn0.lUUYnc0jOMl6JU1SS8RLoxZu2mir70qgcO2J8kvSHn0';
 
 export default async function handler(req: any, res: any) {
   // Enable CORS
@@ -60,27 +56,7 @@ export default async function handler(req: any, res: any) {
       ? `${protocol}://${hostHeader}` 
       : DEFAULT_DOMAIN;
 
-    // Cache ticket image and slip image in Supabase if base64 provided
-    try {
-      const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
-      if (ticketImageUrl && ticketImageUrl.startsWith('data:image')) {
-        await supabase.from('app_store').upsert({
-          key: `img_ticket_${bookingRef}`,
-          value: ticketImageUrl,
-          updated_at: new Date().toISOString()
-        }, { onConflict: 'key' });
-      }
-      const rawSlip = slipImageUrl || slipUrl;
-      if (rawSlip && rawSlip.startsWith('data:image')) {
-        await supabase.from('app_store').upsert({
-          key: `img_slip_${bookingRef}`,
-          value: rawSlip,
-          updated_at: new Date().toISOString()
-        }, { onConflict: 'key' });
-      }
-    } catch (cacheErr) {
-      console.warn('Cache image to Supabase warning:', cacheErr);
-    }
+
 
     const messagesPayload: any[] = [];
 

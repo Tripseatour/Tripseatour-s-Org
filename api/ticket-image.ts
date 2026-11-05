@@ -1,8 +1,3 @@
-import { createClient } from '@supabase/supabase-js';
-
-const SUPABASE_URL = process.env.VITE_SUPABASE_URL || process.env.SUPABASE_URL || 'https://tljofqremlconawmtndd.supabase.co';
-const SUPABASE_ANON_KEY = process.env.VITE_SUPABASE_ANON_KEY || process.env.SUPABASE_ANON_KEY || 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InRsam9mcXJlbWxjb25hd210bmRkIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODY2MTE1MTYsImV4cCI6MjEwMjE4NzUxNn0.lUUYnc0jOMl6JU1SS8RLoxZu2mir70qgcO2J8kvSHn0';
-
 export default async function handler(req: any, res: any) {
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'GET,OPTIONS');
@@ -15,47 +10,19 @@ export default async function handler(req: any, res: any) {
   const ref = (query.ref || query.bookingRef || query.id || 'TEST').toString().trim();
 
   try {
-    const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
-
-    // 1. Try retrieving cached image from app_store
-    const { data: storeData } = await supabase
-      .from('app_store')
-      .select('value')
-      .in('key', [`img_ticket_${ref}`, `ticket_${ref}`])
-      .limit(1)
-      .maybeSingle();
-
-    if (storeData && storeData.value && storeData.value.startsWith('data:image')) {
-      const base64Data = storeData.value.replace(/^data:image\/\w+;base64,/, '');
-      const buffer = Buffer.from(base64Data, 'base64');
-      const isPng = storeData.value.includes('image/png');
-      
-      res.setHeader('Content-Type', isPng ? 'image/png' : 'image/jpeg');
-      res.setHeader('Cache-Control', 'public, max-age=86400');
-      return res.end(buffer);
-    }
-
-    // 2. Try fetching booking from bookings table to render dynamic ticket
-    const { data: booking } = await supabase
-      .from('bookings')
-      .select('*')
-      .eq('booking_ref', ref)
-      .maybeSingle();
-
-    const tourTitle = (booking?.tour_title || 'เกาะพีพี มายา ไข่ (เรือสปีดโบ๊ท VIP)').slice(0, 38);
-    const customerName = (booking?.customer_name || 'ลูกค้าทริปภูเก็ต').slice(0, 32);
-    const customerPhone = booking?.customer_phone || '08X-XXX-XXXX';
-    const travelDate = booking?.travel_date || new Date().toISOString().split('T')[0];
-    const bookingDate = booking?.created_at ? new Date(booking.created_at).toLocaleDateString('th-TH') : new Date().toLocaleDateString('th-TH');
-    const pickupHotel = ((booking?.pickup_hotel || 'โรงแรมในภูเก็ต') + (booking?.room_number ? ` (ห้อง ${booking.room_number})` : '')).slice(0, 50);
-    const sendBackHotel = ((booking?.send_back_hotel || booking?.pickup_hotel || 'โรงแรมในภูเก็ต')).slice(0, 50);
-    const adults = booking?.adults || 1;
-    const children = booking?.children || 0;
-    const infants = booking?.infants || 0;
-    const totalAmount = booking?.total_amount ? Number(booking.total_amount).toLocaleString() : '0';
-    const pickupTime = booking?.pickup_time || '07:30 - 08:00 น.';
-    const nationality = booking?.nationality || 'Thai / -';
-    const remark = (booking?.special_requests || booking?.notes || '-').slice(0, 60);
+    const tourTitle = ('เกาะพีพี มายา ไข่ (เรือสปีดโบ๊ท VIP)').slice(0, 38);
+    const customerName = ('ลูกค้าทริปภูเก็ต').slice(0, 32);
+    const customerPhone = '08X-XXX-XXXX';
+    const travelDate = new Date().toISOString().split('T')[0];
+    const bookingDate = new Date().toLocaleDateString('th-TH');
+    const pickupHotel = 'โรงแรมในภูเก็ต';
+    const sendBackHotel = 'โรงแรมในภูเก็ต';
+    const adults = 1;
+    const children = 0;
+    const infants = 0;
+    const pickupTime = '07:30 - 08:00 น.';
+    const nationality = 'Thai / -';
+    const remark = '-';
 
     // Generate high quality SVG voucher in A5 Landscape proportions (920px x 650px)
     const svg = `

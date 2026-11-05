@@ -8,6 +8,52 @@ export interface SyncToSheetsResult {
   createdTime: string;
 }
 
+// In-Memory state for active spreadsheet auto-sync
+let activeSpreadsheetId: string | null = null;
+let activeSpreadsheetUrl: string | null = null;
+let isRealtimeSyncEnabled = false;
+
+export function getActiveSpreadsheetInfo() {
+  return {
+    spreadsheetId: activeSpreadsheetId,
+    spreadsheetUrl: activeSpreadsheetUrl,
+    isRealtimeSyncEnabled
+  };
+}
+
+export function setActiveSpreadsheetInfo(id: string | null, url: string | null, enabled: boolean = true) {
+  activeSpreadsheetId = id;
+  activeSpreadsheetUrl = url;
+  isRealtimeSyncEnabled = enabled;
+  if (id) {
+    try {
+      localStorage.setItem('tripsea_active_sheet_id', id);
+      if (url) localStorage.setItem('tripsea_active_sheet_url', url);
+      localStorage.setItem('tripsea_realtime_sync_enabled', enabled ? 'true' : 'false');
+    } catch (e) {}
+  } else {
+    try {
+      localStorage.removeItem('tripsea_active_sheet_id');
+      localStorage.removeItem('tripsea_active_sheet_url');
+      localStorage.setItem('tripsea_realtime_sync_enabled', 'false');
+    } catch (e) {}
+  }
+}
+
+export function loadSavedSpreadsheetInfo() {
+  try {
+    const id = localStorage.getItem('tripsea_active_sheet_id');
+    const url = localStorage.getItem('tripsea_active_sheet_url');
+    const enabled = localStorage.getItem('tripsea_realtime_sync_enabled') === 'true';
+    if (id) {
+      activeSpreadsheetId = id;
+      activeSpreadsheetUrl = url || `https://docs.google.com/spreadsheets/d/${id}/edit`;
+      isRealtimeSyncEnabled = enabled;
+    }
+  } catch (e) {}
+  return getActiveSpreadsheetInfo();
+}
+
 export async function createAndSyncGoogleSpreadsheet(
   accessToken: string,
   data: {
@@ -18,7 +64,7 @@ export async function createAndSyncGoogleSpreadsheet(
   }
 ): Promise<SyncToSheetsResult> {
   const dateStr = new Date().toISOString().split('T')[0];
-  const title = `Trip Sea Tour Phuket - Full Backup (${dateStr})`;
+  const title = `Trip Sea Tour Phuket - Realtime Database (${dateStr})`;
 
   // 1. Create Spreadsheet with multiple sheets (tabs)
   const createRes = await fetch('https://sheets.googleapis.com/v4/spreadsheets', {
@@ -49,7 +95,30 @@ export async function createAndSyncGoogleSpreadsheet(
   const spreadsheetId = spreadsheet.spreadsheetId;
   const spreadsheetUrl = spreadsheet.spreadsheetUrl || `https://docs.google.com/spreadsheets/d/${spreadsheetId}/edit`;
 
-  // 2. Prepare Data Arrays for Each Sheet
+  // Save as active sheet
+  setActiveSpreadsheetInfo(spreadsheetId, spreadsheetUrl, true);
+
+  // 2. Populate sheet values
+  await updateExistingGoogleSpreadsheet(accessToken, spreadsheetId, data);
+
+  return {
+    spreadsheetId,
+    spreadsheetUrl,
+    createdTime: new Date().toLocaleTimeString('th-TH')
+  };
+}
+
+export async function updateExistingGoogleSpreadsheet(
+  accessToken: string,
+  spreadsheetId: string,
+  data: {
+    bookings: Booking[];
+    customers: Customer[];
+    suppliers: Supplier[];
+    tours: Tour[];
+  }
+): Promise<boolean> {
+  // Prepare Data Arrays for Each Sheet
   const bookingRows = [
     ['Booking Ref', 'Tour Title', 'Customer Name', 'Phone', 'Email', 'LINE ID', 'Travel Date', 'Adults', 'Children', 'Infants', 'Total Amount (THB)', 'Payment Status', 'Order Status', 'Pickup Hotel', 'Supplier', 'Created At'],
     ...data.bookings.map(b => [
@@ -119,7 +188,7 @@ export async function createAndSyncGoogleSpreadsheet(
     ])
   ];
 
-  // 3. Batch Update Values
+  // Batch Update Values
   const valueRanges = [
     { range: "'คำสั่งซื้อ (Bookings)'!A1", values: bookingRows },
     { range: "'ลูกค้า (Customers CRM)'!A1", values: customerRows },
@@ -141,12 +210,53 @@ export async function createAndSyncGoogleSpreadsheet(
 
   if (!updateRes.ok) {
     const errText = await updateRes.text();
-    throw new Error(`Google Sheets Update Error (${updateRes.status}): ${errText}`);
+    console.warn(`Google Sheets Auto-Sync Warning (${updateRes.status}): ${errText}`);
+    return false;
   }
 
-  return {
-    spreadsheetId,
-    spreadsheetUrl,
-    createdTime: new Date().toLocaleTimeString('th-TH')
-  };
+  return true;
+}
+
+// Append single new booking instantly in real-time
+export async function appendBookingToGoogleSheet(
+  accessToken: string,
+  spreadsheetId: string,
+  booking: Booking
+): Promise<boolean> {
+  try {
+    const row = [
+      booking.bookingRef || '',
+      booking.tourTitle || '',
+      booking.customerName || '',
+      booking.customerPhone || '',
+      booking.customerEmail || '',
+      booking.customerLineId || '',
+      booking.travelDate || '',
+      booking.adults || 1,
+      booking.children || 0,
+      booking.infants || 0,
+      booking.totalAmount || 0,
+      booking.paymentStatus || 'pending',
+      booking.orderStatus || 'pending',
+      booking.pickupHotel || '',
+      booking.supplierName || '',
+      booking.createdAt ? new Date(booking.createdAt).toLocaleString('th-TH') : new Date().toLocaleString('th-TH')
+    ];
+
+    const appendRes = await fetch(`https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}/values/'คำสั่งซื้อ (Bookings)'!A1:append?valueInputOption=USER_ENTERED`, {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${accessToken}`,
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({
+        values: [row]
+      })
+    });
+
+    return appendRes.ok;
+  } catch (e) {
+    console.warn('appendBookingToGoogleSheet error:', e);
+    return false;
+  }
 }

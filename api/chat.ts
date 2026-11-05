@@ -1,8 +1,4 @@
 import { GoogleGenAI } from '@google/genai';
-import { createClient } from '@supabase/supabase-js';
-
-const SUPABASE_URL = process.env.VITE_SUPABASE_URL || process.env.SUPABASE_URL || 'https://tljofqremlconawmtndd.supabase.co';
-const SUPABASE_ANON_KEY = process.env.VITE_SUPABASE_ANON_KEY || process.env.SUPABASE_ANON_KEY || 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InRsam9mcXJlbWxjb25hd210bmRkIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODY2MTE1MTYsImV4cCI6MjEwMjE4NzUxNn0.lUUYnc0jOMl6JU1SS8RLoxZu2mir70qgcO2J8kvSHn0';
 
 const DEFAULT_TOURS = [
   {
@@ -187,15 +183,7 @@ export default async function handler(req: any, res: any) {
       facebookUrl: 'https://www.facebook.com/tripseatoursphuket/'
     };
 
-    try {
-      const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
-      const { data } = await supabase.from('app_store').select('value').eq('key', 'tripsea_settings').single();
-      if (data && data.value) {
-        settings = { ...settings, ...data.value };
-      }
-    } catch (dbErr) {
-      // ignore
-    }
+
 
     // Try Gemini API if key is set
     const apiKey = process.env.GEMINI_API_KEY || process.env.VITE_GEMINI_API_KEY;

@@ -24,7 +24,7 @@ import { Tour, Supplier, Customer, Booking, Review, AppSettings } from '../types
 import { normalizeTours } from '../utils/tourNormalizer';
 import { exportBookingsToCsv, exportCustomersToCsv, exportSuppliersToCsv, exportToursToCsv } from '../utils/excelExporter';
 import { initAuth, googleSignIn, logoutGoogle, getAccessToken } from '../lib/googleAuth';
-import { createAndSyncGoogleSpreadsheet, SyncToSheetsResult } from '../lib/googleSheetsSync';
+import { createAndSyncGoogleSpreadsheet, SyncToSheetsResult, loadSavedSpreadsheetInfo, setActiveSpreadsheetInfo, getActiveSpreadsheetInfo } from '../lib/googleSheetsSync';
 import { User } from 'firebase/auth';
 
 
@@ -119,6 +119,14 @@ export const UniversalDataBackupModal: React.FC<UniversalDataBackupModalProps> =
     }
   };
 
+  const [realtimeSyncInfo, setRealtimeSyncInfo] = useState(() => loadSavedSpreadsheetInfo());
+
+  const handleToggleRealtimeSync = (enabled: boolean) => {
+    const current = getActiveSpreadsheetInfo();
+    setActiveSpreadsheetInfo(current.spreadsheetId, current.spreadsheetUrl, enabled);
+    setRealtimeSyncInfo(getActiveSpreadsheetInfo());
+  };
+
   const handleSyncToGoogleSheets = async () => {
     const token = googleToken || await getAccessToken();
     if (!token) {
@@ -126,7 +134,7 @@ export const UniversalDataBackupModal: React.FC<UniversalDataBackupModalProps> =
       return;
     }
 
-    const confirmed = window.confirm('ยืนยันสร้างสเปรดชีต Google Sheets ใหม่ใน Google Drive ของคุณ เพื่อสำรองข้อมูลทั้งหมดหรือไม่?');
+    const confirmed = window.confirm('ยืนยันสร้างสเปรดชีต Google Sheets ใหม่ใน Google Drive ของคุณ เพื่อซิงค์ข้อมูล Realtime หรือไม่?');
     if (!confirmed) return;
 
     setIsSyncingSheets(true);
@@ -141,6 +149,7 @@ export const UniversalDataBackupModal: React.FC<UniversalDataBackupModalProps> =
         tours
       });
       setSheetsResult(res);
+      setRealtimeSyncInfo(getActiveSpreadsheetInfo());
     } catch (err: any) {
       console.error('Sheets sync error:', err);
       setSheetsError(`สร้าง Google Sheets ไม่สำเร็จ: ${err?.message || 'โปรดตรวจสอบสิทธิ์ Google'}`);
@@ -909,6 +918,52 @@ export const UniversalDataBackupModal: React.FC<UniversalDataBackupModalProps> =
                       </button>
                     </div>
 
+                    {/* Real-time Sync Status Card */}
+                    <div className="bg-slate-900/90 border border-emerald-500/40 p-4 rounded-xl space-y-3">
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-2">
+                          <span className="relative flex h-3 w-3">
+                            <span className={`animate-ping absolute inline-flex h-full w-full rounded-full opacity-75 ${realtimeSyncInfo.isRealtimeSyncEnabled ? 'bg-emerald-400' : 'bg-slate-500'}`}></span>
+                            <span className={`relative inline-flex rounded-full h-3 w-3 ${realtimeSyncInfo.isRealtimeSyncEnabled ? 'bg-emerald-500' : 'bg-slate-400'}`}></span>
+                          </span>
+                          <span className="font-extrabold text-xs text-white">⚡ ระบบซิงค์ข้อมูลเรียลไทม์ (Real-time Google Sheets Auto-Sync)</span>
+                        </div>
+
+                        <label className="relative inline-flex items-center cursor-pointer">
+                          <input
+                            type="checkbox"
+                            checked={realtimeSyncInfo.isRealtimeSyncEnabled}
+                            onChange={(e) => handleToggleRealtimeSync(e.target.checked)}
+                            className="sr-only peer"
+                          />
+                          <div className="w-9 h-5 bg-slate-700 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-emerald-500"></div>
+                          <span className="ml-2 text-[11px] font-bold text-slate-300">
+                            {realtimeSyncInfo.isRealtimeSyncEnabled ? 'เปิดใช้งาน' : 'ปิดอยู่'}
+                          </span>
+                        </label>
+                      </div>
+
+                      <p className="text-[11px] text-slate-300 leading-relaxed">
+                        {realtimeSyncInfo.isRealtimeSyncEnabled
+                          ? '🟢 ทุกครั้งที่มีลูกค้ารายใหม่สั่งจองทัวร์ ระบบจะนำข้อมูลเข้าตารางใน Google Sheets บน Google Drive ของคุณทันทีโดยอัตโนมัติ'
+                          : '⚪ ระบบซิงค์เรียลไทม์ปิดอยู่ สามารถเปิดสวิตช์เพื่อเริ่มซิงค์ออเดอร์ใหม่อัตโนมัติได้ทุกเมื่อ'}
+                      </p>
+
+                      {realtimeSyncInfo.spreadsheetUrl && (
+                        <div className="pt-1">
+                          <a
+                            href={realtimeSyncInfo.spreadsheetUrl}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="inline-flex items-center gap-1.5 text-xs text-emerald-400 hover:text-emerald-300 underline font-bold"
+                          >
+                            <span>🔗 เปิดสเปรดชีต Realtime ที่กำลังซิงค์อยู่ (Google Sheets)</span>
+                            <ArrowRight className="w-3.5 h-3.5" />
+                          </a>
+                        </div>
+                      )}
+                    </div>
+
                     <button
                       type="button"
                       onClick={handleSyncToGoogleSheets}
@@ -916,7 +971,7 @@ export const UniversalDataBackupModal: React.FC<UniversalDataBackupModalProps> =
                       className="w-full bg-emerald-600 hover:bg-emerald-500 text-white font-extrabold py-3.5 rounded-xl text-xs transition shadow-lg shadow-emerald-950/60 flex items-center justify-center gap-2 cursor-pointer disabled:opacity-50 active:scale-95"
                     >
                       <Sparkles className={`w-4 h-4 ${isSyncingSheets ? 'animate-spin' : ''}`} />
-                      <span>{isSyncingSheets ? 'กำลังสร้างและส่งออกข้อมูลไปยัง Google Sheets...' : '🚀 สร้างไฟล์ Google Sheets และส่งออกข้อมูลทันที'}</span>
+                      <span>{isSyncingSheets ? 'กำลังสร้างและส่งออกข้อมูลไปยัง Google Sheets...' : '🚀 สร้างไฟล์ Google Sheets Realtime ใหม่บน Google Drive'}</span>
                     </button>
                   </div>
                 )}

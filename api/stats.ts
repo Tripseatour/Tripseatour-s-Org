@@ -1,7 +1,4 @@
-import { createClient } from '@supabase/supabase-js';
-
-const SUPABASE_URL = process.env.VITE_SUPABASE_URL || process.env.SUPABASE_URL || 'https://tljofqremlconawmtndd.supabase.co';
-const SUPABASE_ANON_KEY = process.env.VITE_SUPABASE_ANON_KEY || process.env.SUPABASE_ANON_KEY || 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InRsam9mcXJlbWxjb25hd210bmRkIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODY2MTE1MTYsImV4cCI6MjEwMjE4NzUxNn0.lUUYnc0jOMl6JU1SS8RLoxZu2mir70qgcO2J8kvSHn0';
+import { initialBookings, initialTours } from '../src/data/mockData';
 
 export default async function handler(req: any, res: any) {
   res.setHeader('Access-Control-Allow-Origin', '*');
@@ -12,39 +9,17 @@ export default async function handler(req: any, res: any) {
     return res.status(200).end();
   }
 
-  const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
-
   try {
-    // 1. Fetch bookings from Supabase
-    let bookings: any[] = [];
-    const { data: bData } = await supabase.from('bookings').select('*').order('created_at', { ascending: false });
-    if (bData && Array.isArray(bData)) {
-      bookings = bData;
-    } else {
-      const { data: kvBookings } = await supabase.from('app_store').select('value').eq('key', 'bookings').maybeSingle();
-      if (kvBookings && kvBookings.value) {
-        try {
-          bookings = JSON.parse(kvBookings.value);
-        } catch (e) {}
-      }
-    }
-
-    // 2. Fetch tours from Supabase
-    let tours: any[] = [];
-    const { data: kvTours } = await supabase.from('app_store').select('value').eq('key', 'tours').maybeSingle();
-    if (kvTours && kvTours.value) {
-      try {
-        tours = JSON.parse(kvTours.value);
-      } catch (e) {}
-    }
+    const bookings = initialBookings || [];
+    const tours = initialTours || [];
 
     const totalRevenue = bookings
-      .filter(b => b.payment_status === 'verified' || b.payment_status === 'slip_uploaded' || b.paymentStatus === 'verified' || b.paymentStatus === 'slip_uploaded')
-      .reduce((sum, b) => sum + (Number(b.total_amount || b.totalAmount) || 0), 0);
+      .filter(b => b.paymentStatus === 'verified' || b.paymentStatus === 'slip_uploaded')
+      .reduce((sum, b) => sum + (Number(b.totalAmount) || 0), 0);
 
     const totalBookings = bookings.length;
-    const pendingVerifications = bookings.filter(b => b.payment_status === 'slip_uploaded' || b.payment_status === 'pending' || b.paymentStatus === 'slip_uploaded' || b.paymentStatus === 'pending').length;
-    const confirmedBookings = bookings.filter(b => b.order_status === 'confirmed' || b.orderStatus === 'confirmed').length;
+    const pendingVerifications = bookings.filter(b => b.paymentStatus === 'slip_uploaded' || b.paymentStatus === 'pending').length;
+    const confirmedBookings = bookings.filter(b => b.orderStatus === 'confirmed').length;
 
     const monthlyRevenue = [
       { month: 'พ.ค. 26', revenue: 145000, bookings: 32 },
@@ -59,12 +34,12 @@ export default async function handler(req: any, res: any) {
     });
 
     bookings.forEach(b => {
-      const tourId = b.tour_id || b.tourId;
+      const tourId = b.tourId;
       const tour = tours.find(t => t.id === tourId);
       const cat = tour ? tour.category : 'island';
       if (!catMap[cat]) catMap[cat] = { count: 0, revenue: 0 };
       catMap[cat].count += 1;
-      catMap[cat].revenue += (Number(b.total_amount || b.totalAmount) || 0);
+      catMap[cat].revenue += (Number(b.totalAmount) || 0);
     });
 
     const categoryBreakdown = Object.keys(catMap).map(cat => ({
@@ -74,9 +49,9 @@ export default async function handler(req: any, res: any) {
     }));
 
     const statusBreakdown = [
-      { status: 'ชำระเงินแล้ว', count: bookings.filter(b => b.payment_status === 'verified' || b.paymentStatus === 'verified').length },
-      { status: 'รอตรวจสอบสลิป', count: bookings.filter(b => b.payment_status === 'slip_uploaded' || b.paymentStatus === 'slip_uploaded').length },
-      { status: 'รอชำระเงิน', count: bookings.filter(b => b.payment_status === 'pending' || b.paymentStatus === 'pending').length }
+      { status: 'ชำระเงินแล้ว', count: bookings.filter(b => b.paymentStatus === 'verified').length },
+      { status: 'รอตรวจสอบสลิป', count: bookings.filter(b => b.paymentStatus === 'slip_uploaded').length },
+      { status: 'รอชำระเงิน', count: bookings.filter(b => b.paymentStatus === 'pending').length }
     ];
 
     return res.status(200).json({

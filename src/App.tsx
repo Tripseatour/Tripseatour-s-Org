@@ -26,6 +26,8 @@ import { Compass, Sparkles, Filter, Ticket, QrCode, Phone, MessageCircle, Shield
 import { supabaseApi } from './lib/supabase';
 import { safeSetLocalStorage } from './utils/storage';
 import { trackPageView, fetchVisitorAnalytics } from './utils/visitorTracker';
+import { getAccessToken } from './lib/googleAuth';
+import { appendBookingToGoogleSheet, updateExistingGoogleSpreadsheet, loadSavedSpreadsheetInfo } from './lib/googleSheetsSync';
 
 export default function App() {
   const [currentLang, setCurrentLang] = useState<Language>(() => {
@@ -650,9 +652,17 @@ export default function App() {
     setBookings(nextBookings);
     safeSetLocalStorage('tst_bookings', nextBookings);
 
-    // Save to Supabase (works on Vercel and production)
+    // Local API Persistence
     supabaseApi.createBooking(newBooking).catch(() => {});
     supabaseApi.saveBookingsBackup(nextBookings).catch(() => {});
+
+    // Realtime Google Sheets Sync
+    getAccessToken().then(token => {
+      const { spreadsheetId, isRealtimeSyncEnabled } = loadSavedSpreadsheetInfo();
+      if (token && spreadsheetId && isRealtimeSyncEnabled) {
+        appendBookingToGoogleSheet(token, spreadsheetId, newBooking).catch(() => {});
+      }
+    }).catch(() => {});
 
     // Dispatch real LINE alert to Group with Ticket & Slip images
     const lineMsg = `🔔 [มีออเดอร์ใหม่] รหัส ${newBooking.bookingRef}\n` +

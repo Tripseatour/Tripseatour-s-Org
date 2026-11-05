@@ -3417,18 +3417,18 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
             {/* Supabase Database Connection Status Banner */}
             <div className="bg-slate-800/80 border border-slate-700/80 p-5 rounded-2xl shadow-xl flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
               <div className="flex items-center gap-3">
-                <div className={`w-10 h-10 rounded-xl flex items-center justify-center font-bold ${supabaseStatus?.connected ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/40' : 'bg-amber-500/20 text-amber-400 border border-amber-500/40'}`}>
+                <div className="w-10 h-10 rounded-xl flex items-center justify-center font-bold bg-emerald-500/20 text-emerald-400 border border-emerald-500/40">
                   <Database className="w-5 h-5" />
                 </div>
                 <div>
                   <div className="flex items-center gap-2">
-                    <h4 className="text-sm font-extrabold text-white">สถานะการเชื่อมต่อฐานข้อมูล Supabase</h4>
-                    <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${supabaseStatus?.connected ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/30' : 'bg-amber-500/20 text-amber-300 border border-amber-500/30'}`}>
-                      {supabaseStatus?.connected ? '🟢 ออนไลน์ / เชื่อมต่อสมบูรณ์' : '🟡 กำลังตรวจสอบ / Local Cache Mode'}
+                    <h4 className="text-sm font-extrabold text-white">สถานะระบบจัดเก็บข้อมูล (Local Server Storage)</h4>
+                    <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-300 border border-emerald-500/30">
+                      🟢 ทำงานปกติ / จัดเก็บในดิสก์ 100% (ถอด Supabase ออกแล้ว)
                     </span>
                   </div>
                   <p className="text-xs text-slate-400 font-mono mt-0.5">
-                    URL: {supabaseStatus?.url || 'https://tljofqremlconawmtndd.supabase.co'} (ตาราง: app_store, bookings, tours, suppliers, settings)
+                    ระบบหลัก: Local Disk Persistence (data/*.json) &amp; Google Sheets / Drive Sync
                   </p>
                 </div>
               </div>
@@ -3439,20 +3439,20 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                   onClick={handleManualBackup}
                   disabled={isBackingUp}
                   className="bg-teal-600 hover:bg-teal-500 text-white font-extrabold px-3.5 py-2 rounded-xl text-xs flex items-center gap-1.5 transition disabled:opacity-50 shadow-md shadow-teal-900/30"
-                  title="ทำการสำรองข้อมูลทัวร์และออเดอร์สะสมเข้าเซิร์ฟเวอร์สำรอง Supabase ทันที"
+                  title="ทำการสำรองข้อมูลทัวร์และออเดอร์สะสมลงไฟล์ระบบทันที"
                 >
                   <Database className={`w-3.5 h-3.5 ${isBackingUp ? 'animate-spin' : ''}`} />
-                  <span>{isBackingUp ? 'กำลังสำรองข้อมูล...' : 'สำรองข้อมูล (Backup Database)'}</span>
+                  <span>{isBackingUp ? 'กำลังสำรองข้อมูล...' : 'สำรองข้อมูล (Local Backup)'}</span>
                 </button>
                 <button
                   type="button"
                   onClick={handleCleanDeletedData}
                   disabled={isCleaningData}
                   className="bg-rose-900/60 hover:bg-rose-800 text-rose-200 border border-rose-700/60 font-bold px-3.5 py-2 rounded-xl text-xs flex items-center gap-1.5 transition disabled:opacity-50"
-                  title="ล้างข้อมูลออเดอร์/ทัวร์ที่เคยลบไปแล้วเพื่อไม่ให้ดึงกลับมาซ้ำ"
+                  title="ล้างขยะข้อมูลออเดอร์/ทัวร์ที่เคยลบไปแล้ว"
                 >
                   <Trash2 className={`w-3.5 h-3.5 ${isCleaningData ? 'animate-spin' : ''}`} />
-                  <span>{isCleaningData ? 'กำลังล้างข้อมูล...' : 'ล้างขยะข้อมูลเก่าใน Supabase'}</span>
+                  <span>{isCleaningData ? 'กำลังล้างข้อมูล...' : 'ล้างขยะข้อมูลเก่า'}</span>
                 </button>
                 <button
                   type="button"

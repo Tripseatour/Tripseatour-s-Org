@@ -1,8 +1,3 @@
-import { createClient } from '@supabase/supabase-js';
-
-const SUPABASE_URL = process.env.VITE_SUPABASE_URL || process.env.SUPABASE_URL || 'https://tljofqremlconawmtndd.supabase.co';
-const SUPABASE_ANON_KEY = process.env.VITE_SUPABASE_ANON_KEY || process.env.SUPABASE_ANON_KEY || 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InRsam9mcXJlbWxjb25hd210bmRkIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODY2MTE1MTYsImV4cCI6MjEwMjE4NzUxNn0.lUUYnc0jOMl6JU1SS8RLoxZu2mir70qgcO2J8kvSHn0';
-
 const DEFAULT_CHANNEL_ACCESS_TOKEN = 'Na3ekdkIyTshDZwZItjOQGv4MXBqo/j6zzXfoES2K6Od6HEjLXDjookdpV5QzuUA6FqXknMZL3MwgiPNmupdAy9oZweKN5QKlTjdloODikwIgrlJEeyrWJW7vAzydq38jHDmKR1NZE58ji2oYNy9VwdB04t89/1O/w1cDnyilFU=';
 const DEFAULT_LINE_GROUP_ID = 'C1bb0d71ad5dbb960801dad6bd5208afa';
 const DEFAULT_DOMAIN = 'https://tripseatourphuket.vercel.app';
@@ -42,47 +37,19 @@ const DEFAULT_DEMO_SESSION = [
   }
 ];
 
-async function loadSessionsFromSupabase(supabase: any) {
-  try {
-    const { data } = await supabase.from('app_store').select('value').eq('key', 'live_chat_sessions').maybeSingle();
-    if (data && data.value) {
-      const parsed = JSON.parse(data.value);
-      if (Array.isArray(parsed)) return parsed;
-    }
-  } catch (e) {
-    console.warn('Error loading live_chat_sessions from Supabase:', e);
-  }
-  return DEFAULT_DEMO_SESSION;
+let memorySessions: any[] = DEFAULT_DEMO_SESSION;
+
+async function loadSessionsFromSupabase() {
+  return memorySessions;
 }
 
-async function persistSessionsToSupabase(supabase: any, sessions: any[]) {
-  try {
-    await supabase.from('app_store').upsert({
-      key: 'live_chat_sessions',
-      value: JSON.stringify(sessions),
-      updated_at: new Date().toISOString()
-    }, { onConflict: 'key' });
-  } catch (e) {
-    console.error('Error persisting live_chat_sessions to Supabase:', e);
-  }
+async function persistSessionsToSupabase(sessions: any[]) {
+  memorySessions = sessions;
 }
 
-async function loadLineCredentials(supabase: any) {
+async function loadLineCredentials() {
   let token = process.env.LINE_MESSAGING_CHANNEL_ACCESS_TOKEN || DEFAULT_CHANNEL_ACCESS_TOKEN;
   let targetId = process.env.LINE_MESSAGING_USER_ID || DEFAULT_LINE_GROUP_ID;
-
-  try {
-    const { data } = await supabase.from('settings').select('*').eq('id', 1).maybeSingle();
-    if (data) {
-      if (data.line_messaging_channel_access_token && !data.line_messaging_channel_access_token.startsWith('SIMULATED')) {
-        token = data.line_messaging_channel_access_token.trim();
-      }
-      if (data.line_messaging_user_id && data.line_messaging_user_id.trim().length > 0) {
-        targetId = data.line_messaging_user_id.trim();
-      }
-    }
-  } catch (e) {}
-
   return { token, targetId };
 }
 
@@ -100,7 +67,6 @@ export default async function handler(req: any, res: any) {
     return res.status(200).end();
   }
 
-  const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
   const url = req.url || '';
   const action = req.query?.action || (url.includes('/send') ? 'send' : url.includes('/read') ? 'read' : url.includes('/delete') ? 'delete' : 'sessions');
   const sessionId = req.query?.id || req.query?.sessionId;
@@ -116,7 +82,7 @@ export default async function handler(req: any, res: any) {
       const { sessionId: bodySessionId, sender, senderName, text, imageUrl } = body;
       const targetSessionId = bodySessionId || sessionId;
 
-      const sessions = await loadSessionsFromSupabase(supabase);
+      const sessions = await loadSessionsFromSupabase();
       let session = sessions.find((s: any) => s.id === targetSessionId);
 
       if (!session) {
@@ -149,7 +115,7 @@ export default async function handler(req: any, res: any) {
 
         // Trigger LINE notification
         try {
-          const { token, targetId } = await loadLineCredentials(supabase);
+          const { token, targetId } = await loadLineCredentials();
           const hostHeader = req.headers['x-forwarded-host'] || req.headers.host;
           const siteUrl = hostHeader && !hostHeader.includes('localhost')
             ? `https://${hostHeader}`
@@ -192,7 +158,7 @@ export default async function handler(req: any, res: any) {
         session.unreadCount = 0;
       }
 
-      await persistSessionsToSupabase(supabase, sessions);
+      await persistSessionsToSupabase(sessions);
 
       return res.status(200).json({
         success: true,
@@ -210,11 +176,11 @@ export default async function handler(req: any, res: any) {
       const parsedBody = typeof req.body === 'string' ? JSON.parse(req.body) : (req.body || {});
       const targetId = sessionId || parsedBody?.id || parsedBody?.sessionId;
 
-      const sessions = await loadSessionsFromSupabase(supabase);
+      const sessions = await loadSessionsFromSupabase();
       const session = sessions.find((s: any) => s.id === targetId);
       if (session) {
         session.unreadCount = 0;
-        await persistSessionsToSupabase(supabase, sessions);
+        await persistSessionsToSupabase(sessions);
         return res.status(200).json({ success: true, session });
       }
       return res.status(200).json({ success: true });
@@ -233,9 +199,9 @@ export default async function handler(req: any, res: any) {
         return res.status(400).json({ error: 'Missing sessionId' });
       }
 
-      let sessions = await loadSessionsFromSupabase(supabase);
+      let sessions = await loadSessionsFromSupabase();
       const updatedSessions = sessions.filter((s: any) => s.id !== targetId);
-      await persistSessionsToSupabase(supabase, updatedSessions);
+      await persistSessionsToSupabase(updatedSessions);
       return res.status(200).json({ success: true, sessions: updatedSessions });
     } catch (e: any) {
       return res.status(500).json({ error: e?.message || 'Failed to delete session' });
@@ -243,7 +209,7 @@ export default async function handler(req: any, res: any) {
   }
 
   // 4. ACTION: SESSIONS LIST & CREATE (DEFAULT)
-  const sessions = await loadSessionsFromSupabase(supabase);
+  const sessions = await loadSessionsFromSupabase();
 
   // GET: Single session by ID or list all
   if (req.method === 'GET') {
@@ -284,10 +250,10 @@ export default async function handler(req: any, res: any) {
         ]
       };
       sessions.unshift(session);
-      await persistSessionsToSupabase(supabase, sessions);
+      await persistSessionsToSupabase(sessions);
     } else if (customerName && customerName !== session.customerName) {
       session.customerName = customerName;
-      await persistSessionsToSupabase(supabase, sessions);
+      await persistSessionsToSupabase(sessions);
     }
 
     return res.status(200).json(session);

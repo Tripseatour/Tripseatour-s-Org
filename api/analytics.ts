@@ -1,7 +1,4 @@
-import { createClient } from '@supabase/supabase-js';
-
-const SUPABASE_URL = process.env.VITE_SUPABASE_URL || process.env.SUPABASE_URL || 'https://tljofqremlconawmtndd.supabase.co';
-const SUPABASE_ANON_KEY = process.env.VITE_SUPABASE_ANON_KEY || process.env.SUPABASE_ANON_KEY || 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InRsam9mcXJlbWxjb25hd210bmRkIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODY2MTE1MTYsImV4cCI6MjEwMjE4NzUxNn0.lUUYnc0jOMl6JU1SS8RLoxZu2mir70qgcO2J8kvSHn0';
+let memoryAnalytics: any = null;
 
 function getDefaultVisitorAnalytics() {
   const dailyHistory: Array<{ date: string; views: number; uniques: number }> = [];
@@ -131,33 +128,15 @@ export default async function handler(req: any, res: any) {
     return res.status(200).end();
   }
 
-  const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
-
   const loadAnalytics = async () => {
-    try {
-      const { data } = await supabase.from('app_store').select('value').eq('key', 'visitor_analytics').maybeSingle();
-      if (data && data.value) {
-        const parsed = JSON.parse(data.value);
-        if (parsed && typeof parsed.totalPageviews === 'number') {
-          return parsed;
-        }
-      }
-    } catch (e) {
-      console.warn('loadAnalytics error:', e);
+    if (!memoryAnalytics) {
+      memoryAnalytics = getDefaultVisitorAnalytics();
     }
-    return getDefaultVisitorAnalytics();
+    return memoryAnalytics;
   };
 
   const saveAnalytics = async (analytics: any) => {
-    try {
-      await supabase.from('app_store').upsert({
-        key: 'visitor_analytics',
-        value: JSON.stringify(analytics),
-        updated_at: new Date().toISOString()
-      }, { onConflict: 'key' });
-    } catch (e) {
-      console.warn('saveAnalytics error:', e);
-    }
+    memoryAnalytics = analytics;
   };
 
   try {

@@ -1,7 +1,4 @@
-import { createClient } from '@supabase/supabase-js';
-
-const SUPABASE_URL = process.env.VITE_SUPABASE_URL || process.env.SUPABASE_URL || 'https://tljofqremlconawmtndd.supabase.co';
-const SUPABASE_ANON_KEY = process.env.VITE_SUPABASE_ANON_KEY || process.env.SUPABASE_ANON_KEY || 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InRsam9mcXJlbWxjb25hd210bmRkIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODY2MTE1MTYsImV4cCI6MjEwMjE4NzUxNn0.lUUYnc0jOMl6JU1SS8RLoxZu2mir70qgcO2J8kvSHn0';
+let memorySuppliers: any[] | null = null;
 
 export const defaultSuppliers = [
   {
@@ -150,33 +147,15 @@ export default async function handler(req: any, res: any) {
     return res.status(200).end();
   }
 
-  const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
-
-  // Helper to load suppliers from Supabase
+  // Helper to load suppliers
   const loadSuppliersFromDb = async (): Promise<any[]> => {
-    try {
-      const { data } = await supabase.from('app_store').select('value').eq('key', 'suppliers').maybeSingle();
-      if (data && data.value) {
-        const parsed = JSON.parse(data.value);
-        if (Array.isArray(parsed) && parsed.length > 0) return parsed;
-      }
-    } catch (e) {
-      console.warn('loadSuppliersFromDb error:', e);
-    }
-    return defaultSuppliers;
+    if (!memorySuppliers) memorySuppliers = defaultSuppliers;
+    return memorySuppliers;
   };
 
-  // Helper to save suppliers to Supabase
+  // Helper to save suppliers
   const saveSuppliersToDb = async (suppliers: any[]) => {
-    try {
-      await supabase.from('app_store').upsert({
-        key: 'suppliers',
-        value: JSON.stringify(suppliers),
-        updated_at: new Date().toISOString()
-      }, { onConflict: 'key' });
-    } catch (e) {
-      console.warn('saveSuppliersToDb error:', e);
-    }
+    memorySuppliers = suppliers;
   };
 
   try {

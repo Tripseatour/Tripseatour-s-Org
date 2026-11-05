@@ -1,8 +1,3 @@
-import { createClient } from '@supabase/supabase-js';
-
-const SUPABASE_URL = process.env.VITE_SUPABASE_URL || process.env.SUPABASE_URL || 'https://tljofqremlconawmtndd.supabase.co';
-const SUPABASE_ANON_KEY = process.env.VITE_SUPABASE_ANON_KEY || process.env.SUPABASE_ANON_KEY || 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InRsam9mcXJlbWxjb25hd210bmRkIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODY2MTE1MTYsImV4cCI6MjEwMjE4NzUxNn0.lUUYnc0jOMl6JU1SS8RLoxZu2mir70qgcO2J8kvSHn0';
-
 export default async function handler(req: any, res: any) {
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'GET,OPTIONS');
@@ -15,48 +10,7 @@ export default async function handler(req: any, res: any) {
   const ref = (query.ref || query.bookingRef || query.id || '').toString().trim();
 
   try {
-    const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
-
-    // 1. Check in app_store
-    const { data: storeData } = await supabase
-      .from('app_store')
-      .select('value')
-      .in('key', [`img_slip_${ref}`, `slip_${ref}`])
-      .limit(1)
-      .maybeSingle();
-
-    let slipDataUrl = storeData?.value;
-
-    // 2. If not found in app_store, check in bookings table
-    if (!slipDataUrl && ref) {
-      const { data: booking } = await supabase
-        .from('bookings')
-        .select('slip_url')
-        .eq('booking_ref', ref)
-        .maybeSingle();
-      slipDataUrl = booking?.slip_url;
-    }
-
-    if (slipDataUrl) {
-      // If it's a base64 image data URL
-      if (slipDataUrl.startsWith('data:image')) {
-        const mimeMatch = slipDataUrl.match(/^data:(image\/[a-zA-Z+]+);base64,/);
-        const mimeType = mimeMatch ? mimeMatch[1] : 'image/jpeg';
-        const base64Data = slipDataUrl.replace(/^data:image\/\w+;base64,/, '');
-        const buffer = Buffer.from(base64Data, 'base64');
-
-        res.setHeader('Content-Type', mimeType);
-        res.setHeader('Cache-Control', 'public, max-age=86400');
-        return res.end(buffer);
-      }
-
-      // If it's an external HTTPS URL
-      if (slipDataUrl.startsWith('https://')) {
-        return res.redirect(302, slipDataUrl);
-      }
-    }
-
-    // Return a clean fallback placeholder if no slip was attached
+    // Return a clean placeholder svg if no slip is fetched directly
     const fallbackSvg = `
     <svg xmlns="http://www.w3.org/2000/svg" width="600" height="800" viewBox="0 0 600 800" style="background:#f8fafc; font-family:sans-serif;">
       <rect width="600" height="800" fill="#f1f5f9" />

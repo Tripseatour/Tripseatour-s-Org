@@ -1,7 +1,6 @@
 import express from 'express';
 import path from 'path';
 import fs from 'fs';
-import { createClient } from '@supabase/supabase-js';
 import { GoogleGenAI } from '@google/genai';
 import { initialTours, initialBookings, initialReviews, initialCustomers, initialSettings, mockSuppliers } from './src/data/mockData';
 import { normalizeTours } from './src/utils/tourNormalizer';
@@ -13,13 +12,6 @@ import { safeParseLlmJson } from './src/utils/llmJsonParser';
 const app = express();
 const PORT = 3000;
 const SITE_URL = process.env.APP_URL || 'https://tripseatourphuket.vercel.app';
-
-const SUPABASE_URL = process.env.VITE_SUPABASE_URL || process.env.SUPABASE_URL || 'https://tljofqremlconawmtndd.supabase.co';
-const SUPABASE_ANON_KEY = process.env.VITE_SUPABASE_ANON_KEY || process.env.SUPABASE_ANON_KEY || 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InRsam9mcXJlbWxjb25hd210bmRkIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODY2MTE1MTYsImV4cCI6MjEwMjE4NzUxNn0.lUUYnc0jOMl6JU1SS8RLoxZu2mir70qgcO2J8kvSHn0';
-
-const supabase = (SUPABASE_URL && SUPABASE_ANON_KEY)
-  ? createClient(SUPABASE_URL, SUPABASE_ANON_KEY)
-  : null;
 
 // Local Disk Persistence Helpers to ensure data is permanently saved across server restarts
 const LOCAL_DATA_DIR = path.join(process.cwd(), 'data');
@@ -319,191 +311,7 @@ let lineLogs: LineNotificationLog[] = [
 let isStateLoaded = false;
 
 async function loadStateFromSupabase() {
-  if (!supabase) return;
-  
-  // 1. Settings
-  try {
-    const { data: kvSettings } = await supabase.from('app_store').select('value').eq('key', 'settings').maybeSingle();
-    if (kvSettings && kvSettings.value) {
-      try {
-        const parsed = JSON.parse(kvSettings.value);
-        settings = { ...settings, ...parsed };
-      } catch (e) {}
-    } else {
-      const { data: settingsData } = await supabase.from('settings').select('*').limit(1);
-      if (settingsData && settingsData.length > 0) {
-        const s = settingsData[0];
-        settings = {
-          siteName: s.site_name || settings.siteName,
-          companyName: s.company_name || settings.companyName,
-          promptPayId: s.promptpay_id || settings.promptPayId,
-          promptPayName: s.promptpay_name || settings.promptPayName,
-          lineMessagingChannelAccessToken: s.line_messaging_channel_access_token || s.line_notify_token || settings.lineMessagingChannelAccessToken,
-          lineMessagingUserId: s.line_messaging_user_id || settings.lineMessagingUserId,
-          lineNotifyToken: s.line_notify_token || settings.lineNotifyToken,
-          lineOaId: s.line_oa_id || settings.lineOaId,
-          contactPhone: s.contact_phone || settings.contactPhone,
-          contactEmail: s.contact_email || settings.contactEmail,
-          address: s.address || settings.address,
-          adminPin: s.admin_pin || settings.adminPin,
-          adminGoogleEmails: s.admin_google_emails || (settings.adminGoogleEmails && settings.adminGoogleEmails.length > 0 ? settings.adminGoogleEmails : ['asmr9941@gmail.com', 'admin@tripseatour.com']),
-          tatLicenseNo: s.tat_license_no || settings.tatLicenseNo,
-          tatLicenseImgUrl: s.tat_license_img_url || settings.tatLicenseImgUrl,
-          facebookUrl: s.facebook_url || settings.facebookUrl
-        };
-      }
-    }
-    // Ensure promptPayName is set to พรทิพย์ แดงทัด if missing or previously company name
-    if (!settings.promptPayName || settings.promptPayName.includes('บริษัท')) {
-      settings.promptPayName = 'พรทิพย์ แดงทัด';
-      await persistState('settings');
-    }
-  } catch (e) {
-    console.warn('Could not load settings from Supabase:', e);
-  }
-
-  // 2. Tours
-  try {
-    const { data: kvTours } = await supabase.from('app_store').select('value').eq('key', 'tours').maybeSingle();
-    if (kvTours && kvTours.value !== undefined && kvTours.value !== null) {
-      try {
-        const loaded = normalizeTours(JSON.parse(kvTours.value));
-        if (loaded && loaded.length > 0) {
-          tours = loaded.filter(t => !deletedTourIds.has(t.id) && !deletedTourIds.has(t.slug));
-          saveLocalFile('tours.json', tours);
-        } else if (tours.length === 0) {
-          tours = normalizeTours(initialTours).filter(t => !deletedTourIds.has(t.id) && !deletedTourIds.has(t.slug));
-          saveLocalFile('tours.json', tours);
-          await persistState('tours');
-        }
-      } catch (e) {}
-    } else {
-      tours = tours.filter(t => !deletedTourIds.has(t.id) && !deletedTourIds.has(t.slug));
-    }
-  } catch (e) {
-    console.warn('Could not load tours from Supabase:', e);
-  }
-
-  // 3. Bookings
-  try {
-    const { data: kvBookings } = await supabase.from('app_store').select('value').eq('key', 'bookings').maybeSingle();
-    if (kvBookings && kvBookings.value !== undefined && kvBookings.value !== null) {
-      try {
-        bookings = JSON.parse(kvBookings.value);
-      } catch (e) {}
-    } else {
-      const { data: bkData } = await supabase.from('bookings').select('*').order('created_at', { ascending: false });
-      if (bkData && bkData.length > 0) {
-        bookings = bkData.map((b: any) => ({
-          id: b.id,
-          bookingRef: b.booking_ref,
-          tourId: b.tour_id,
-          tourTitle: b.tour_title,
-          tourImage: b.tour_image || '',
-          customerName: b.customer_name,
-          customerEmail: b.customer_email,
-          customerPhone: b.customer_phone,
-          customerLineId: b.customer_line_id,
-          nationality: b.nationality || 'Thai',
-          travelDate: b.travel_date,
-          pickupHotel: b.pickup_hotel,
-          pickupZone: b.pickup_zone,
-          roomNumber: b.room_number,
-          specialRequests: b.special_requests,
-          adults: Number(b.adults) || 1,
-          children: Number(b.children) || 0,
-          infants: Number(b.infants) || 0,
-          totalAmount: Number(b.total_amount) || 0,
-          paymentMethod: b.payment_method || 'promptpay',
-          promptPayIdUsed: b.promptpay_id_used,
-          paymentStatus: b.payment_status || 'pending',
-          orderStatus: b.order_status || 'pending',
-          slipUrl: b.slip_url,
-          slipUploadedAt: b.slip_uploaded_at,
-          paidAt: b.paid_at,
-          createdAt: b.created_at,
-          lineNotifySent: b.line_notify_sent,
-          reminderSent: b.reminder_sent,
-          notes: b.notes
-        }));
-        // Immediately persist to app_store
-        await persistState('bookings');
-      }
-    }
-  } catch (e) {
-    console.warn('Could not load bookings from Supabase:', e);
-  }
-
-  // 4. Reviews
-  try {
-    const { data: kvReviews } = await supabase.from('app_store').select('value').eq('key', 'reviews').maybeSingle();
-    if (kvReviews && kvReviews.value !== undefined && kvReviews.value !== null) {
-      try {
-        reviews = JSON.parse(kvReviews.value);
-      } catch (e) {}
-    }
-  } catch (e) {
-    console.warn('Could not load reviews from Supabase:', e);
-  }
-
-  // 5. Customers
-  try {
-    const { data: kvCustomers } = await supabase.from('app_store').select('value').eq('key', 'customers').maybeSingle();
-    if (kvCustomers && kvCustomers.value !== undefined && kvCustomers.value !== null) {
-      try {
-        customers = JSON.parse(kvCustomers.value);
-      } catch (e) {}
-    }
-  } catch (e) {
-    console.warn('Could not load customers from Supabase:', e);
-  }
-
-  // 6. Live Chat Sessions
-  try {
-    const { data: kvChat } = await supabase.from('app_store').select('value').eq('key', 'live_chat_sessions').maybeSingle();
-    if (kvChat && kvChat.value !== undefined && kvChat.value !== null) {
-      try {
-        const loaded = JSON.parse(kvChat.value);
-        if (Array.isArray(loaded)) {
-          liveChatSessions = loaded;
-        }
-      } catch (e) {}
-    }
-  } catch (e) {
-    console.warn('Could not load live chat sessions from Supabase:', e);
-  }
-
-  // 7. Suppliers
-  try {
-    const { data: kvSuppliers } = await supabase.from('app_store').select('value').eq('key', 'suppliers').maybeSingle();
-    if (kvSuppliers && kvSuppliers.value !== undefined && kvSuppliers.value !== null) {
-      try {
-        const loaded = JSON.parse(kvSuppliers.value);
-        if (Array.isArray(loaded) && loaded.length > 0) {
-          suppliers = loaded;
-          saveLocalFile('suppliers.json', suppliers);
-        }
-      } catch (e) {}
-    }
-  } catch (e) {
-    console.warn('Could not load suppliers from Supabase:', e);
-  }
-
-  // 8. Visitor Analytics
-  try {
-    const { data: kvAnalytics } = await supabase.from('app_store').select('value').eq('key', 'visitor_analytics').maybeSingle();
-    if (kvAnalytics && kvAnalytics.value !== undefined && kvAnalytics.value !== null) {
-      try {
-        const loaded = JSON.parse(kvAnalytics.value);
-        if (loaded && typeof loaded.totalPageviews === 'number') {
-          visitorAnalytics = { ...visitorAnalytics, ...loaded };
-          saveLocalFile('analytics.json', visitorAnalytics);
-        }
-      } catch (e) {}
-    }
-  } catch (e) {
-    console.warn('Could not load visitor_analytics from Supabase:', e);
-  }
+  return;
 }
 
 let syncMetadata = {
@@ -558,62 +366,13 @@ async function persistState(key: 'tours' | 'bookings' | 'settings' | 'reviews' |
     console.warn(`Local file save error for ${key}:`, localErr);
   }
 
-  // 2. Sync to Supabase if configured
-  if (!supabase) return;
-  try {
-    let val = '';
-    if (key === 'tours') val = JSON.stringify(tours);
-    if (key === 'bookings') val = JSON.stringify(bookings);
-    if (key === 'settings') val = JSON.stringify(settings);
-    if (key === 'reviews') val = JSON.stringify(reviews);
-    if (key === 'customers') val = JSON.stringify(customers);
-    if (key === 'suppliers') val = JSON.stringify(suppliers);
-    if (key === 'analytics') val = JSON.stringify(visitorAnalytics);
-
-    const targetKey = key === 'analytics' ? 'visitor_analytics' : key;
-    const { error: kvError } = await supabase.from('app_store').upsert({ key: targetKey, value: val, updated_at: new Date().toISOString() }, { onConflict: 'key' });
-    if (kvError) {
-      console.log(`[Supabase app_store upsert info for ${key}]:`, kvError.message);
-    }
-
-    if (key === 'settings') {
-      try {
-        const { error: setErr } = await supabase.from('settings').upsert({
-          id: 1,
-          site_name: settings.siteName,
-          company_name: settings.companyName,
-          promptpay_id: settings.promptPayId,
-          promptpay_name: settings.promptPayName,
-          line_messaging_channel_access_token: settings.lineMessagingChannelAccessToken,
-          line_messaging_user_id: settings.lineMessagingUserId,
-          line_notify_token: settings.lineNotifyToken,
-          line_oa_id: settings.lineOaId,
-          contact_phone: settings.contactPhone,
-          contact_email: settings.contactEmail,
-          address: settings.address,
-          admin_pin: settings.adminPin,
-          admin_google_emails: settings.adminGoogleEmails,
-          tat_license_no: settings.tatLicenseNo,
-          tat_license_img_url: settings.tatLicenseImgUrl,
-          facebook_url: settings.facebookUrl,
-          updated_at: new Date().toISOString()
-        }, { onConflict: 'id' });
-        if (setErr) console.log('[Supabase settings upsert info]:', setErr.message);
-      } catch (e) {
-        // Ignore if settings table not present
-      }
-    }
-  } catch (err) {
-    console.error(`Error persisting ${key} to Supabase:`, err);
-  }
+  // 2. Sync to Supabase - removed (local disk storage active)
+  return;
 }
 
-// Middleware to ensure persistent state is loaded on every API call on Vercel
+// Middleware to ensure persistent state is loaded on every API call
 app.use(async (req, res, next) => {
-  if (!isStateLoaded && supabase) {
-    await loadStateFromSupabase();
-    isStateLoaded = true;
-  }
+  isStateLoaded = true;
   next();
 });
 
@@ -1318,44 +1077,20 @@ app.delete('/api/bookings/:id', async (req, res) => {
   const { id } = req.params;
   bookings = bookings.filter(b => b.id !== id && b.bookingRef !== id);
   await persistState('bookings');
-  if (supabase) {
-    try {
-      await supabase.from('bookings').delete().or(`id.eq.${id},booking_ref.eq.${id}`);
-    } catch (e) {
-      console.warn('Supabase row delete info:', e);
-    }
-  }
   res.json({ success: true, id, version: syncMetadata.version, message: 'Deleted booking successfully' });
 });
 
-// Supabase Connection Status API
+// Local Storage Connection Status API
 app.get('/api/admin/supabase-status', async (req, res) => {
-  if (!supabase) {
-    return res.json({
-      connected: false,
-      url: null,
-      message: 'Supabase client is not initialized'
-    });
-  }
-
-  try {
-    const { data, error } = await supabase.from('app_store').select('key').limit(5);
-    res.json({
-      connected: !error,
-      url: SUPABASE_URL,
-      keysFound: data ? data.map((d: any) => d.key) : [],
-      error: error ? error.message : null
-    });
-  } catch (err: any) {
-    res.json({
-      connected: false,
-      url: SUPABASE_URL,
-      error: err?.message || 'Database ping error'
-    });
-  }
+  res.json({
+    connected: true,
+    storageType: 'Local Disk Persistence (data/*.json)',
+    message: 'Local disk storage active (Supabase completely removed)',
+    keysFound: ['tours', 'bookings', 'reviews', 'customers', 'suppliers', 'settings']
+  });
 });
 
-// Purge / Clean orphaned deleted data from Supabase
+// Purge / Clean orphaned deleted data from Local Storage
 app.post('/api/admin/clean-deleted-data', async (req, res) => {
   try {
     await persistState('tours');
@@ -1364,86 +1099,24 @@ app.post('/api/admin/clean-deleted-data', async (req, res) => {
     await persistState('customers');
     await persistState('settings');
 
-    if (supabase) {
-      // Clean relational table entries that don't match current bookings memory
-      const currentBookingIds = bookings.map(b => b.id);
-      const currentRefs = bookings.map(b => b.bookingRef);
-      const { data: dbBookings } = await supabase.from('bookings').select('id, booking_ref');
-      if (dbBookings && dbBookings.length > 0) {
-        for (const row of dbBookings) {
-          if (!currentBookingIds.includes(row.id) && !currentRefs.includes(row.booking_ref)) {
-            await supabase.from('bookings').delete().eq('id', row.id);
-          }
-        }
-      }
-    }
-
-    res.json({ success: true, message: 'ล้างข้อมูลเก่าที่ลบไปแล้วใน Supabase เรียบร้อยแล้ว (Sync Complete)' });
+    res.json({ success: true, message: 'ล้างข้อมูลเก่าที่ลบไปแล้วเรียบร้อยแล้ว' });
   } catch (err: any) {
-    res.status(500).json({ error: 'Failed to clean Supabase data', details: err?.message });
+    res.status(500).json({ error: 'Failed to clean data', details: err?.message });
   }
 });
 
-// Manual Backup Database API to force write state to Supabase
+// Manual Backup Database API to force write state to local disk files
 app.post('/api/admin/backup-database', async (req, res) => {
   try {
-    if (!supabase) {
-      return res.status(503).json({
-        success: false,
-        message: 'Supabase client is not initialized. Cannot perform backup.'
-      });
-    }
-
-    // Force persist all memory states
     await persistState('tours');
     await persistState('bookings');
     await persistState('reviews');
     await persistState('customers');
     await persistState('settings');
 
-    // Synchronize individual bookings inside the relational 'bookings' table for extra manual data safety
-    for (const b of bookings) {
-      try {
-        await supabase.from('bookings').upsert({
-          id: b.id,
-          booking_ref: b.bookingRef,
-          tour_id: b.tourId,
-          tour_title: b.tourTitle,
-          tour_image: b.tourImage,
-          customer_name: b.customerName,
-          customer_email: b.customerEmail,
-          customer_phone: b.customerPhone,
-          customer_line_id: b.customerLineId,
-          nationality: b.nationality || 'Thai',
-          travel_date: b.travelDate,
-          pickup_hotel: b.pickupHotel,
-          pickup_zone: b.pickupZone,
-          room_number: b.roomNumber,
-          special_requests: b.specialRequests,
-          adults: b.adults,
-          children: b.children,
-          infants: b.infants,
-          total_amount: b.totalAmount,
-          payment_method: b.paymentMethod,
-          promptpay_id_used: b.promptPayIdUsed,
-          payment_status: b.paymentStatus,
-          order_status: b.orderStatus,
-          slip_url: b.slipUrl,
-          slip_uploaded_at: b.slipUploadedAt,
-          paid_at: b.paidAt,
-          created_at: b.createdAt || new Date().toISOString(),
-          line_notify_sent: b.lineNotifySent,
-          reminder_sent: b.reminderSent,
-          notes: b.notes
-        }, { onConflict: 'id' });
-      } catch (upsertErr) {
-        console.warn(`Could not sync individual booking ${b.bookingRef} to relational DB:`, upsertErr);
-      }
-    }
-
     res.json({
       success: true,
-      message: 'สำรองข้อมูลทั้งหมดและซิงค์ความปลอดภัยไปยัง Supabase เรียบร้อยแล้ว',
+      message: 'สำรองข้อมูลลงไฟล์ระบบ Local Disk เรียบร้อยแล้ว',
       backupTime: new Date().toISOString(),
       counts: {
         tours: tours.length,
@@ -1944,14 +1617,7 @@ let liveChatSessions: LiveChatSession[] = [
 ];
 
 async function persistLiveChat() {
-  if (!supabase) return;
-  try {
-    await supabase.from('app_store').upsert({
-      key: 'live_chat_sessions',
-      value: JSON.stringify(liveChatSessions),
-      updated_at: new Date().toISOString()
-    }, { onConflict: 'key' });
-  } catch (err) {}
+  saveLocalFile('live_chat_sessions.json', liveChatSessions);
 }
 
 // --- Live Chat Endpoints ---

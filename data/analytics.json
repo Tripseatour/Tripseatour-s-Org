@@ -1,17 +1,12 @@
 {
-  "totalPageviews": 24851,
-  "totalUniqueVisitors": 9421,
-  "todayPageviews": 187,
-  "todayUniqueVisitors": 115,
-  "yesterdayPageviews": 210,
-  "yesterdayUniqueVisitors": 128,
-  "activeNow": 4,
+  "totalPageviews": 24856,
+  "totalUniqueVisitors": 9422,
+  "todayPageviews": 5,
+  "todayUniqueVisitors": 1,
+  "yesterdayPageviews": 187,
+  "yesterdayUniqueVisitors": 115,
+  "activeNow": 1,
   "dailyHistory": [
-    {
-      "date": "2026-10-17",
-      "views": 187,
-      "uniques": 120
-    },
     {
       "date": "2026-10-18",
       "views": 106,
@@ -76,12 +71,17 @@
       "date": "2026-10-30",
       "views": 141,
       "uniques": 87
+    },
+    {
+      "date": "2026-11-05",
+      "views": 5,
+      "uniques": 1
     }
   ],
   "devices": {
     "mobile": 16891,
     "desktop": 6940,
-    "tablet": 1020
+    "tablet": 1025
   },
   "topPages": [
     {
@@ -103,6 +103,11 @@
       "path": "tour-detail",
       "title": "รายละเอียดโปรแกรมทัวร์",
       "views": 2260
+    },
+    {
+      "path": "admin",
+      "title": "แดชบอร์ดแอดมิน",
+      "views": 5
     }
   ],
   "sources": [
@@ -113,7 +118,7 @@
     },
     {
       "source": "Google Search",
-      "count": 8200,
+      "count": 8205,
       "percentage": 33
     },
     {
@@ -124,7 +129,7 @@
     {
       "source": "LINE Official",
       "count": 2100,
-      "percentage": 8.5
+      "percentage": 8.4
     },
     {
       "source": "TikTok & Other",
@@ -133,6 +138,61 @@
     }
   ],
   "recentVisitors": [
+    {
+      "id": "v-eh61f3u-mvv0gpnb",
+      "timestamp": "2026-11-05T09:00:27.657Z",
+      "device": "tablet",
+      "browser": "Chrome",
+      "os": "Windows",
+      "country": "🇹🇭 ประเทศไทย",
+      "city": "Phuket / Bangkok",
+      "page": "admin",
+      "referrer": "Google Search"
+    },
+    {
+      "id": "v-eh61f3u-mvv0gpnb",
+      "timestamp": "2026-11-05T09:00:12.653Z",
+      "device": "tablet",
+      "browser": "Chrome",
+      "os": "Windows",
+      "country": "🇹🇭 ประเทศไทย",
+      "city": "Phuket / Bangkok",
+      "page": "admin",
+      "referrer": "Google Search"
+    },
+    {
+      "id": "v-eh61f3u-mvv0gpnb",
+      "timestamp": "2026-11-05T09:00:07.063Z",
+      "device": "tablet",
+      "browser": "Chrome",
+      "os": "Windows",
+      "country": "🇹🇭 ประเทศไทย",
+      "city": "Phuket / Bangkok",
+      "page": "admin",
+      "referrer": "Google Search"
+    },
+    {
+      "id": "v-eh61f3u-mvv0gpnb",
+      "timestamp": "2026-11-05T08:59:57.664Z",
+      "device": "tablet",
+      "browser": "Chrome",
+      "os": "Windows",
+      "country": "🇹🇭 ประเทศไทย",
+      "city": "Phuket / Bangkok",
+      "page": "admin",
+      "referrer": "Google Search"
+    },
+    {
+      "id": "v-eh61f3u-mvv0gpnb",
+      "timestamp": "2026-11-05T08:59:56.893Z",
+      "device": "tablet",
+      "browser": "Chrome",
+      "os": "Windows",
+      "country": "🇹🇭 ประเทศไทย",
+      "city": "Phuket / Bangkok",
+      "page": "admin",
+      "referrer": "Google Search"
+    },
     {
       "id": "v-test-123",
       "timestamp": "2026-10-30T13:28:45.640Z",
@@ -162,5 +222,27 @@
       "referrer": "Facebook"
     }
   ],
-  "lastUpdated": "2026-10-30T13:28:45.640Z"
+  "lastUpdated": "2026-11-05T09:00:27.657Z",
+  "liveSessions": [
+    {
+      "visitorId": "v-eh61f3u-mvv0gpnb",
+      "ipMasked": "2001:fb1:10a:d9e3:98cd:e45e:d635:7cf8",
+      "country": "🇹🇭 ประเทศไทย",
+      "countryCode": "TH",
+      "city": "Phuket / Bangkok",
+      "device": "tablet",
+      "browser": "Chrome",
+      "os": "Windows",
+      "screen": "861x488",
+      "language": "th-TH",
+      "timezone": "Asia/Bangkok",
+      "currentPage": "admin",
+      "pageTitle": "แดชบอร์ดแอดมิน",
+      "referrer": "Google Search",
+      "firstSeen": "2026-11-05T08:59:56.893Z",
+      "lastPing": "2026-11-05T09:00:27.657Z",
+      "lastPingSecondsAgo": 0,
+      "pageviewsCount": 5
+    }
+  ]
 }
