@@ -147,6 +147,8 @@ export const BookingModal: React.FC<BookingModalProps> = ({
         isForeigner,
         selectedAddons: (tour?.addons || []).filter(a => selectedAddonIds.includes(a.id)),
         totalAmount,
+        slipUrl: slipFile || undefined,
+        paymentStatus: slipFile ? 'slip_uploaded' : 'pending',
       };
 
       let bookingData: Booking;
@@ -223,43 +225,15 @@ export const BookingModal: React.FC<BookingModalProps> = ({
         bookingData.slipUrl = slipFile;
         bookingData.slipUploadedAt = new Date().toISOString();
 
-        // Cache image to server for public LINE delivery
+        // 2. Cache image to server for public LINE delivery
         fetch('/api/cache-image', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
             key: `slip_${bookingData.bookingRef}`,
-            dataUrl: slipFile
+            dataUrl: slipFile,
+            mimeType: slipFile.includes('image/png') ? 'image/png' : 'image/jpeg'
           })
-        }).catch(() => {});
-
-        // 1. Double-write slip info direct to Supabase
-        await supabaseApi.updateBooking(bookingData.id, {
-          paymentStatus: 'slip_uploaded',
-          slipUrl: slipFile,
-          slipUploadedAt: bookingData.slipUploadedAt
-        }).catch((dbErr) => {
-          console.warn('Direct Supabase update for slip failed, updating local fallback copy:', dbErr);
-          try {
-            const savedFallbacks = localStorage.getItem('local_fallback_bookings');
-            if (savedFallbacks) {
-              const list = JSON.parse(savedFallbacks);
-              const idx = list.findIndex((b: any) => b.id === bookingData.id);
-              if (idx !== -1) {
-                list[idx].paymentStatus = 'slip_uploaded';
-                list[idx].slipUrl = slipFile;
-                list[idx].slipUploadedAt = bookingData.slipUploadedAt;
-                localStorage.setItem('local_fallback_bookings', JSON.stringify(list));
-              }
-            }
-          } catch (storageErr) {}
-        });
-
-        // 2. Fallback push to API in background
-        await fetch(`/api/bookings/${bookingData.id}/upload-slip`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ slipUrl: slipFile }),
         }).catch(() => {});
       }
 

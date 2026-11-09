@@ -2,6 +2,7 @@ import express from 'express';
 import path from 'path';
 import fs from 'fs';
 import { GoogleGenAI } from '@google/genai';
+import QRCode from 'qrcode';
 import { initialTours, initialBookings, initialReviews, initialCustomers, initialSettings, mockSuppliers } from './src/data/mockData';
 import { normalizeTours } from './src/utils/tourNormalizer';
 import { Tour, Booking, Review, Customer, AppSettings, LineNotificationLog, SalesStats, AdminUser, Supplier, VisitorAnalytics, DailyVisitorPoint, VisitorPingPayload, LiveSession } from './src/types';
@@ -90,10 +91,28 @@ const ai = new GoogleGenAI({
 app.use(express.json({ limit: '50mb' }));
 app.use(express.urlencoded({ limit: '50mb', extended: true }));
 
-// Tombstone set for permanently deleted tours
-let deletedTourIds = new Set<string>(readLocalFile<string[]>('deleted_tour_ids.json', []));
+// Dynamic live host tracking for LINE image URLs
+let liveHostUrl = SITE_URL;
+app.use((req, res, next) => {
+  const forwardedHost = (req.headers['x-forwarded-host'] || req.headers.host || '').toString().split(',')[0].trim();
+  const forwardedProto = (req.headers['x-forwarded-proto'] || req.protocol || 'https').toString().split(',')[0].trim();
+  if (forwardedHost && !forwardedHost.includes('localhost') && !forwardedHost.includes('127.0.0.1')) {
+    liveHostUrl = `https://${forwardedHost}`;
+  }
+  next();
+});
 
-// Authoritative Memory DB State with local disk and Supabase persistence
+// Deduplication map to prevent duplicate LINE notification messages
+const recentLineNotifications = new Map<string, number>();
+
+// Tombstone sets for permanently deleted items to prevent bounce-back
+let deletedTourIds = new Set<string>(readLocalFile<string[]>('deleted_tour_ids.json', []));
+let deletedBookingIds = new Set<string>(readLocalFile<string[]>('deleted_booking_ids.json', []));
+let deletedCustomerIds = new Set<string>(readLocalFile<string[]>('deleted_customer_ids.json', []));
+let deletedReviewIds = new Set<string>(readLocalFile<string[]>('deleted_review_ids.json', []));
+let deletedSupplierIds = new Set<string>(readLocalFile<string[]>('deleted_supplier_ids.json', []));
+
+// Authoritative Memory DB State with local disk persistence
 let tours: Tour[] = (() => {
   const localSaved = readLocalFile<Tour[] | null>('tours.json', null);
   if (localSaved && Array.isArray(localSaved) && localSaved.length > 0) {
@@ -103,10 +122,39 @@ let tours: Tour[] = (() => {
   saveLocalFile('tours.json', defaults);
   return defaults;
 })();
-let bookings: Booking[] = readLocalFile<Booking[]>('bookings.json', [...initialBookings]);
-let reviews: Review[] = readLocalFile<Review[]>('reviews.json', [...initialReviews]);
-let customers: Customer[] = readLocalFile<Customer[]>('customers.json', [...initialCustomers]);
-let suppliers: Supplier[] = readLocalFile<Supplier[]>('suppliers.json', [...mockSuppliers]);
+
+let bookings: Booking[] = (() => {
+  const localSaved = readLocalFile<Booking[] | null>('bookings.json', null);
+  const source = (localSaved && Array.isArray(localSaved)) ? localSaved : [...initialBookings];
+  const filtered = source.filter(b => !deletedBookingIds.has(b.id) && !deletedBookingIds.has(b.bookingRef));
+  saveLocalFile('bookings.json', filtered);
+  return filtered;
+})();
+
+let reviews: Review[] = (() => {
+  const localSaved = readLocalFile<Review[] | null>('reviews.json', null);
+  const source = (localSaved && Array.isArray(localSaved)) ? localSaved : [...initialReviews];
+  const filtered = source.filter(r => !deletedReviewIds.has(r.id));
+  saveLocalFile('reviews.json', filtered);
+  return filtered;
+})();
+
+let customers: Customer[] = (() => {
+  const localSaved = readLocalFile<Customer[] | null>('customers.json', null);
+  const source = (localSaved && Array.isArray(localSaved)) ? localSaved : [...initialCustomers];
+  const filtered = source.filter(c => !deletedCustomerIds.has(c.id));
+  saveLocalFile('customers.json', filtered);
+  return filtered;
+})();
+
+let suppliers: Supplier[] = (() => {
+  const localSaved = readLocalFile<Supplier[] | null>('suppliers.json', null);
+  const source = (localSaved && Array.isArray(localSaved)) ? localSaved : [...mockSuppliers];
+  const filtered = source.filter(s => !deletedSupplierIds.has(s.id));
+  saveLocalFile('suppliers.json', filtered);
+  return filtered;
+})();
+
 let settings: AppSettings = readLocalFile<AppSettings>('settings.json', { ...initialSettings });
 
 function getDefaultVisitorAnalytics(): VisitorAnalytics {
@@ -351,14 +399,18 @@ async function persistState(key: 'tours' | 'bookings' | 'settings' | 'reviews' |
       saveLocalFile('deleted_tour_ids.json', Array.from(deletedTourIds));
     } else if (key === 'bookings') {
       saveLocalFile('bookings.json', bookings);
+      saveLocalFile('deleted_booking_ids.json', Array.from(deletedBookingIds));
     } else if (key === 'settings') {
       saveLocalFile('settings.json', settings);
     } else if (key === 'reviews') {
       saveLocalFile('reviews.json', reviews);
+      saveLocalFile('deleted_review_ids.json', Array.from(deletedReviewIds));
     } else if (key === 'customers') {
       saveLocalFile('customers.json', customers);
+      saveLocalFile('deleted_customer_ids.json', Array.from(deletedCustomerIds));
     } else if (key === 'suppliers') {
       saveLocalFile('suppliers.json', suppliers);
+      saveLocalFile('deleted_supplier_ids.json', Array.from(deletedSupplierIds));
     } else if (key === 'analytics') {
       saveLocalFile('analytics.json', visitorAnalytics);
     }
@@ -385,6 +437,30 @@ async function sendLineNotification(
   ticketImageUrl?: string,
   slipImageUrl?: string
 ) {
+  // Deduplicate rapid repeat calls for the same booking and event within 30 seconds
+  if (bookingRef && bookingRef !== 'N/A' && bookingRef !== 'TEST' && bookingRef !== 'GROUP-ID-CHECK') {
+    const dedupKey = `${bookingRef}_${type}`;
+    const lastSentTime = recentLineNotifications.get(dedupKey);
+    const now = Date.now();
+    if (lastSentTime && now - lastSentTime < 30000) {
+      console.log(`[LINE] Skipping duplicate notification for ${dedupKey} (sent ${Math.round((now - lastSentTime) / 1000)}s ago)`);
+      return {
+        id: `log-${Date.now()}`,
+        bookingRef,
+        type,
+        message: `${message} (ข้ามการส่งซ้ำ: เพิ่งส่งไปเมื่อสักครู่)`,
+        status: 'sent' as const,
+        timestamp: new Date().toISOString()
+      };
+    }
+    recentLineNotifications.set(dedupKey, now);
+    if (recentLineNotifications.size > 100) {
+      for (const [k, t] of recentLineNotifications.entries()) {
+        if (now - t > 300000) recentLineNotifications.delete(k);
+      }
+    }
+  }
+
   const logItem: LineNotificationLog = {
     id: `log-${Date.now()}`,
     bookingRef,
@@ -404,27 +480,30 @@ async function sendLineNotification(
   if (channelToken && !channelToken.startsWith('SIMULATED')) {
     try {
       const messagesPayload: any[] = [];
-      const hostUrl = SITE_URL || 'https://tripseatourphuket.vercel.app';
+      const rawHost = liveHostUrl || SITE_URL || 'https://tripseatourphuket.vercel.app';
+      const hostUrl = rawHost.startsWith('https://') 
+        ? rawHost 
+        : (rawHost.startsWith('http://') ? rawHost.replace('http://', 'https://') : `https://${rawHost}`);
 
-      // 1. E-Ticket Image
-      const effectiveTicketUrl = (ticketImageUrl && ticketImageUrl.startsWith('https://'))
-        ? ticketImageUrl
-        : (ticketImageUrl || (bookingRef && bookingRef.startsWith('TST-')) ? `${hostUrl}/api/ticket-image?ref=${bookingRef}` : null);
+      const booking = bookings.find(b => b.bookingRef === bookingRef || b.id === bookingRef);
 
-      if (effectiveTicketUrl) {
-        messagesPayload.push({
-          type: 'image',
-          originalContentUrl: effectiveTicketUrl,
-          previewImageUrl: effectiveTicketUrl
-        });
+      // 1. Slip Image (Payment slip uploaded by customer)
+      let effectiveSlipUrl: string | null = null;
+      const hasSlipData = Boolean(
+        (slipImageUrl && slipImageUrl.trim().length > 0) ||
+        (booking?.slipUrl && booking.slipUrl.trim().length > 0) ||
+        memoryServerImages.has(`slip_${bookingRef}`)
+      );
+
+      if (hasSlipData) {
+        if (slipImageUrl && slipImageUrl.startsWith('https://') && !slipImageUrl.includes('localhost')) {
+          effectiveSlipUrl = slipImageUrl;
+        } else if (booking?.slipUrl && booking.slipUrl.startsWith('https://') && !booking.slipUrl.includes('localhost')) {
+          effectiveSlipUrl = booking.slipUrl;
+        } else if (bookingRef && bookingRef.startsWith('TST-')) {
+          effectiveSlipUrl = `${hostUrl}/api/slip-image?ref=${bookingRef}`;
+        }
       }
-
-      // 2. Slip Image
-      const effectiveSlipUrl = (slipImageUrl && slipImageUrl.startsWith('https://'))
-        ? slipImageUrl
-        : (slipImageUrl || ((type === 'NEW_ORDER' || type === 'PAYMENT_VERIFIED') && bookingRef && bookingRef.startsWith('TST-'))
-            ? `${hostUrl}/api/slip-image?ref=${bookingRef}` 
-            : null);
 
       if (effectiveSlipUrl) {
         messagesPayload.push({
@@ -434,16 +513,27 @@ async function sendLineNotification(
         });
       }
 
-      // 3. Fallback Tour Thumbnail (if no ticket or slip attached)
-      if (messagesPayload.length === 0 && imageUrl && imageUrl.startsWith('https://')) {
+      // 2. Ticket Voucher / Tour Image (High-res photo of tour or verified ticket)
+      let effectiveTicketUrl: string | null = null;
+      if (ticketImageUrl && ticketImageUrl.startsWith('https://') && !ticketImageUrl.includes('localhost')) {
+        effectiveTicketUrl = ticketImageUrl;
+      } else if (imageUrl && imageUrl.startsWith('https://') && !imageUrl.includes('localhost')) {
+        effectiveTicketUrl = imageUrl;
+      } else if (booking?.tourImage && booking.tourImage.startsWith('https://') && !booking.tourImage.includes('localhost')) {
+        effectiveTicketUrl = booking.tourImage;
+      } else if (bookingRef && bookingRef.startsWith('TST-')) {
+        effectiveTicketUrl = `${hostUrl}/api/ticket-image?ref=${bookingRef}`;
+      }
+
+      if (effectiveTicketUrl) {
         messagesPayload.push({
           type: 'image',
-          originalContentUrl: imageUrl,
-          previewImageUrl: imageUrl
+          originalContentUrl: effectiveTicketUrl,
+          previewImageUrl: effectiveTicketUrl
         });
       }
 
-      // 4. Detailed Text Message
+      // 3. Detailed Text Message
       messagesPayload.push({
         type: 'text',
         text: message
@@ -485,16 +575,18 @@ async function sendLineNotification(
         const errorText = await response.text();
         console.error('LINE Messaging API Error:', response.status, errorText);
 
-        // Fallback to text-only push if images failed
+        // Fallback to text-only push if image proxy unreachable from LINE
         try {
-          const fallbackRes = await fetch('https://api.line.me/v2/bot/message/push', {
+          const fallbackRes = await fetch(targetId ? 'https://api.line.me/v2/bot/message/push' : 'https://api.line.me/v2/bot/message/broadcast', {
             method: 'POST',
             headers: {
               'Content-Type': 'application/json',
               'Authorization': `Bearer ${channelToken.trim()}`
             },
-            body: JSON.stringify({
+            body: JSON.stringify(targetId ? {
               to: targetId.trim(),
+              messages: [{ type: 'text', text: message }]
+            } : {
               messages: [{ type: 'text', text: message }]
             })
           });
@@ -578,6 +670,18 @@ app.get('/api/tours', (req, res) => {
 // Endpoint to retrieve deleted tour IDs
 app.get('/api/tours/deleted-ids', (req, res) => {
   res.json({ deletedTourIds: Array.from(deletedTourIds) });
+});
+
+// Endpoint to retrieve all permanently deleted IDs across all entities
+app.get('/api/deleted-ids', (req, res) => {
+  res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
+  res.json({
+    deletedTourIds: Array.from(deletedTourIds),
+    deletedBookingIds: Array.from(deletedBookingIds),
+    deletedCustomerIds: Array.from(deletedCustomerIds),
+    deletedReviewIds: Array.from(deletedReviewIds),
+    deletedSupplierIds: Array.from(deletedSupplierIds)
+  });
 });
 
 app.post('/api/tours', async (req, res) => {
@@ -693,7 +797,8 @@ app.post('/api/tours/reset-default', async (req, res) => {
 
 // --- Suppliers API (CRUD & Bulk JSON Backup / Restore) ---
 app.get('/api/suppliers', (req, res) => {
-  res.json(suppliers);
+  const activeSuppliers = suppliers.filter(s => !deletedSupplierIds.has(s.id));
+  res.json(activeSuppliers);
 });
 
 app.post('/api/suppliers', async (req, res) => {
@@ -715,6 +820,7 @@ app.post('/api/suppliers', async (req, res) => {
     createdAt: req.body.createdAt || new Date().toISOString().split('T')[0]
   };
 
+  deletedSupplierIds.delete(newSup.id);
   const existingIdx = suppliers.findIndex(s => s.id === newSup.id || (s.code && s.code === newSup.code));
   if (existingIdx !== -1) {
     suppliers[existingIdx] = { ...suppliers[existingIdx], ...newSup };
@@ -722,6 +828,7 @@ app.post('/api/suppliers', async (req, res) => {
     suppliers.unshift(newSup);
   }
 
+  suppliers = suppliers.filter(s => !deletedSupplierIds.has(s.id));
   await persistState('suppliers');
   res.json({ ...(existingIdx !== -1 ? suppliers[existingIdx] : newSup), version: syncMetadata.version });
 });
@@ -731,6 +838,7 @@ app.put('/api/suppliers/:id', async (req, res) => {
   const index = suppliers.findIndex(s => s.id === id);
   if (index !== -1) {
     suppliers[index] = { ...suppliers[index], ...req.body };
+    suppliers = suppliers.filter(s => !deletedSupplierIds.has(s.id));
     await persistState('suppliers');
     res.json({ ...suppliers[index], version: syncMetadata.version });
   } else {
@@ -740,9 +848,15 @@ app.put('/api/suppliers/:id', async (req, res) => {
 
 app.delete('/api/suppliers/:id', async (req, res) => {
   const { id } = req.params;
-  suppliers = suppliers.filter(s => s.id !== id);
+  deletedSupplierIds.add(id);
+  suppliers = suppliers.filter(s => s.id !== id && !deletedSupplierIds.has(s.id));
   await persistState('suppliers');
-  res.json({ success: true, id, version: syncMetadata.version });
+  res.json({
+    success: true,
+    id,
+    deletedSupplierIds: Array.from(deletedSupplierIds),
+    version: syncMetadata.version
+  });
 });
 
 app.post('/api/suppliers/save-all', async (req, res) => {
@@ -751,7 +865,7 @@ app.post('/api/suppliers/save-all', async (req, res) => {
     if (!Array.isArray(incoming)) {
       return res.status(400).json({ error: 'suppliers payload must be an array' });
     }
-    suppliers = incoming;
+    suppliers = incoming.filter((s: Supplier) => !deletedSupplierIds.has(s.id));
     await persistState('suppliers');
     res.json({
       success: true,
@@ -899,7 +1013,8 @@ app.all('/api/extract-tour-from-image', async (req, res) => {
 
 // --- Bookings ---
 app.get('/api/bookings', (req, res) => {
-  res.json(bookings);
+  const activeBookings = bookings.filter(b => !deletedBookingIds.has(b.id) && !deletedBookingIds.has(b.bookingRef));
+  res.json(activeBookings);
 });
 
 app.post('/api/bookings', async (req, res) => {
@@ -945,7 +1060,19 @@ app.post('/api/bookings', async (req, res) => {
     lineNotifySent: false
   };
 
+  // Untombstone booking ID and ref
+  deletedBookingIds.delete(newBooking.id);
+  deletedBookingIds.delete(bookingRef);
+
   bookings.unshift(newBooking);
+
+  // Cache slip image in memory immediately if uploaded
+  if (hasSlip && slipUrl) {
+    const mimeMatch = slipUrl.match(/^data:(image\/[a-zA-Z+]+);base64,/);
+    const mimeType = mimeMatch ? mimeMatch[1] : 'image/jpeg';
+    memoryServerImages.set(`slip_${bookingRef}`, { data: slipUrl, mimeType });
+    memoryServerImages.set(`slip_${newBooking.id}`, { data: slipUrl, mimeType });
+  }
 
   // Auto update / save Customer CRM
   let custIndex = customers.findIndex(c => c.email === customerEmail || c.phone === customerPhone);
@@ -968,18 +1095,30 @@ app.post('/api/bookings', async (req, res) => {
     });
   }
 
-  // LINE Notification Alert
-  const lineMsg = `\n🆕 [มีคำสั่งจองใหม่${hasSlip ? ' (แนบสลิปแล้ว)' : ''}!] ${bookingRef}\n` +
+  // LINE Notification Alert (Single authoritative send upon creation)
+  const rawHost = liveHostUrl || SITE_URL || 'https://tripseatourphuket.vercel.app';
+  const hostUrl = rawHost.startsWith('https://') 
+    ? rawHost 
+    : (rawHost.startsWith('http://') ? rawHost.replace('http://', 'https://') : `https://${rawHost}`);
+
+  const lineMsg = `🔔 [มีคำสั่งจองใหม่${hasSlip ? ' (แนบสลิปแล้ว)' : ''}!] ${bookingRef}\n` +
     `📍 ทัวร์: ${newBooking.tourTitle}\n` +
     `👤 ลูกค้า: ${customerName} (${customerPhone})\n` +
     `📅 วันเดินทาง: ${travelDate}\n` +
-    `🏨 โรงแรม: ${pickupHotel}\n` +
-    `👥 จำนวน: ผู้ใหญ่ ${adults} / เด็ก ${children}\n` +
-    `💰 ยอดรวม: ${totalAmount.toLocaleString()} บาท (PromptPay QR)\n` +
-    `📄 สลิปโอนเงิน: ${hasSlip ? 'แนบสลิปเรียบร้อย' : 'รอแนบสลิป'}\n` +
-    `🌐 เว็บไซต์: ${SITE_URL}`;
+    `🏨 โรงแรม: ${pickupHotel}${roomNumber ? ` (ห้อง ${roomNumber})` : ''} (โซน: ${pickupZone || 'ทั่วไป'})\n` +
+    `👥 จำนวน: ผู้ใหญ่ ${adults} ท่าน / เด็ก ${children} ท่าน\n` +
+    `💰 ยอดรวม: ฿${totalAmount.toLocaleString()} (PromptPay QR)\n` +
+    `📄 สลิปโอนเงิน: ${hasSlip ? 'แนบสลิปเรียบร้อย (ดูรูปด้านบน)' : 'ยังไม่แนบสลิป'}\n` +
+    `🌐 เว็บไซต์: ${hostUrl}`;
 
-  await sendLineNotification(lineMsg, bookingRef, hasSlip ? 'NEW_ORDER' : 'NEW_ORDER', (hasSlip ? slipUrl : undefined) || newBooking.tourImage);
+  await sendLineNotification(
+    lineMsg, 
+    bookingRef, 
+    'NEW_ORDER', 
+    newBooking.tourImage, 
+    newBooking.tourImage, 
+    hasSlip ? `${hostUrl}/api/slip-image?ref=${bookingRef}` : undefined
+  );
   newBooking.lineNotifySent = true;
 
   await persistState('bookings');
@@ -997,18 +1136,42 @@ app.post('/api/bookings/:id/upload-slip', async (req, res) => {
     return res.status(404).json({ error: 'Booking not found' });
   }
 
+  if (slipUrl) {
+    const mimeMatch = slipUrl.match(/^data:(image\/[a-zA-Z+]+);base64,/);
+    const mimeType = mimeMatch ? mimeMatch[1] : 'image/jpeg';
+    memoryServerImages.set(`slip_${booking.bookingRef}`, { data: slipUrl, mimeType });
+    memoryServerImages.set(`slip_${booking.id}`, { data: slipUrl, mimeType });
+  }
+
+  const wasAlreadySlipUploaded = booking.paymentStatus === 'slip_uploaded' && Boolean(booking.slipUrl);
   booking.slipUrl = slipUrl || 'https://images.unsplash.com/photo-1559526324-4b87b5e36e44?auto=format&fit=crop&w=400&q=80';
   booking.paymentStatus = 'slip_uploaded';
   booking.slipUploadedAt = new Date().toISOString();
 
-  const msg = `\n📄 [สลิปแจ้งชำระเงิน] ${booking.bookingRef}\n` +
-    `👤 ${booking.customerName} อัปโหลดสลิปเรียบร้อยแล้ว\n` +
-    `💰 ยอดชำระ: ${booking.totalAmount.toLocaleString()} บาท\n` +
-    `🌐 ตรวจสอบที่: ${SITE_URL}`;
+  // Only send notification if not already notified for this slip
+  if (!wasAlreadySlipUploaded && !booking.lineNotifySent) {
+    const rawHost = liveHostUrl || SITE_URL || 'https://tripseatourphuket.vercel.app';
+    const hostUrl = rawHost.startsWith('https://') 
+      ? rawHost 
+      : (rawHost.startsWith('http://') ? rawHost.replace('http://', 'https://') : `https://${rawHost}`);
 
-  await sendLineNotification(msg, booking.bookingRef, 'NEW_ORDER', booking.slipUrl || booking.tourImage);
+    const msg = `📄 [สลิปแจ้งชำระเงิน] ${booking.bookingRef}\n` +
+      `👤 ${booking.customerName} อัปโหลดสลิปเรียบร้อยแล้ว\n` +
+      `💰 ยอดชำระ: ฿${booking.totalAmount.toLocaleString()}\n` +
+      `🌐 ตรวจสอบที่: ${hostUrl}`;
+
+    await sendLineNotification(
+      msg, 
+      booking.bookingRef, 
+      'NEW_ORDER', 
+      booking.tourImage, 
+      booking.tourImage, 
+      `${hostUrl}/api/slip-image?ref=${booking.bookingRef}`
+    );
+    booking.lineNotifySent = true;
+  }
+
   await persistState('bookings');
-
   res.json({ ...booking, version: syncMetadata.version });
 });
 
@@ -1075,9 +1238,19 @@ app.put('/api/bookings/:id/status', async (req, res) => {
 // Delete Booking Order API
 app.delete('/api/bookings/:id', async (req, res) => {
   const { id } = req.params;
-  bookings = bookings.filter(b => b.id !== id && b.bookingRef !== id);
+  const target = bookings.find(b => b.id === id || b.bookingRef === id);
+  deletedBookingIds.add(id);
+  if (target?.id) deletedBookingIds.add(target.id);
+  if (target?.bookingRef) deletedBookingIds.add(target.bookingRef);
+  bookings = bookings.filter(b => b.id !== id && b.bookingRef !== id && !deletedBookingIds.has(b.id));
   await persistState('bookings');
-  res.json({ success: true, id, version: syncMetadata.version, message: 'Deleted booking successfully' });
+  res.json({
+    success: true,
+    id,
+    deletedBookingIds: Array.from(deletedBookingIds),
+    version: syncMetadata.version,
+    message: 'Deleted booking successfully'
+  });
 });
 
 // Local Storage Connection Status API
@@ -1097,6 +1270,7 @@ app.post('/api/admin/clean-deleted-data', async (req, res) => {
     await persistState('bookings');
     await persistState('reviews');
     await persistState('customers');
+    await persistState('suppliers');
     await persistState('settings');
 
     res.json({ success: true, message: 'ล้างข้อมูลเก่าที่ลบไปแล้วเรียบร้อยแล้ว' });
@@ -1136,7 +1310,8 @@ app.post('/api/admin/backup-database', async (req, res) => {
 
 // --- Reviews Management API ---
 app.get('/api/reviews', (req, res) => {
-  res.json(reviews);
+  const activeReviews = reviews.filter(r => !deletedReviewIds.has(r.id));
+  res.json(activeReviews);
 });
 
 app.post('/api/reviews', async (req, res) => {
@@ -1221,14 +1396,16 @@ app.put('/api/reviews/:id', async (req, res) => {
 
 app.delete('/api/reviews/:id', async (req, res) => {
   const { id } = req.params;
-  const initialLen = reviews.length;
-  reviews = reviews.filter(r => r.id !== id);
-  if (reviews.length < initialLen) {
-    await persistState('reviews');
-    res.json({ success: true, id, version: syncMetadata.version, message: 'Review deleted successfully' });
-  } else {
-    res.status(404).json({ error: 'Review not found' });
-  }
+  deletedReviewIds.add(id);
+  reviews = reviews.filter(r => r.id !== id && !deletedReviewIds.has(r.id));
+  await persistState('reviews');
+  res.json({
+    success: true,
+    id,
+    deletedReviewIds: Array.from(deletedReviewIds),
+    version: syncMetadata.version,
+    message: 'Review deleted successfully'
+  });
 });
 
 // --- AI Review Reply Generator (Powered by Gemini AI) ---
@@ -1770,7 +1947,8 @@ app.post('/api/livechat/delete', async (req, res) => {
 
 // --- Customers ---
 app.get('/api/customers', (req, res) => {
-  res.json(customers);
+  const activeCustomers = customers.filter(c => !deletedCustomerIds.has(c.id));
+  res.json(activeCustomers);
 });
 
 app.put('/api/customers/:id', async (req, res) => {
@@ -1784,6 +1962,7 @@ app.put('/api/customers/:id', async (req, res) => {
     if (lineId !== undefined) cust.lineId = lineId;
     if (nationality !== undefined) cust.nationality = nationality;
     
+    customers = customers.filter(c => !deletedCustomerIds.has(c.id));
     await persistState('customers');
     res.json({ ...cust, version: syncMetadata.version });
   } else {
@@ -1793,9 +1972,16 @@ app.put('/api/customers/:id', async (req, res) => {
 
 app.delete('/api/customers/:id', async (req, res) => {
   const { id } = req.params;
-  customers = customers.filter(c => c.id !== id);
+  deletedCustomerIds.add(id);
+  customers = customers.filter(c => c.id !== id && !deletedCustomerIds.has(c.id));
   await persistState('customers');
-  res.json({ success: true, id, version: syncMetadata.version, message: 'Customer deleted successfully' });
+  res.json({
+    success: true,
+    id,
+    deletedCustomerIds: Array.from(deletedCustomerIds),
+    version: syncMetadata.version,
+    message: 'Customer deleted successfully'
+  });
 });
 
 app.post('/api/customers/save-all', async (req, res) => {
@@ -1804,7 +1990,7 @@ app.post('/api/customers/save-all', async (req, res) => {
     if (!Array.isArray(incoming)) {
       return res.status(400).json({ error: 'customers payload must be an array' });
     }
-    customers = incoming;
+    customers = incoming.filter((c: Customer) => !deletedCustomerIds.has(c.id));
     await persistState('customers');
     res.json({
       success: true,
@@ -2228,7 +2414,7 @@ app.post('/api/cache-image', async (req, res) => {
   res.json({ success: true, key });
 });
 
-// Ticket Image Endpoint
+// Ticket Image Endpoint - Guarantees valid PNG or JPEG binary response (LINE rejects SVG)
 app.get(['/api/ticket-image', '/api/ticket-image/:ref'], async (req, res) => {
   const ref = (req.params.ref || req.query.ref || req.query.bookingRef || 'TEST').toString().trim();
   
@@ -2242,186 +2428,52 @@ app.get(['/api/ticket-image', '/api/ticket-image/:ref'], async (req, res) => {
     return res.end(buffer);
   }
 
-  // 2. Query booking details to render official paper voucher replica
+  // 2. Query booking details
   const booking = bookings.find(b => b.bookingRef === ref || b.id === ref);
-  const tourTitle = (booking?.tourTitle || 'เกาะพีพี มายา ไข่ (เรือสปีดโบ๊ท VIP)').slice(0, 38);
-  const customerName = (booking?.customerName || 'ลูกค้าทริปภูเก็ต').slice(0, 32);
-  const customerPhone = booking?.customerPhone || '08X-XXX-XXXX';
-  const travelDate = booking?.travelDate || new Date().toISOString().split('T')[0];
-  const bookingDate = booking?.createdAt ? new Date(booking.createdAt).toLocaleDateString('th-TH') : new Date().toLocaleDateString('th-TH');
-  const pickupHotel = ((booking?.pickupHotel || 'โรงแรมในภูเก็ต') + (booking?.roomNumber ? ` (ห้อง ${booking.roomNumber})` : '')).slice(0, 50);
-  const sendBackHotel = ((booking?.sendBackHotel || booking?.pickupHotel || 'โรงแรมในภูเก็ต')).slice(0, 50);
-  const adults = booking?.adults || 1;
-  const children = booking?.children || 0;
-  const infants = booking?.infants || 0;
-  const totalAmount = booking?.totalAmount ? Number(booking.totalAmount).toLocaleString() : '0';
-  const pickupTime = booking?.pickupTime || '07:30 - 08:00 น.';
-  const nationality = booking?.nationality || 'Thai / -';
-  const remark = (booking?.specialRequests || booking?.notes || '-').slice(0, 60);
 
-  const svg = `
-  <svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" width="920" height="650" viewBox="0 0 920 650" style="background:#f8fafc; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;">
-    <defs>
-      <filter id="cardShadow" x="-3%" y="-3%" width="106%" height="106%">
-        <feDropShadow dx="0" dy="4" stdDeviation="6" flood-color="#000000" flood-opacity="0.12" />
-      </filter>
-    </defs>
+  // 3. If tourImage is an HTTPS JPEG/PNG URL, stream it as binary image
+  if (booking?.tourImage && booking.tourImage.startsWith('https://')) {
+    try {
+      const imgRes = await fetch(booking.tourImage);
+      if (imgRes.ok) {
+        const buffer = Buffer.from(await imgRes.arrayBuffer());
+        res.setHeader('Content-Type', imgRes.headers.get('content-type') || 'image/jpeg');
+        res.setHeader('Cache-Control', 'public, max-age=86400');
+        return res.end(buffer);
+      }
+    } catch {}
+  }
 
-    <!-- White Ticket Card (A5 Landscape) -->
-    <rect x="15" y="15" width="890" height="620" rx="12" fill="#ffffff" stroke="#0f172a" stroke-width="3" filter="url(#cardShadow)" />
-
-    <!-- Top Header -->
-    <g transform="translate(35, 30)">
-      <!-- Logo Box -->
-      <rect x="0" y="0" width="60" height="60" rx="12" fill="#0d3b66" stroke="#0f172a" stroke-width="2" />
-      <text x="30" y="38" fill="#38bdf8" font-size="22" font-weight="900" text-anchor="middle">TST</text>
-      
-      <!-- Company Text -->
-      <text x="75" y="24" fill="#0d3b66" font-size="18" font-weight="900" letter-spacing="0.5">Trip Sea Tour Phuket Co., Ltd.</text>
-      
-      <!-- License Badge -->
-      <rect x="360" y="8" width="115" height="20" rx="5" fill="#fef3c7" stroke="#f59e0b" stroke-width="1" />
-      <text x="417" y="22" fill="#78350f" font-size="10" font-weight="800" text-anchor="middle">ททท. 33/11100</text>
-      
-      <text x="75" y="42" fill="#475569" font-size="10" font-weight="500">ภูเก็ต ประเทศไทย (Phuket, Thailand)</text>
-      <text x="75" y="56" fill="#475569" font-size="10" font-weight="500">Tel. (+66) 97 924 1399 / (+66) 62 681 6494 | Email: tripseatourphuket@gmail.com</text>
-
-      <!-- Ticket Ref Header Right -->
-      <rect x="670" y="2" width="180" height="22" rx="4" fill="#0f172a" />
-      <text x="760" y="17" fill="#ffffff" font-size="9.5" font-weight="bold" text-anchor="middle">OFFICIAL E-TICKET</text>
-      <rect x="670" y="24" width="180" height="34" rx="4" fill="#f0fdfa" stroke="#0f172a" stroke-width="1.5" />
-      <text x="760" y="48" fill="#0f766e" font-size="17" font-weight="900" font-family="monospace" text-anchor="middle">${ref}</text>
-    </g>
-
-    <!-- Header Divider Line -->
-    <line x1="35" y1="98" x2="885" y2="98" stroke="#0f172a" stroke-width="2" />
-
-    <!-- Main Layout Grid -->
-    <!-- Left Panel: Booking Details (Width 565px) -->
-    <g transform="translate(35, 108)">
-      <rect x="0" y="0" width="565" height="425" rx="8" fill="#ffffff" stroke="#0f172a" stroke-width="2" />
-
-      <!-- Program Banner -->
-      <rect x="0" y="0" width="565" height="48" rx="7 7 0 0" fill="#0f766e" />
-      <text x="15" y="18" fill="#99f6e4" font-size="9" font-weight="bold">TOUR PROGRAM (โปรแกรมทัวร์):</text>
-      <text x="15" y="38" fill="#ffffff" font-size="14" font-weight="900">${tourTitle}</text>
-
-      <!-- Row 1: Guest Name & Mobile -->
-      <line x1="0" y1="96" x2="565" y2="96" stroke="#0f172a" stroke-width="1.5" />
-      <line x1="282" y1="48" x2="282" y2="96" stroke="#0f172a" stroke-width="1.5" />
-      <text x="15" y="66" fill="#64748b" font-size="9" font-weight="bold">GUEST NAME (ชื่อลูกค้า):</text>
-      <text x="15" y="85" fill="#0f172a" font-size="13" font-weight="bold">${customerName}</text>
-      <text x="295" y="66" fill="#64748b" font-size="9" font-weight="bold">MOBILE NO. (เบอร์โทร):</text>
-      <text x="295" y="85" fill="#0f172a" font-size="13" font-weight="bold" font-family="monospace">${customerPhone}</text>
-
-      <!-- Row 2: Tour Date & Pickup Time (Highlight) -->
-      <rect x="0" y="96" width="282" height="54" fill="#fff1f2" />
-      <rect x="282" y="96" width="283" height="54" fill="#fffbeb" />
-      <line x1="0" y1="150" x2="565" y2="150" stroke="#0f172a" stroke-width="1.5" />
-      <line x1="282" y1="96" x2="282" y2="150" stroke="#0f172a" stroke-width="1.5" />
-      <text x="15" y="114" fill="#9f1239" font-size="9.5" font-weight="900">TOUR DATE (วันที่เดินทาง):</text>
-      <text x="15" y="138" fill="#e11d48" font-size="17" font-weight="900" font-family="monospace">${travelDate}</text>
-      <text x="295" y="114" fill="#92400e" font-size="9.5" font-weight="900">PICKUP TIME (เวลารับ):</text>
-      <text x="295" y="138" fill="#d97706" font-size="15" font-weight="900">${pickupTime}</text>
-
-      <!-- Row 3: Booking Date & Nationality -->
-      <line x1="0" y1="198" x2="565" y2="198" stroke="#0f172a" stroke-width="1.5" />
-      <line x1="282" y1="150" x2="282" y2="198" stroke="#0f172a" stroke-width="1.5" />
-      <text x="15" y="168" fill="#64748b" font-size="9" font-weight="bold">BOOKING DATE (วันที่จอง):</text>
-      <text x="15" y="187" fill="#1e293b" font-size="12" font-weight="600">${bookingDate}</text>
-      <text x="295" y="168" fill="#64748b" font-size="9" font-weight="bold">NATIONALITY (สัญชาติ):</text>
-      <text x="295" y="187" fill="#1e293b" font-size="12" font-weight="600">${nationality}</text>
-
-      <!-- Row 4: Pick up Hotel -->
-      <line x1="0" y1="250" x2="565" y2="250" stroke="#0f172a" stroke-width="1.5" />
-      <text x="15" y="218" fill="#64748b" font-size="9" font-weight="bold">PICK UP HOTEL (รับโรงแรม):</text>
-      <text x="15" y="238" fill="#0f172a" font-size="12.5" font-weight="bold">🏨 ${pickupHotel}</text>
-
-      <!-- Row 5: Send Back Hotel -->
-      <line x1="0" y1="302" x2="565" y2="302" stroke="#0f172a" stroke-width="1.5" />
-      <text x="15" y="270" fill="#64748b" font-size="9" font-weight="bold">SEND BACK HOTEL (ส่งกลับโรงแรม):</text>
-      <text x="15" y="290" fill="#1e293b" font-size="12" font-weight="600">🚐 ${sendBackHotel}</text>
-
-      <!-- Row 6: Remarks -->
-      <rect x="0" y="302" width="565" height="123" rx="0 0 7 7" fill="#f8fafc" />
-      <text x="15" y="322" fill="#64748b" font-size="9" font-weight="bold">REMARKS (หมายเหตุ):</text>
-      <text x="15" y="344" fill="#475569" font-size="11.5" font-style="italic">${remark}</text>
-    </g>
-
-    <!-- Right Panel: Status, PAX Summary, Boarding Notice (Width 270px) -->
-    <g transform="translate(615, 108)">
-      <rect x="0" y="0" width="270" height="425" rx="8" fill="#f8fafc" stroke="#0f172a" stroke-width="2" />
-
-      <!-- Status Header -->
-      <rect x="15" y="15" width="240" height="50" rx="8" fill="#0f766e" stroke="#0f172a" stroke-width="1.5" />
-      <text x="135" y="34" fill="#99f6e4" font-size="9" font-weight="bold" text-anchor="middle">BOOKING STATUS</text>
-      <text x="135" y="52" fill="#ffffff" font-size="13" font-weight="900" text-anchor="middle">CONFIRMED (ยืนยันสิทธิ์แล้ว)</text>
-
-      <!-- PAX Summary Box -->
-      <rect x="15" y="75" width="240" height="150" rx="8" fill="#ffffff" stroke="#0f172a" stroke-width="1.5" />
-      <text x="135" y="98" fill="#0f172a" font-size="10" font-weight="900" text-anchor="middle">PAX SUMMARY (จำนวนผู้เดินทาง)</text>
-      <line x1="25" y1="108" x2="245" y2="108" stroke="#e2e8f0" stroke-width="1" />
-      
-      <!-- Adult -->
-      <rect x="25" y="116" width="100" height="46" rx="6" fill="#f8fafc" stroke="#cbd5e1" stroke-width="1" />
-      <text x="75" y="132" fill="#64748b" font-size="8.5" font-weight="bold" text-anchor="middle">ผู้ใหญ่ (Adult)</text>
-      <text x="75" y="152" fill="#0f766e" font-size="14" font-weight="900" text-anchor="middle">${adults} ท่าน</text>
-
-      <!-- Child -->
-      <rect x="135" y="116" width="100" height="46" rx="6" fill="#f8fafc" stroke="#cbd5e1" stroke-width="1" />
-      <text x="185" y="132" fill="#64748b" font-size="8.5" font-weight="bold" text-anchor="middle">เด็ก (Child)</text>
-      <text x="185" y="152" fill="#0f766e" font-size="14" font-weight="900" text-anchor="middle">${children} ท่าน</text>
-
-      <!-- Total Guests Banner -->
-      <rect x="25" y="172" width="210" height="38" rx="6" fill="#f0fdfa" stroke="#0f766e" stroke-width="1" />
-      <text x="130" y="196" fill="#0f766e" font-size="11" font-weight="bold" text-anchor="middle">ผู้เดินทางรวมทั้งหมด: ${Number(adults) + Number(children) + Number(infants)} ท่าน</text>
-
-      <!-- Boarding Notice Box -->
-      <rect x="15" y="235" width="240" height="85" rx="8" fill="#fffbeb" stroke="#f59e0b" stroke-width="1" />
-      <text x="135" y="255" fill="#92400e" font-size="9.5" font-weight="900" text-anchor="middle">📌 แสดงตั๋วนี้แก่คนขับรถ / ไกด์</text>
-      <text x="135" y="272" fill="#475569" font-size="7.5" text-anchor="middle">Please present this E-Ticket on your mobile</text>
-      <text x="135" y="284" fill="#475569" font-size="7.5" text-anchor="middle">to the driver upon boarding.</text>
-      <line x1="25" y1="292" x2="245" y2="292" stroke="#fde68a" stroke-width="1" />
-      <text x="135" y="308" fill="#78350f" font-size="9" font-weight="bold" text-anchor="middle">📞 Hotline: (+66) 97 924 1399</text>
-
-      <!-- Ink Stamp -->
-      <circle cx="135" cy="370" r="35" fill="none" stroke="#059669" stroke-width="2" stroke-dasharray="4 2" />
-      <text x="135" y="364" fill="#059669" font-size="8" font-weight="900" text-anchor="middle">CONFIRMED</text>
-      <text x="135" y="376" fill="#059669" font-size="7" font-weight="bold" text-anchor="middle">TRIP SEA TOUR</text>
-      <text x="135" y="388" fill="#059669" font-size="6" font-weight="bold" text-anchor="middle">OFFICIAL VOUCHER</text>
-    </g>
-
-    <!-- Multi-Lingual Cautions (Footer) -->
-    <g transform="translate(35, 542)">
-      <text x="0" y="10" fill="#b91c1c" font-size="8" font-weight="bold">1. กรุณารอที่ล็อบบี้ตรงเวลานัด คนขับรอไม่เกิน 5 นาที หากล่าช้าถือว่าสละสิทธิ์และไม่คืนเงิน</text>
-      <text x="0" y="22" fill="#b91c1c" font-size="8" font-weight="bold">2. สตรีมีครรภ์ ผู้ป่วยโรคหัวใจ ความดันรุนแรง หรือกระดูกสันหลัง ห้ามออกทะเล | หากเกินเวลานัด 20 นาที โทร (+66) 97 924 1399</text>
-      <text x="0" y="34" fill="#475569" font-size="7.5" font-weight="bold">重要提醒: 请准时在酒店大堂等候。严禁孕妇、心脏病患者出海。超过20分钟未见司机请联系 (+66) 97 924 1399</text>
-      <text x="0" y="46" fill="#475569" font-size="7.5">Cautions: Please standby at lobby on time. Driver waits max 5 mins. If delayed over 20 mins, contact (+66) 97 924 1399.</text>
-    </g>
-
-    <!-- Bottom Wish Banner -->
-    <g transform="translate(35, 600)">
-      <rect x="0" y="0" width="850" height="24" rx="4" fill="#0f766e" />
-      <text x="425" y="16" fill="#f0fdfa" font-size="10" font-weight="bold" letter-spacing="1" text-anchor="middle">
-        HAVE A NICE TRIP - ขอให้เป็นทริปที่สนุกและปลอดภัยนะครับ/ค่ะ - 祝您旅途愉快
-      </text>
-    </g>
-  </svg>
-  `;
-  res.setHeader('Content-Type', 'image/svg+xml');
-  res.setHeader('Cache-Control', 'public, max-age=86400');
-  res.send(svg);
+  // 4. Fallback: generate a clean high-res PNG QR Ticket using qrcode
+  try {
+    const rawHost = liveHostUrl || SITE_URL || 'https://tripseatourphuket.vercel.app';
+    const hostUrl = rawHost.startsWith('https://') 
+      ? rawHost 
+      : (rawHost.startsWith('http://') ? rawHost.replace('http://', 'https://') : `https://${rawHost}`);
+    const checkUrl = `${hostUrl}/#lookup?ref=${ref}`;
+    const qrBuffer = await QRCode.toBuffer(checkUrl, {
+      type: 'png',
+      width: 600,
+      margin: 3,
+      color: { dark: '#0d3b66', light: '#ffffff' }
+    });
+    res.setHeader('Content-Type', 'image/png');
+    res.setHeader('Cache-Control', 'public, max-age=86400');
+    return res.end(qrBuffer);
+  } catch (err) {
+    res.status(500).send('Error generating ticket image');
+  }
 });
 
-// Slip Image Endpoint
+// Slip Image Endpoint - Returns real JPEG/PNG binary buffer or 404 (NEVER returns SVG)
 app.get(['/api/slip-image', '/api/slip-image/:ref'], async (req, res) => {
   const ref = (req.params.ref || req.query.ref || req.query.bookingRef || '').toString().trim();
   
   const cached = memoryServerImages.get(`slip_${ref}`) || memoryServerImages.get(ref);
-  if (cached && cached.data.startsWith('data:image')) {
+  if (cached && cached.data && cached.data.startsWith('data:image')) {
     const base64Data = cached.data.replace(/^data:image\/\w+;base64,/, '');
     const buffer = Buffer.from(base64Data, 'base64');
-    res.setHeader('Content-Type', cached.mimeType);
+    res.setHeader('Content-Type', cached.mimeType || 'image/jpeg');
     res.setHeader('Cache-Control', 'public, max-age=86400');
     return res.end(buffer);
   }
@@ -2438,22 +2490,20 @@ app.get(['/api/slip-image', '/api/slip-image/:ref'], async (req, res) => {
       return res.end(buffer);
     }
     if (booking.slipUrl.startsWith('https://')) {
+      try {
+        const imgRes = await fetch(booking.slipUrl);
+        if (imgRes.ok) {
+          const buffer = Buffer.from(await imgRes.arrayBuffer());
+          res.setHeader('Content-Type', imgRes.headers.get('content-type') || 'image/jpeg');
+          res.setHeader('Cache-Control', 'public, max-age=86400');
+          return res.end(buffer);
+        }
+      } catch {}
       return res.redirect(302, booking.slipUrl);
     }
   }
 
-  const fallbackSvg = `
-  <svg xmlns="http://www.w3.org/2000/svg" width="600" height="800" viewBox="0 0 600 800" style="background:#f8fafc; font-family:sans-serif;">
-    <rect width="600" height="800" fill="#f1f5f9" />
-    <rect x="50" y="50" width="500" height="700" rx="16" fill="#ffffff" stroke="#cbd5e1" stroke-width="2" />
-    <circle cx="300" cy="350" r="50" fill="#e2e8f0" />
-    <path d="M280 340 L300 360 L330 330" stroke="#64748b" stroke-width="6" fill="none" stroke-linecap="round" />
-    <text x="300" y="440" font-size="22" font-weight="bold" fill="#334155" text-anchor="middle">สลิปโอนเงิน (Slip Preview)</text>
-    <text x="300" y="480" font-size="16" fill="#64748b" text-anchor="middle">รหัสอ้างอิง: ${ref || 'ไม่มีข้อมูล'}</text>
-  </svg>`;
-  res.setHeader('Content-Type', 'image/svg+xml');
-  res.setHeader('Cache-Control', 'public, max-age=86400');
-  res.send(fallbackSvg);
+  res.status(404).send('No slip image found for this booking');
 });
 
 // API to send E-Ticket Voucher to LINE Notification

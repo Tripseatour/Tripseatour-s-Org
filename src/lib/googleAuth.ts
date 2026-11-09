@@ -47,7 +47,17 @@ export const googleSignIn = async (): Promise<{ user: User; accessToken: string 
     cachedAccessToken = credential.accessToken;
     return { user: result.user, accessToken: cachedAccessToken };
   } catch (error: any) {
-    console.error('Google Sign in error:', error);
+    const isCancelled =
+      error?.code === 'auth/popup-closed-by-user' ||
+      error?.code === 'auth/cancelled-popup-request' ||
+      error?.message?.includes('popup-closed-by-user') ||
+      error?.message?.includes('cancelled-popup-request');
+
+    if (isCancelled) {
+      // Normal user cancellation - do not treat as an unhandled error
+      return null;
+    }
+    console.warn('Google Sign in exception:', error);
     throw error;
   } finally {
     isSigningIn = false;

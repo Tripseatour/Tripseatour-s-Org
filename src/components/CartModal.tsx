@@ -318,16 +318,16 @@ export const CartModal: React.FC<CartModalProps> = ({
           bookingData.paymentStatus = 'slip_uploaded';
           bookingData.slipUploadedAt = new Date().toISOString();
 
-          // Also try uploading slip endpoint if available
-          try {
-            await fetch(`/api/bookings/${bookingData.id}/upload-slip`, {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ slipUrl: slipFile }),
-            });
-          } catch (e) {
-            // Ignore if endpoint already handled
-          }
+          // Cache image to server for public LINE delivery
+          fetch('/api/cache-image', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              key: `slip_${bookingData.bookingRef}`,
+              dataUrl: slipFile,
+              mimeType: slipFile.includes('image/png') ? 'image/png' : 'image/jpeg'
+            })
+          }).catch(() => {});
         }
 
         // Direct persist to Supabase if available

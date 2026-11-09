@@ -74,10 +74,46 @@ export default function App() {
   });
   const [isAdminAuthModalOpen, setIsAdminAuthModalOpen] = useState<boolean>(false);
 
-  // Tombstone list of permanently deleted tour IDs to prevent bounce back
+  // Tombstone lists of permanently deleted items to prevent bounce back
   const [deletedTourIds, setDeletedTourIds] = useState<string[]>(() => {
     try {
       const saved = localStorage.getItem('tst_deleted_tour_ids');
+      return saved ? JSON.parse(saved) : [];
+    } catch {
+      return [];
+    }
+  });
+
+  const [deletedBookingIds, setDeletedBookingIds] = useState<string[]>(() => {
+    try {
+      const saved = localStorage.getItem('tst_deleted_booking_ids');
+      return saved ? JSON.parse(saved) : [];
+    } catch {
+      return [];
+    }
+  });
+
+  const [deletedCustomerIds, setDeletedCustomerIds] = useState<string[]>(() => {
+    try {
+      const saved = localStorage.getItem('tst_deleted_customer_ids');
+      return saved ? JSON.parse(saved) : [];
+    } catch {
+      return [];
+    }
+  });
+
+  const [deletedReviewIds, setDeletedReviewIds] = useState<string[]>(() => {
+    try {
+      const saved = localStorage.getItem('tst_deleted_review_ids');
+      return saved ? JSON.parse(saved) : [];
+    } catch {
+      return [];
+    }
+  });
+
+  const [deletedSupplierIds, setDeletedSupplierIds] = useState<string[]>(() => {
+    try {
+      const saved = localStorage.getItem('tst_deleted_supplier_ids');
       return saved ? JSON.parse(saved) : [];
     } catch {
       return [];
@@ -99,35 +135,47 @@ export default function App() {
 
   const [bookings, setBookings] = useState<Booking[]>(() => {
     try {
+      const savedDeleted = localStorage.getItem('tst_deleted_booking_ids');
+      const tombstoneList: string[] = savedDeleted ? JSON.parse(savedDeleted) : [];
       const saved = localStorage.getItem('tst_bookings');
-      return saved ? JSON.parse(saved) : initialBookings;
+      const loaded: Booking[] = saved ? JSON.parse(saved) : initialBookings;
+      return loaded.filter(b => !tombstoneList.includes(b.id) && !tombstoneList.includes(b.bookingRef));
     } catch {
-      return initialBookings;
+      return [];
     }
   });
 
   const [reviews, setReviews] = useState<Review[]>(() => {
     try {
+      const savedDeleted = localStorage.getItem('tst_deleted_review_ids');
+      const tombstoneList: string[] = savedDeleted ? JSON.parse(savedDeleted) : [];
       const saved = localStorage.getItem('tst_reviews');
-      return saved ? JSON.parse(saved) : initialReviews;
+      const loaded: Review[] = saved ? JSON.parse(saved) : initialReviews;
+      return loaded.filter(r => !tombstoneList.includes(r.id));
     } catch {
-      return initialReviews;
+      return [];
     }
   });
 
   const [customers, setCustomers] = useState<Customer[]>(() => {
     try {
+      const savedDeleted = localStorage.getItem('tst_deleted_customer_ids');
+      const tombstoneList: string[] = savedDeleted ? JSON.parse(savedDeleted) : [];
       const saved = localStorage.getItem('tst_customers');
-      return saved ? JSON.parse(saved) : initialCustomers;
+      const loaded: Customer[] = saved ? JSON.parse(saved) : initialCustomers;
+      return loaded.filter(c => !tombstoneList.includes(c.id));
     } catch {
-      return initialCustomers;
+      return [];
     }
   });
 
   const [suppliers, setSuppliers] = useState<Supplier[]>(() => {
     try {
+      const savedDeleted = localStorage.getItem('tst_deleted_supplier_ids');
+      const tombstoneList: string[] = savedDeleted ? JSON.parse(savedDeleted) : [];
       const saved = localStorage.getItem('tst_suppliers');
-      return saved ? JSON.parse(saved) : mockSuppliers;
+      const loaded: Supplier[] = saved ? JSON.parse(saved) : mockSuppliers;
+      return loaded.filter(s => !tombstoneList.includes(s.id));
     } catch {
       return mockSuppliers;
     }
@@ -165,13 +213,28 @@ export default function App() {
 
   const handleDeleteSupplier = async (id: string) => {
     lastMutationTimeRef.current = Date.now();
+    const updatedDeletedIds = Array.from(new Set([...deletedSupplierIds, id]));
+    setDeletedSupplierIds(updatedDeletedIds);
+    safeSetLocalStorage('tst_deleted_supplier_ids', updatedDeletedIds);
+
     const next = suppliers.filter(s => s.id !== id);
     setSuppliers(next);
     safeSetLocalStorage('tst_suppliers', next);
     supabaseApi.saveSuppliers(next).catch(() => {});
-    fetch(`/api/suppliers/${id}`, {
-      method: 'DELETE'
-    }).catch(() => {});
+    try {
+      const res = await fetch(`/api/suppliers/${encodeURIComponent(id)}`, {
+        method: 'DELETE'
+      });
+      if (res.ok) {
+        const data = await res.json().catch(() => ({}));
+        if (data.version) lastServerVersionRef.current = data.version;
+        if (Array.isArray(data.deletedSupplierIds)) {
+          const merged = Array.from(new Set([...updatedDeletedIds, ...data.deletedSupplierIds]));
+          setDeletedSupplierIds(merged);
+          safeSetLocalStorage('tst_deleted_supplier_ids', merged);
+        }
+      }
+    } catch {}
   };
 
   const [settings, setSettings] = useState<AppSettings>(() => {
@@ -297,13 +360,18 @@ export default function App() {
         return;
       }
 
-      // 1. Check server version and deleted tour IDs
+      // 1. Check server version and deleted IDs across all entities
       let serverVersion: number | null = null;
-      let serverDeletedIds: string[] = [];
+      let serverDeletedTourIds: string[] = [];
+      let serverDeletedBookingIds: string[] = [];
+      let serverDeletedCustomerIds: string[] = [];
+      let serverDeletedReviewIds: string[] = [];
+      let serverDeletedSupplierIds: string[] = [];
+
       try {
         const [syncRes, delRes] = await Promise.all([
           fetch('/api/sync-status', { cache: 'no-store' }).catch(() => null),
-          fetch('/api/tours/deleted-ids', { cache: 'no-store' }).catch(() => null)
+          fetch('/api/deleted-ids', { cache: 'no-store' }).catch(() => null)
         ]);
         if (syncRes && syncRes.ok) {
           const syncData = await syncRes.json();
@@ -311,18 +379,48 @@ export default function App() {
         }
         if (delRes && delRes.ok) {
           const delData = await delRes.json();
-          if (Array.isArray(delData.deletedTourIds)) {
-            serverDeletedIds = delData.deletedTourIds;
-          }
+          if (Array.isArray(delData.deletedTourIds)) serverDeletedTourIds = delData.deletedTourIds;
+          if (Array.isArray(delData.deletedBookingIds)) serverDeletedBookingIds = delData.deletedBookingIds;
+          if (Array.isArray(delData.deletedCustomerIds)) serverDeletedCustomerIds = delData.deletedCustomerIds;
+          if (Array.isArray(delData.deletedReviewIds)) serverDeletedReviewIds = delData.deletedReviewIds;
+          if (Array.isArray(delData.deletedSupplierIds)) serverDeletedSupplierIds = delData.deletedSupplierIds;
         }
       } catch (e) {}
 
-      // Combine local tombstone and server tombstone list
-      const latestDeletedIds = Array.from(new Set([...deletedTourIds, ...serverDeletedIds]));
-      if (serverDeletedIds.length > 0 && serverDeletedIds.some(id => !deletedTourIds.includes(id))) {
-        setDeletedTourIds(latestDeletedIds);
-        safeSetLocalStorage('tst_deleted_tour_ids', latestDeletedIds);
-      }
+      // Combine local tombstone and server tombstone lists (reading fresh from localStorage to guarantee no stale closures)
+      const getStoredList = (key: string): string[] => {
+        try {
+          const val = localStorage.getItem(key);
+          return val ? JSON.parse(val) : [];
+        } catch {
+          return [];
+        }
+      };
+
+      const localTourDel = getStoredList('tst_deleted_tour_ids');
+      const latestDeletedTourIds = Array.from(new Set([...deletedTourIds, ...localTourDel, ...serverDeletedTourIds]));
+      setDeletedTourIds(latestDeletedTourIds);
+      safeSetLocalStorage('tst_deleted_tour_ids', latestDeletedTourIds);
+
+      const localBookingDel = getStoredList('tst_deleted_booking_ids');
+      const latestDeletedBookingIds = Array.from(new Set([...deletedBookingIds, ...localBookingDel, ...serverDeletedBookingIds]));
+      setDeletedBookingIds(latestDeletedBookingIds);
+      safeSetLocalStorage('tst_deleted_booking_ids', latestDeletedBookingIds);
+
+      const localCustomerDel = getStoredList('tst_deleted_customer_ids');
+      const latestDeletedCustomerIds = Array.from(new Set([...deletedCustomerIds, ...localCustomerDel, ...serverDeletedCustomerIds]));
+      setDeletedCustomerIds(latestDeletedCustomerIds);
+      safeSetLocalStorage('tst_deleted_customer_ids', latestDeletedCustomerIds);
+
+      const localReviewDel = getStoredList('tst_deleted_review_ids');
+      const latestDeletedReviewIds = Array.from(new Set([...deletedReviewIds, ...localReviewDel, ...serverDeletedReviewIds]));
+      setDeletedReviewIds(latestDeletedReviewIds);
+      safeSetLocalStorage('tst_deleted_review_ids', latestDeletedReviewIds);
+
+      const localSupplierDel = getStoredList('tst_deleted_supplier_ids');
+      const latestDeletedSupplierIds = Array.from(new Set([...deletedSupplierIds, ...localSupplierDel, ...serverDeletedSupplierIds]));
+      setDeletedSupplierIds(latestDeletedSupplierIds);
+      safeSetLocalStorage('tst_deleted_supplier_ids', latestDeletedSupplierIds);
 
       // If server version has NOT changed and we are not forcing reload, skip heavy re-renders
       if (!forceReload && serverVersion !== null && serverVersion === lastServerVersionRef.current && lastServerVersionRef.current > 0) {
@@ -360,14 +458,18 @@ export default function App() {
         if (logs) setLineLogs(logs);
       }
 
-      // Supabase direct fallback ONLY if server API returned null (e.g. server offline / Vercel SPA)
+      // Direct fallback ONLY if server API returned null (e.g. server offline / Vercel SPA)
       if (serverBookings === null) {
         const directBookings = await supabaseApi.getBookings();
         if (directBookings !== null) {
           serverBookings = directBookings;
         } else {
-          serverBookings = initialBookings;
-          supabaseApi.saveBookingsBackup(initialBookings).catch(() => {});
+          try {
+            const saved = localStorage.getItem('tst_bookings');
+            serverBookings = saved ? JSON.parse(saved) : [];
+          } catch {
+            serverBookings = [];
+          }
         }
       }
       if (!serverSettings) {
@@ -382,9 +484,14 @@ export default function App() {
       if (serverTours === null) {
         const directTours = await supabaseApi.getTours();
         if (directTours !== null) {
-          serverTours = directTours.filter(t => !latestDeletedIds.includes(t.id) && !latestDeletedIds.includes(t.slug));
+          serverTours = directTours.filter(t => !latestDeletedTourIds.includes(t.id) && !latestDeletedTourIds.includes(t.slug));
         } else {
-          serverTours = initialTours.filter(t => !latestDeletedIds.includes(t.id) && !latestDeletedIds.includes(t.slug));
+          try {
+            const saved = localStorage.getItem('tst_tours');
+            serverTours = saved ? normalizeTours(JSON.parse(saved)) : initialTours;
+          } catch {
+            serverTours = initialTours;
+          }
         }
       }
       if (serverCustomers === null) {
@@ -392,8 +499,12 @@ export default function App() {
         if (directCustomers !== null) {
           serverCustomers = directCustomers;
         } else {
-          serverCustomers = initialCustomers;
-          supabaseApi.saveCustomers(initialCustomers).catch(() => {});
+          try {
+            const saved = localStorage.getItem('tst_customers');
+            serverCustomers = saved ? JSON.parse(saved) : [];
+          } catch {
+            serverCustomers = [];
+          }
         }
       }
       if (serverReviews === null) {
@@ -401,8 +512,12 @@ export default function App() {
         if (directReviews !== null) {
           serverReviews = directReviews;
         } else {
-          serverReviews = initialReviews;
-          supabaseApi.saveReviews(initialReviews).catch(() => {});
+          try {
+            const saved = localStorage.getItem('tst_reviews');
+            serverReviews = saved ? JSON.parse(saved) : [];
+          } catch {
+            serverReviews = [];
+          }
         }
       }
       if (serverSuppliers === null) {
@@ -410,33 +525,41 @@ export default function App() {
         if (directSuppliers !== null && directSuppliers.length > 0) {
           serverSuppliers = directSuppliers;
         } else {
-          serverSuppliers = mockSuppliers;
-          supabaseApi.saveSuppliers(mockSuppliers).catch(() => {});
+          try {
+            const saved = localStorage.getItem('tst_suppliers');
+            serverSuppliers = saved ? JSON.parse(saved) : mockSuppliers;
+          } catch {
+            serverSuppliers = mockSuppliers;
+          }
         }
       }
 
-      // Update state & replace localStorage cache authoritatively (excluding permanently deleted tours)
+      // Update state & replace localStorage cache authoritatively (excluding permanently deleted items)
       if (serverTours && Array.isArray(serverTours)) {
-        const filteredTours = serverTours.filter(t => !latestDeletedIds.includes(t.id) && !latestDeletedIds.includes(t.slug));
+        const filteredTours = serverTours.filter(t => !latestDeletedTourIds.includes(t.id) && !latestDeletedTourIds.includes(t.slug));
         const normalized = normalizeTours(filteredTours);
         setTours(normalized);
         safeSetLocalStorage('tst_tours', normalized);
       }
       if (serverBookings && Array.isArray(serverBookings)) {
-        setBookings(serverBookings);
-        safeSetLocalStorage('tst_bookings', serverBookings);
+        const filteredBookings = serverBookings.filter(b => !latestDeletedBookingIds.includes(b.id) && !latestDeletedBookingIds.includes(b.bookingRef));
+        setBookings(filteredBookings);
+        safeSetLocalStorage('tst_bookings', filteredBookings);
       }
       if (serverReviews && Array.isArray(serverReviews)) {
-        setReviews(serverReviews);
-        safeSetLocalStorage('tst_reviews', serverReviews);
+        const filteredReviews = serverReviews.filter(r => !latestDeletedReviewIds.includes(r.id));
+        setReviews(filteredReviews);
+        safeSetLocalStorage('tst_reviews', filteredReviews);
       }
       if (serverCustomers && Array.isArray(serverCustomers)) {
-        setCustomers(serverCustomers);
-        safeSetLocalStorage('tst_customers', serverCustomers);
+        const filteredCustomers = serverCustomers.filter(c => !latestDeletedCustomerIds.includes(c.id));
+        setCustomers(filteredCustomers);
+        safeSetLocalStorage('tst_customers', filteredCustomers);
       }
       if (serverSuppliers && Array.isArray(serverSuppliers)) {
-        setSuppliers(serverSuppliers);
-        safeSetLocalStorage('tst_suppliers', serverSuppliers);
+        const filteredSuppliers = serverSuppliers.filter(s => !latestDeletedSupplierIds.includes(s.id));
+        setSuppliers(filteredSuppliers);
+        safeSetLocalStorage('tst_suppliers', filteredSuppliers);
       }
       if (serverSettings && serverSettings.promptPayId) {
         setSettings(serverSettings);
@@ -664,27 +787,29 @@ export default function App() {
       }
     }).catch(() => {});
 
-    // Dispatch real LINE alert to Group with Ticket & Slip images
-    const lineMsg = `🔔 [มีออเดอร์ใหม่] รหัส ${newBooking.bookingRef}\n` +
-      `📍 ทัวร์: ${newBooking.tourTitle}\n` +
-      `👤 ลูกค้า: ${newBooking.customerName} (${newBooking.customerPhone})\n` +
-      `💰 ยอดชำระ: ฿${newBooking.totalAmount.toLocaleString()}\n` +
-      `📅 วันเดินทาง: ${newBooking.travelDate}\n` +
-      `🏨 โรงแรมรับ: ${newBooking.pickupHotel}${newBooking.roomNumber ? ` (ห้อง ${newBooking.roomNumber})` : ''}\n` +
-      `👥 จำนวน: ผู้ใหญ่ ${newBooking.adults} ท่าน / เด็ก ${newBooking.children || 0} ท่าน\n` +
-      `💳 สถานะ: ${newBooking.paymentStatus === 'slip_uploaded' ? 'แนบสลิปแล้ว (รอตรวจ)' : 'รอชำระเงิน'}\n` +
-      `🎟️ ตั๋ว E-Ticket และสลิปโอนเงินแนบมาในรูปภาพด้านบน`;
+    // Dispatch real LINE alert only if server has not already sent it
+    if (!newBooking.lineNotifySent) {
+      const lineMsg = `🔔 [มีออเดอร์ใหม่] รหัส ${newBooking.bookingRef}\n` +
+        `📍 ทัวร์: ${newBooking.tourTitle}\n` +
+        `👤 ลูกค้า: ${newBooking.customerName} (${newBooking.customerPhone})\n` +
+        `💰 ยอดชำระ: ฿${newBooking.totalAmount.toLocaleString()}\n` +
+        `📅 วันเดินทาง: ${newBooking.travelDate}\n` +
+        `🏨 โรงแรมรับ: ${newBooking.pickupHotel}${newBooking.roomNumber ? ` (ห้อง ${newBooking.roomNumber})` : ''}\n` +
+        `👥 จำนวน: ผู้ใหญ่ ${newBooking.adults} ท่าน / เด็ก ${newBooking.children || 0} ท่าน\n` +
+        `💳 สถานะ: ${newBooking.paymentStatus === 'slip_uploaded' ? 'แนบสลิปแล้ว (รอตรวจ)' : 'รอชำระเงิน'}\n` +
+        `🎟️ ตั๋ว E-Ticket และสลิปโอนเงินแนบมาในรูปภาพด้านบน`;
 
-    dispatchLineNotification(
-      lineMsg, 
-      newBooking.bookingRef, 
-      'NEW_ORDER', 
-      newBooking.tourImage,
-      newBooking.ticketImageUrl,
-      newBooking.slipUrl
-    );
+      dispatchLineNotification(
+        lineMsg, 
+        newBooking.bookingRef, 
+        'NEW_ORDER', 
+        newBooking.tourImage,
+        newBooking.ticketImageUrl,
+        newBooking.slipUrl
+      );
+    }
 
-    showToast(`🟢 สั่งจองทัวร์สำเร็จ! รหัส ${newBooking.bookingRef} - ส่งแจ้งเตือน LINE พร้อมรูปตั๋วและสลิปแล้ว`);
+    showToast(`🟢 สั่งจองทัวร์สำเร็จ! รหัส ${newBooking.bookingRef} - ส่งแจ้งเตือน LINE เรียบร้อยแล้ว`);
   };
 
   const handleUpdateBookingStatus = async (id: string, paymentStatus: string, orderStatus: string) => {
@@ -797,24 +922,40 @@ export default function App() {
       const targetBooking = bookings.find(b => b.id === id || b.bookingRef === id);
       const bookingRef = targetBooking?.bookingRef || id;
       const actualId = targetBooking?.id || id;
+      const idsToExclude = new Set<string>([id, bookingRef, actualId]);
 
-      const nextBookings = bookings.filter(b => b.id !== id && b.bookingRef !== id);
-      setBookings(nextBookings);
-      safeSetLocalStorage('tst_bookings', nextBookings);
+      // Record in tombstone list permanently in state & localStorage
+      const updatedDeletedIds = Array.from(new Set([...deletedBookingIds, ...Array.from(idsToExclude)]));
+      setDeletedBookingIds(updatedDeletedIds);
+      safeSetLocalStorage('tst_deleted_booking_ids', updatedDeletedIds);
+
+      // Functional state update so nothing can resurrect it
+      let remainingBookings: Booking[] = [];
+      setBookings(prev => {
+        remainingBookings = prev.filter(b => !idsToExclude.has(b.id) && !idsToExclude.has(b.bookingRef));
+        safeSetLocalStorage('tst_bookings', remainingBookings);
+        return remainingBookings;
+      });
+
       showToast('🗑️ ลบคำสั่งซื้อทัวร์เรียบร้อยแล้ว');
 
       // Sync to Supabase (delete from bookings table AND update app_store backup)
       await Promise.all([
         supabaseApi.deleteBooking(actualId),
         supabaseApi.deleteBooking(bookingRef),
-        supabaseApi.saveBookingsBackup(nextBookings)
+        supabaseApi.saveBookingsBackup(remainingBookings)
       ]).catch(() => {});
 
       // Sync to Express API if available
-      const res = await fetch(`/api/bookings/${id}`, { method: 'DELETE' }).catch(() => null);
+      const res = await fetch(`/api/bookings/${encodeURIComponent(id)}`, { method: 'DELETE' }).catch(() => null);
       if (res && res.ok) {
         const data = await res.json().catch(() => ({}));
         if (data.version) lastServerVersionRef.current = data.version;
+        if (Array.isArray(data.deletedBookingIds)) {
+          const merged = Array.from(new Set([...updatedDeletedIds, ...data.deletedBookingIds]));
+          setDeletedBookingIds(merged);
+          safeSetLocalStorage('tst_deleted_booking_ids', merged);
+        }
       }
     } catch (err) {
       console.error(err);
@@ -875,19 +1016,32 @@ export default function App() {
   const handleDeleteCustomer = async (id: string) => {
     try {
       lastMutationTimeRef.current = Date.now();
-      const nextCustomers = customers.filter(c => c.id !== id);
-      setCustomers(nextCustomers);
-      safeSetLocalStorage('tst_customers', nextCustomers);
+      const updatedDeletedIds = Array.from(new Set([...deletedCustomerIds, id]));
+      setDeletedCustomerIds(updatedDeletedIds);
+      safeSetLocalStorage('tst_deleted_customer_ids', updatedDeletedIds);
+
+      let remainingCustomers: Customer[] = [];
+      setCustomers(prev => {
+        remainingCustomers = prev.filter(c => c.id !== id);
+        safeSetLocalStorage('tst_customers', remainingCustomers);
+        return remainingCustomers;
+      });
+
       showToast('🗑️ ลบข้อมูลลูกค้าเรียบร้อยแล้ว');
 
       // Sync to Supabase
-      supabaseApi.saveCustomers(nextCustomers).catch(() => {});
+      supabaseApi.saveCustomers(remainingCustomers).catch(() => {});
 
       // Sync to Express API
-      const res = await fetch(`/api/customers/${id}`, { method: 'DELETE' }).catch(() => null);
+      const res = await fetch(`/api/customers/${encodeURIComponent(id)}`, { method: 'DELETE' }).catch(() => null);
       if (res && res.ok) {
         const data = await res.json().catch(() => ({}));
         if (data.version) lastServerVersionRef.current = data.version;
+        if (Array.isArray(data.deletedCustomerIds)) {
+          const merged = Array.from(new Set([...updatedDeletedIds, ...data.deletedCustomerIds]));
+          setDeletedCustomerIds(merged);
+          safeSetLocalStorage('tst_deleted_customer_ids', merged);
+        }
       }
     } catch (err) {
       console.error(err);
@@ -1389,17 +1543,31 @@ export default function App() {
   };
 
   const handleDeleteReview = async (id: string) => {
-    lastMutationTimeRef.current = Date.now();
-    const nextReviews = reviews.filter(r => r.id !== id);
-    setReviews(nextReviews);
-    localStorage.setItem('tst_reviews', JSON.stringify(nextReviews));
-    supabaseApi.saveReviews(nextReviews).catch(() => {});
-    showToast('🗑️ ลบรีวิวเรียบร้อยแล้ว');
     try {
-      const res = await fetch(`/api/reviews/${id}`, { method: 'DELETE' });
-      if (res.ok) {
-        const data = await res.json();
+      lastMutationTimeRef.current = Date.now();
+      const updatedDeletedIds = Array.from(new Set([...deletedReviewIds, id]));
+      setDeletedReviewIds(updatedDeletedIds);
+      safeSetLocalStorage('tst_deleted_review_ids', updatedDeletedIds);
+
+      let remainingReviews: Review[] = [];
+      setReviews(prev => {
+        remainingReviews = prev.filter(r => r.id !== id);
+        safeSetLocalStorage('tst_reviews', remainingReviews);
+        return remainingReviews;
+      });
+
+      supabaseApi.saveReviews(remainingReviews).catch(() => {});
+      showToast('🗑️ ลบรีวิวเรียบร้อยแล้ว');
+
+      const res = await fetch(`/api/reviews/${encodeURIComponent(id)}`, { method: 'DELETE' });
+      if (res && res.ok) {
+        const data = await res.json().catch(() => ({}));
         if (data.version) lastServerVersionRef.current = data.version;
+        if (Array.isArray(data.deletedReviewIds)) {
+          const merged = Array.from(new Set([...updatedDeletedIds, ...data.deletedReviewIds]));
+          setDeletedReviewIds(merged);
+          safeSetLocalStorage('tst_deleted_review_ids', merged);
+        }
       }
     } catch (e) {}
   };

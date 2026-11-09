@@ -88,6 +88,7 @@ export const UniversalDataBackupModal: React.FC<UniversalDataBackupModalProps> =
   const [sheetsResult, setSheetsResult] = useState<SyncToSheetsResult | null>(null);
   const [sheetsError, setSheetsError] = useState<string | null>(null);
   const [isUnauthorizedDomain, setIsUnauthorizedDomain] = useState(false);
+  const [isAccessDeniedTestUser, setIsAccessDeniedTestUser] = useState(false);
   const [copiedDomain, setCopiedDomain] = useState(false);
   const currentHostname = typeof window !== 'undefined' ? window.location.hostname : '';
 
@@ -110,24 +111,59 @@ export const UniversalDataBackupModal: React.FC<UniversalDataBackupModalProps> =
     setIsLoggingInGoogle(true);
     setSheetsError(null);
     setIsUnauthorizedDomain(false);
+    setIsAccessDeniedTestUser(false);
     try {
       const res = await googleSignIn();
       if (res) {
         setGoogleUser(res.user);
         setGoogleToken(res.accessToken);
         setIsUnauthorizedDomain(false);
+        setIsAccessDeniedTestUser(false);
       }
     } catch (err: any) {
-      console.error('Google login error:', err);
-      const isUnauth = err?.code === 'auth/unauthorized-domain' ||
+      const isCancelled =
+        err?.code === 'auth/popup-closed-by-user' ||
+        err?.code === 'auth/cancelled-popup-request' ||
+        err?.message?.includes('popup-closed-by-user') ||
+        err?.message?.includes('cancelled-popup-request');
+
+      if (isCancelled) {
+        // User closed or dismissed popup voluntarily - not an error
+        return;
+      }
+
+      const isBlocked = err?.code === 'auth/popup-blocked' || err?.message?.includes('popup-blocked');
+      if (isBlocked) {
+        setSheetsError('เบราว์เซอร์บล็อกหน้าต่าง Pop-up กรุณาอนุญาตให้แสดง Pop-up ในแถบที่อยู่ของเบราว์เซอร์');
+        return;
+      }
+
+      const isUnauth =
+        err?.code === 'auth/unauthorized-domain' ||
         err?.message?.includes('auth/unauthorized-domain') ||
         err?.message?.includes('unauthorized-domain');
+
       if (isUnauth) {
         setIsUnauthorizedDomain(true);
         setSheetsError(`โดเมน "${window.location.hostname}" ยังไม่ได้รับอนุญาตใน Firebase Authentication (auth/unauthorized-domain)`);
-      } else {
-        setSheetsError(`เข้าสู่ระบบ Google ไม่สำเร็จ: ${err?.message || 'ข้อผิดพลาดระบบ'}`);
+        return;
       }
+
+      const isAccessDenied =
+        err?.code === 'auth/access-denied' ||
+        err?.message?.includes('access_denied') ||
+        err?.message?.includes('403') ||
+        err?.message?.includes('ยังไม่ผ่านกระบวนการยืนยันตัวตน') ||
+        err?.message?.includes('ผู้ทดสอบที่นักพัฒนาแอปอนุมัติ');
+
+      if (isAccessDenied) {
+        setIsAccessDeniedTestUser(true);
+        setSheetsError('การเข้าถึงถูกบล็อก (403: access_denied): บัญชี Google นี้ยังไม่ได้ถูกเพิ่มในรายชื่อ Test users (ผู้ใช้ทดสอบ) ใน Google Cloud Console');
+        return;
+      }
+
+      console.warn('Google login exception:', err);
+      setSheetsError(`เข้าสู่ระบบ Google ไม่สำเร็จ: ${err?.message || 'ข้อผิดพลาดระบบ'}`);
     } finally {
       setIsLoggingInGoogle(false);
     }
@@ -1101,6 +1137,64 @@ export const UniversalDataBackupModal: React.FC<UniversalDataBackupModalProps> =
                         className="w-full sm:w-auto flex-1 bg-slate-800 hover:bg-slate-700 text-slate-200 font-bold px-3 py-2 rounded-xl text-xs transition border border-slate-700 text-center cursor-pointer"
                       >
                         📥 หรือใช้ดาวน์โหลดสำรอง JSON (ทำได้ทันที ไม่ต้องตั้งค่า)
+                      </button>
+                    </div>
+                  </div>
+                )}
+
+                {isAccessDeniedTestUser && (
+                  <div className="bg-amber-950/70 border-2 border-amber-500/70 text-amber-200 p-4 sm:p-5 rounded-2xl space-y-3.5 animate-in fade-in">
+                    <div className="flex items-start gap-3">
+                      <div className="w-10 h-10 rounded-xl bg-amber-500/20 text-amber-400 border border-amber-500/40 flex items-center justify-center font-black shrink-0">
+                        <ShieldCheck className="w-5 h-5 text-amber-400" />
+                      </div>
+                      <div className="flex-1">
+                        <h5 className="font-extrabold text-sm text-white flex items-center gap-2">
+                          <span>วิธีแก้: การเข้าถึงถูกบล็อก 403: access_denied (แอปอยู่ระหว่างการทดสอบ)</span>
+                        </h5>
+                        <p className="text-xs text-amber-300/90 mt-1 leading-relaxed">
+                          Google บล็อกการเข้าถึงเนื่องจากโปรเจกต์ Google Cloud อยู่ในโหมด <strong>Testing (การทดสอบ)</strong> ซึ่งอนุญาตเฉพาะอีเมลที่อยู่ในรายชื่อ <strong>Test users (ผู้ใช้ทดสอบ)</strong> เท่านั้น
+                        </p>
+                      </div>
+                    </div>
+
+                    <div className="bg-slate-950/70 p-3.5 rounded-xl border border-slate-800 text-xs text-slate-300 space-y-3">
+                      <div>
+                        <strong className="text-emerald-400 block mb-1">✅ วิธีที่ 1 (เร็วที่สุด - 20 วินาที): เพิ่มอีเมลเป็น Test User</strong>
+                        <ol className="list-decimal list-inside space-y-1.5 text-slate-300 ml-1">
+                          <li>
+                            คลิกเปิด{' '}
+                            <a
+                              href="https://console.cloud.google.com/apis/credentials/consent?project=gen-lang-client-0325240090"
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="text-amber-400 hover:underline font-bold inline-flex items-center gap-1"
+                            >
+                              <span>Google Cloud Console ➔ OAuth consent screen</span>
+                              <ExternalLink className="w-3 h-3" />
+                            </a>
+                          </li>
+                          <li>เลื่อนลงมาที่หัวข้อ <strong>"Test users (ผู้ใช้ทดสอบ)"</strong> ➔ กดปุ่ม <strong>"+ ADD USERS"</strong></li>
+                          <li>ใส่อีเมลที่คุณต้องการใช้ (เช่น <code className="text-amber-300 font-mono font-bold">tripseatourphuket@gmail.com</code>) ➔ กด <strong>SAVE</strong></li>
+                          <li>กลับมากดปุ่ม <strong>"เข้าสู่ระบบด้วย Google"</strong> ใหม่อีกครั้ง จะเข้าสู่ระบบได้ทันที!</li>
+                        </ol>
+                      </div>
+
+                      <div className="border-t border-slate-800 pt-2.5">
+                        <strong className="text-teal-400 block mb-1">🌐 วิธีที่ 2: เผยแพร่แอป (Publish App)</strong>
+                        <p className="text-slate-300 leading-relaxed">
+                          ในหน้า Google Cloud Console เดียวกัน ตรงหัวข้อ <strong>Publishing status</strong> กดปุ่ม <strong>"PUBLISH APP"</strong> เพื่อให้อีเมลใดๆ ก็ตามสามารถเข้าสู่ระบบและสร้างชีตได้ทันที
+                        </p>
+                      </div>
+                    </div>
+
+                    <div className="pt-1 flex flex-col sm:flex-row items-center gap-2">
+                      <button
+                        type="button"
+                        onClick={() => setActiveTab('export')}
+                        className="w-full sm:w-auto flex-1 bg-slate-800 hover:bg-slate-700 text-slate-200 font-bold px-3 py-2 rounded-xl text-xs transition border border-slate-700 text-center cursor-pointer"
+                      >
+                        📥 หรือใช้ดาวน์โหลดสำรอง JSON / CSV (ทำได้ทันที ไม่ต้องตั้งค่า)
                       </button>
                     </div>
                   </div>
