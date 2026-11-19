@@ -19,7 +19,8 @@ import { ReorderToursModal } from './ReorderToursModal';
 import { PickupLogisticsMap } from './PickupLogisticsMap';
 import { SupplierModal } from './SupplierModal';
 import { UniversalDataBackupModal, BackupTargetSection } from './UniversalDataBackupModal';
-import { isSupabaseConfigured, getSupabase, SUPABASE_SQL_SCHEMA } from '../lib/supabase';
+import { isCloudDbConfigured, cloudDbApi, getAuthHeaders } from '../lib/cloudDb';
+import { compressImageBase64 } from '../utils/storage';
 import { initialSettings } from '../data/mockData';
 
 interface AdminDashboardProps {
@@ -192,7 +193,8 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
 
   const fetchLiveChatSessions = async () => {
     try {
-      const res = await fetch('/api/livechat/sessions');
+      const authHeaders = await getAuthHeaders();
+      const res = await fetch('/api/livechat/sessions', { headers: authHeaders });
       if (res.ok) {
         const data = await res.json();
         setLiveChatSessions(data || []);
@@ -220,9 +222,10 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
     setIsSendingAdminReply(true);
 
     try {
+      const authHeaders = await getAuthHeaders();
       const res = await fetch('/api/livechat/send', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 'Content-Type': 'application/json', ...authHeaders },
         body: JSON.stringify({
           sessionId: selectedLiveSessionId,
           sender: 'admin',
@@ -268,9 +271,10 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
     });
 
     try {
+      const authHeaders = await getAuthHeaders();
       await fetch(`/api/livechat/delete/${sessionIdToDelete}?id=${encodeURIComponent(sessionIdToDelete)}`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 'Content-Type': 'application/json', ...authHeaders },
         body: JSON.stringify({ id: sessionIdToDelete, sessionId: sessionIdToDelete })
       });
       fetchLiveChatSessions();
@@ -553,11 +557,12 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
     }
 
     const reader = new FileReader();
-    reader.onloadend = () => {
+    reader.onloadend = async () => {
       const base64String = reader.result as string;
+      const compressed = await compressImageBase64(base64String, 1100, 0.78);
       setFormSettings(prev => ({
         ...prev,
-        tatLicenseImgUrl: base64String
+        tatLicenseImgUrl: compressed
       }));
     };
     reader.readAsDataURL(file);
@@ -591,60 +596,55 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
   const [detectedGroups, setDetectedGroups] = useState<Array<{ groupId: string; groupName?: string; lastSeen: string }>>([]);
   const [isFetchingGroups, setIsFetchingGroups] = useState(false);
   const [groupFetchStatus, setGroupFetchStatus] = useState<string | null>(null);
-  const [copiedSql, setCopiedSql] = useState(false);
   const [saveSuccess, setSaveSuccess] = useState(false);
   const [showToken, setShowToken] = useState(false);
   const [copiedToken, setCopiedToken] = useState(false);
 
-  // Supabase Status & Purge State
-  const [supabaseStatus, setSupabaseStatus] = useState<{ connected: boolean; url: string | null; error?: string | null } | null>(null);
+  // Firebase Firestore Status & Purge State
+  const [firestoreStatus, setFirestoreStatus] = useState<{ connected: boolean; projectId?: string; url: string | null; error?: string | null } | null>(null);
   const [isCleaningData, setIsCleaningData] = useState(false);
   const [cleanStatusMsg, setCleanStatusMsg] = useState<string | null>(null);
 
-  const checkSupabaseStatus = async () => {
+  const checkFirestoreStatus = async () => {
     try {
-      // 1. Direct browser check via Supabase client SDK
-      const client = getSupabase();
-      if (client) {
-        const { error: appStoreErr } = await client.from('app_store').select('key').limit(1);
-        const { error: bookingsErr } = await client.from('bookings').select('id').limit(1);
+      const [directCheck, authHeaders] = await Promise.all([
+        cloudDbApi.checkConnection(),
+        getAuthHeaders(),
+      ]);
 
-        if (!appStoreErr || !bookingsErr) {
-          setSupabaseStatus({
-            connected: true,
-            url: 'https://tljofqremlconawmtndd.supabase.co'
-          });
-          return;
-        }
-      }
-
-      // 2. Try serverless / server endpoint fallback
-      const res = await (fetch('/api/supabase-status').catch(() => null) || fetch('/api/admin/supabase-status').catch(() => null));
+      const res = await fetch('/api/firestore-status', { headers: authHeaders }).catch(() => null);
       if (res && res.ok) {
         const contentType = res.headers.get('content-type') || '';
         if (contentType.includes('application/json')) {
           const data = await res.json().catch(() => null);
           if (data) {
-            setSupabaseStatus(data);
+            setFirestoreStatus({
+              connected: Boolean(data.connected || directCheck.connected),
+              projectId: data.projectId,
+              url: data.url || null,
+              error: data.error || directCheck.error || null,
+            });
             return;
           }
         }
       }
 
-      if (isSupabaseConfigured) {
-        setSupabaseStatus({
+      if (directCheck.connected) {
+        setFirestoreStatus({
           connected: true,
-          url: 'https://tljofqremlconawmtndd.supabase.co'
+          url: 'https://console.firebase.google.com/project/gen-lang-client-0325240090/firestore',
+        });
+      } else if (isCloudDbConfigured) {
+        setFirestoreStatus({
+          connected: false,
+          url: null,
+          error: directCheck.error || 'ไม่สามารถเชื่อมต่อ Firebase Firestore ได้',
         });
       } else {
-        setSupabaseStatus({ connected: false, url: null, error: 'ยังไม่ได้ตั้งค่า Supabase' });
+        setFirestoreStatus({ connected: false, url: null, error: 'ยังไม่ได้ตั้งค่า Firebase Firestore' });
       }
     } catch (err: any) {
-      if (isSupabaseConfigured) {
-        setSupabaseStatus({ connected: true, url: 'https://tljofqremlconawmtndd.supabase.co' });
-      } else {
-        setSupabaseStatus({ connected: false, url: null, error: err?.message || 'Network Error' });
-      }
+      setFirestoreStatus({ connected: false, url: null, error: err?.message || 'Network Error' });
     }
   };
 
@@ -652,30 +652,14 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
     setIsCleaningData(true);
     setCleanStatusMsg(null);
     try {
-      // Direct clean on Supabase
-      const client = getSupabase();
-      if (client) {
-        try {
-          await client.from('app_store').upsert({
-            key: 'bookings',
-            value: JSON.stringify(bookings),
-            updated_at: new Date().toISOString()
-          }, { onConflict: 'key' });
-        } catch (e) {}
+      const authHeaders = await getAuthHeaders();
+      await Promise.all([
+        cloudDbApi.saveBookingsBackup(bookings).catch(() => false),
+        cloudDbApi.saveTours(tours).catch(() => false),
+        fetch('/api/admin/clean-deleted-data', { method: 'POST', headers: authHeaders }).catch(() => null),
+      ]);
 
-        try {
-          await client.from('app_store').upsert({
-            key: 'tours',
-            value: JSON.stringify(tours),
-            updated_at: new Date().toISOString()
-          }, { onConflict: 'key' });
-        } catch (e) {}
-      }
-
-      // Try server endpoint
-      await fetch('/api/admin/clean-deleted-data', { method: 'POST' }).catch(() => null);
-
-      setCleanStatusMsg('✅ ล้างข้อมูลเก่าที่ลบไปแล้วสะสมใน Supabase เรียบร้อยแล้ว!');
+      setCleanStatusMsg('✅ ล้างข้อมูลเก่าที่ลบไปแล้วสะสมใน Firebase Firestore เรียบร้อยแล้ว!');
       if (onRefreshData) onRefreshData();
     } catch (e) {
       setCleanStatusMsg('❌ เกิดข้อผิดพลาดในการล้างข้อมูล');
@@ -696,28 +680,47 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
     setIsBackingUp(true);
     setBackupStatusMsg(null);
     try {
+      const authHeaders = await getAuthHeaders();
       const res = await fetch('/api/admin/backup-database', {
         method: 'POST',
         headers: {
-          'Content-Type': 'application/json'
+          'Content-Type': 'application/json',
+          ...authHeaders,
         }
       });
-      
+
       if (res.ok) {
         const data = await res.json();
         setBackupStatusMsg({
           success: true,
-          message: data.message || 'สำรองข้อมูลสำเร็จ!',
+          message: data.message || 'สำรองข้อมูลไปยัง Firebase Firestore สำเร็จ!',
           backupTime: data.backupTime,
           counts: data.counts
         });
         if (onRefreshData) onRefreshData();
       } else {
-        const data = await res.json().catch(() => null);
-        setBackupStatusMsg({
-          success: false,
-          message: data?.message || data?.error || 'เกิดข้อผิดพลาดในการสำรองข้อมูลไปยังเซิร์ฟเวอร์'
-        });
+        // Direct browser Firestore backup fallback if authenticated
+        const [tOk, bOk, cOk, rOk, sOk] = await Promise.all([
+          cloudDbApi.saveTours(tours).catch(() => false),
+          cloudDbApi.saveBookingsBackup(bookings).catch(() => false),
+          cloudDbApi.saveCustomers(customers).catch(() => false),
+          cloudDbApi.saveReviews(reviews).catch(() => false),
+          cloudDbApi.saveSettings(formSettings).catch(() => false),
+        ]);
+        if (tOk || bOk || cOk || rOk || sOk) {
+          setBackupStatusMsg({
+            success: true,
+            message: 'สำรองข้อมูลทั้งหมดลง Firebase Firestore เรียบร้อยแล้ว!',
+            backupTime: new Date().toISOString(),
+            counts: { tours: tours.length, bookings: bookings.length, reviews: reviews.length, customers: customers.length }
+          });
+        } else {
+          const data = await res.json().catch(() => null);
+          setBackupStatusMsg({
+            success: false,
+            message: data?.message || data?.error || 'เกิดข้อผิดพลาดในการสำรองข้อมูลไปยัง Firebase Firestore'
+          });
+        }
       }
     } catch (e: any) {
       console.error('Error backup database:', e);
@@ -734,7 +737,8 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
     setIsFetchingGroups(true);
     setGroupFetchStatus(null);
     try {
-      const res = await fetch('/api/line/detected-groups');
+      const authHeaders = await getAuthHeaders();
+      const res = await fetch('/api/line/detected-groups', { headers: authHeaders });
       if (res.ok) {
         const data = await res.json();
         setDetectedGroups(data.detectedGroups || []);
@@ -752,9 +756,10 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
   const handleSendGroupIdToBot = async (targetGroup: string) => {
     setGroupFetchStatus('กำลังส่งข้อความยืนยันเข้ากลุ่ม LINE...');
     try {
+      const authHeaders = await getAuthHeaders();
       const res = await fetch('/api/line/send-group-id-bot-message', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 'Content-Type': 'application/json', ...authHeaders },
         body: JSON.stringify({ groupId: targetGroup })
       });
       const data = await res.json();
@@ -770,7 +775,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
 
   useEffect(() => {
     fetchDetectedGroups();
-    checkSupabaseStatus();
+    checkFirestoreStatus();
   }, []);
 
   useEffect(() => {
@@ -780,7 +785,8 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
   // Load Stats from backend API with automatic client-side calculation fallback
   const fetchStats = async () => {
     try {
-      const res = await fetch('/api/stats', { cache: 'no-store' }).catch(() => null);
+      const authHeaders = await getAuthHeaders();
+      const res = await fetch('/api/stats', { cache: 'no-store', headers: authHeaders }).catch(() => null);
       if (res && res.ok) {
         const data = await res.json().catch(() => null);
         if (data && typeof data.totalRevenue === 'number') {
@@ -819,9 +825,10 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
     if (!confirm(confirmMsg)) return;
 
     try {
+      const authHeaders = await getAuthHeaders();
       const res = await fetch('/api/analytics/reset', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 'Content-Type': 'application/json', ...authHeaders },
         body: JSON.stringify({ mode })
       });
       if (res.ok) {
@@ -865,9 +872,10 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
     onSaveSettings(updatedSettings);
     setNewAdminEmail('');
     try {
+      const authHeaders = await getAuthHeaders();
       await fetch('/api/admin/google-accounts', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 'Content-Type': 'application/json', ...authHeaders },
         body: JSON.stringify({ email })
       });
     } catch (e) {}
@@ -891,8 +899,10 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
     setFormSettings(updatedSettings);
     onSaveSettings(updatedSettings);
     try {
+      const authHeaders = await getAuthHeaders();
       await fetch(`/api/admin/google-accounts/${encodeURIComponent(emailToRemove)}`, {
-        method: 'DELETE'
+        method: 'DELETE',
+        headers: authHeaders
       });
     } catch (e) {}
   };
@@ -902,9 +912,10 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
     setAiGeneratingMap(prev => ({ ...prev, [review.id]: true }));
     try {
       const tour = tours.find(t => t.id === review.tourId);
+      const authHeaders = await getAuthHeaders();
       const res = await fetch('/api/ai/reply-review', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 'Content-Type': 'application/json', ...authHeaders },
         body: JSON.stringify({
           reviewText: review.comment,
           rating: review.rating,
@@ -942,9 +953,10 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
       onReplyReview(reviewId, reply.trim());
     }
     try {
+      const authHeaders = await getAuthHeaders();
       await fetch(`/api/reviews/${reviewId}/reply`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 'Content-Type': 'application/json', ...authHeaders },
         body: JSON.stringify({ reply: reply.trim() })
       });
     } catch (e) {}
@@ -2676,7 +2688,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                         </span>
                       </div>
                       <p className="text-[11px] text-slate-400 mt-1 leading-relaxed">
-                        บันทึกสำรองข้อมูลลงฐานข้อมูล <span className="text-teal-300 font-semibold">Supabase Cloud + Express Server + Local Storage</span> อัตโนมัติ ป้องกันข้อมูลสูญหาย 100%
+                        บันทึกสำรองข้อมูลลงฐานข้อมูล <span className="text-teal-300 font-semibold">Firebase Firestore Cloud + Express Server + Local Storage</span> อัตโนมัติ ป้องกันข้อมูลสูญหาย 100%
                         {lastToursSavedAt && (
                           <span className="ml-1 text-slate-300 font-medium">
                             • เซฟล่าสุด: <span className="text-teal-300 font-bold font-mono">{lastToursSavedAt}</span>
@@ -3414,21 +3426,29 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
             renderRestrictedArea('ตั้งค่า & บัญชี Google Admin')
           ) : (
             <div className="space-y-8 animate-in fade-in">
-            {/* Supabase Database Connection Status Banner */}
+            {/* Firebase Firestore Database Connection Status Banner */}
             <div className="bg-slate-800/80 border border-slate-700/80 p-5 rounded-2xl shadow-xl flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
               <div className="flex items-center gap-3">
-                <div className="w-10 h-10 rounded-xl flex items-center justify-center font-bold bg-emerald-500/20 text-emerald-400 border border-emerald-500/40">
+                <div className={`w-10 h-10 rounded-xl flex items-center justify-center font-bold border ${
+                  firestoreStatus?.connected !== false
+                    ? 'bg-emerald-500/20 text-emerald-400 border-emerald-500/40'
+                    : 'bg-amber-500/20 text-amber-400 border-amber-500/40'
+                }`}>
                   <Database className="w-5 h-5" />
                 </div>
                 <div>
-                  <div className="flex items-center gap-2">
-                    <h4 className="text-sm font-extrabold text-white">สถานะระบบจัดเก็บข้อมูล (Local Server Storage)</h4>
-                    <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-300 border border-emerald-500/30">
-                      🟢 ทำงานปกติ / จัดเก็บในดิสก์ 100% (ถอด Supabase ออกแล้ว)
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <h4 className="text-sm font-extrabold text-white">สถานะฐานข้อมูลคลาวด์ (Firebase Firestore Cloud Database)</h4>
+                    <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full border ${
+                      firestoreStatus?.connected !== false
+                        ? 'bg-emerald-500/20 text-emerald-300 border-emerald-500/30'
+                        : 'bg-amber-500/20 text-amber-300 border-amber-500/30'
+                    }`}>
+                      {firestoreStatus?.connected !== false ? '🟢 เชื่อมต่อ Firebase Firestore ปกติ' : `🟡 ${firestoreStatus?.error || 'กำลังตรวจสอบการเชื่อมต่อ'}`}
                     </span>
                   </div>
                   <p className="text-xs text-slate-400 font-mono mt-0.5">
-                    ระบบหลัก: Local Disk Persistence (data/*.json) &amp; Google Sheets / Drive Sync
+                    ระบบหลัก: Firebase Firestore (gen-lang-client-0325240090) &amp; Google Sheets / Drive Sync
                   </p>
                 </div>
               </div>
@@ -3439,10 +3459,10 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                   onClick={handleManualBackup}
                   disabled={isBackingUp}
                   className="bg-teal-600 hover:bg-teal-500 text-white font-extrabold px-3.5 py-2 rounded-xl text-xs flex items-center gap-1.5 transition disabled:opacity-50 shadow-md shadow-teal-900/30"
-                  title="ทำการสำรองข้อมูลทัวร์และออเดอร์สะสมลงไฟล์ระบบทันที"
+                  title="ทำการสำรองข้อมูลทัวร์และออเดอร์สะสมลง Firebase Firestore ทันที"
                 >
                   <Database className={`w-3.5 h-3.5 ${isBackingUp ? 'animate-spin' : ''}`} />
-                  <span>{isBackingUp ? 'กำลังสำรองข้อมูล...' : 'สำรองข้อมูล (Local Backup)'}</span>
+                  <span>{isBackingUp ? 'กำลังสำรองข้อมูล...' : 'สำรองข้อมูล (Firestore Backup)'}</span>
                 </button>
                 <button
                   type="button"
@@ -3456,7 +3476,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                 </button>
                 <button
                   type="button"
-                  onClick={checkSupabaseStatus}
+                  onClick={checkFirestoreStatus}
                   className="bg-slate-700 hover:bg-slate-600 text-slate-200 font-bold px-3 py-2 rounded-xl text-xs transition flex items-center gap-1"
                 >
                   <RefreshCw className="w-3.5 h-3.5" />
@@ -3464,6 +3484,12 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                 </button>
               </div>
             </div>
+            {cleanStatusMsg && (
+              <div className="bg-emerald-500/10 border border-emerald-500/30 text-emerald-300 px-4 py-2.5 rounded-xl text-xs font-bold flex items-center justify-between">
+                <span>{cleanStatusMsg}</span>
+                <button type="button" onClick={() => setCleanStatusMsg(null)} className="text-slate-400 hover:text-white">✕</button>
+              </div>
+            )}
 
             {/* Universal System Disaster Recovery & JSON Backup Card */}
             <div className="bg-gradient-to-br from-slate-900 via-slate-900 to-slate-950 border border-teal-500/40 p-6 rounded-3xl shadow-2xl space-y-4">
@@ -3575,7 +3601,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                 <div className="flex items-center justify-between font-bold">
                   <div className="flex items-center gap-2">
                     <Database className="w-4 h-4 text-emerald-400" />
-                    <span>{backupStatusMsg.success ? '💾 สำรองข้อมูลสำเร็จแล้ว (Supabase Safe Manual Backup)' : '❌ การสำรองข้อมูลขัดข้อง'}</span>
+                    <span>{backupStatusMsg.success ? '💾 สำรองข้อมูลสำเร็จแล้ว (Firebase Firestore Safe Manual Backup)' : '❌ การสำรองข้อมูลขัดข้อง'}</span>
                   </div>
                   <button onClick={() => setBackupStatusMsg(null)} className="text-slate-400 hover:text-white text-xs">✕</button>
                 </div>
@@ -5583,7 +5609,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
             <div className="border-t border-slate-800 pt-3 flex items-center justify-between text-xs text-slate-400 shrink-0">
               <span className="flex items-center gap-1.5">
                 <ShieldCheck className="w-4 h-4 text-emerald-400" />
-                <span>ซิงค์ตรงกับฐานข้อมูล Supabase และ Local Storage</span>
+                <span>ซิงค์ตรงกับฐานข้อมูล Firebase Firestore และ Local Storage</span>
               </span>
               <button
                 type="button"

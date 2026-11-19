@@ -4,9 +4,10 @@ import { Tour, Booking, Language, AppSettings } from '../types';
 import { translations } from '../data/translations';
 import { generatePromptPayQRDataUrl } from '../utils/promptpay';
 import { TicketVoucher } from './TicketVoucher';
-import { supabaseApi } from '../lib/supabase';
+import { cloudDbApi } from '../lib/cloudDb';
 import { getAddonDisplayName, getAddonAdjustmentText } from '../utils/addonHelper';
 import { getEffectivePickupZones, getZoneExtraFeePerGuest, getZoneDisplayName, getZoneTransferStatusLabel } from '../utils/pickupZoneHelper';
+import { compressImageBase64 } from '../utils/storage';
 
 interface BookingModalProps {
   tour: Tour | null;
@@ -104,12 +105,15 @@ export const BookingModal: React.FC<BookingModalProps> = ({
 
   const t = translations[currentLang];
 
-  // Handle Slip Upload
+  // Handle Slip Upload (compress large photos so Vercel Serverless Function body limit is never exceeded)
   const handleSlipChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files && e.target.files[0]) {
       const reader = new FileReader();
-      reader.onload = (uploadEvent) => {
-        setSlipFile(uploadEvent.target?.result as string);
+      reader.onload = async (uploadEvent) => {
+        const rawDataUrl = uploadEvent.target?.result as string;
+        if (!rawDataUrl) return;
+        const compressed = await compressImageBase64(rawDataUrl, 1000, 0.8);
+        setSlipFile(compressed);
       };
       reader.readAsDataURL(e.target.files[0]);
     }
@@ -163,7 +167,7 @@ export const BookingModal: React.FC<BookingModalProps> = ({
         if (!res.ok) throw new Error('Booking request failed');
         bookingData = await res.json();
       } catch (apiErr) {
-        console.warn('Vercel API endpoint for booking creation failed, falling back to direct client-side Supabase write:', apiErr);
+        console.warn('API endpoint for booking creation failed, falling back to direct client-side Firestore write:', apiErr);
         
         // Generate robust booking payload client-side
         const refNum = Math.floor(1000 + Math.random() * 9000);
@@ -194,20 +198,22 @@ export const BookingModal: React.FC<BookingModalProps> = ({
           totalAmount: Number(totalAmount) || 0,
           paymentMethod: 'promptpay',
           promptPayIdUsed: settings.promptPayId || '0825257914',
-          paymentStatus: 'pending',
+          paymentStatus: slipFile ? 'slip_uploaded' : 'pending',
           orderStatus: 'pending',
+          slipUrl: slipFile || undefined,
+          slipUploadedAt: slipFile ? new Date().toISOString() : undefined,
           createdAt: new Date().toISOString(),
           lineNotifySent: false
         };
 
-        // Write directly to Supabase client-side
+        // Write directly to Firebase Firestore client-side
         try {
-          const success = await supabaseApi.createBooking(bookingData);
+          const success = await cloudDbApi.createBooking(bookingData);
           if (!success) {
-            throw new Error('Supabase direct booking creation returned false');
+            throw new Error('Firestore direct booking creation returned false');
           }
         } catch (dbErr) {
-          console.error('Supabase write failed, falling back to localStorage database backup:', dbErr);
+          console.error('Firestore write failed, falling back to localStorage database backup:', dbErr);
           try {
             const savedFallbacks = localStorage.getItem('local_fallback_bookings');
             const list = savedFallbacks ? JSON.parse(savedFallbacks) : [];

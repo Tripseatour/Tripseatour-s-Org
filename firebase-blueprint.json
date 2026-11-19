@@ -1,0 +1,316 @@
+{
+  "entities": {
+    "Tour": {
+      "title": "Tour",
+      "description": "Phuket tour package in the public catalog",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "slug": { "type": "string", "minLength": 1, "maxLength": 128 },
+        "title": { "type": "object" },
+        "category": { "type": "string", "enum": ["island", "sunset", "yacht", "eco", "sightseeing"] },
+        "categoryLabel": { "type": "object" },
+        "description": { "type": "object" },
+        "highlights": { "type": "object" },
+        "priceAdult": { "type": "number" },
+        "priceChild": { "type": "number" },
+        "priceInfant": { "type": "number" },
+        "costAdult": { "type": "number" },
+        "costChild": { "type": "number" },
+        "priceForeignAdult": { "type": "number" },
+        "priceForeignChild": { "type": "number" },
+        "costForeignAdult": { "type": "number" },
+        "costForeignChild": { "type": "number" },
+        "originalPriceAdult": { "type": "number" },
+        "originalPriceChild": { "type": "number" },
+        "originalPriceForeignAdult": { "type": "number" },
+        "originalPriceForeignChild": { "type": "number" },
+        "supplierId": { "type": "string", "maxLength": 128 },
+        "supplierName": { "type": "string", "maxLength": 200 },
+        "duration": { "type": "object" },
+        "location": { "type": "string", "maxLength": 300 },
+        "pickupAreas": { "type": "array" },
+        "pickupZoneConfigs": { "type": "array" },
+        "included": { "type": "object" },
+        "excluded": { "type": "object" },
+        "itinerary": { "type": "array" },
+        "images": { "type": "array" },
+        "rating": { "type": "number" },
+        "reviewCount": { "type": "number" },
+        "tags": { "type": "array" },
+        "isFeatured": { "type": "boolean" },
+        "isAvailable": { "type": "boolean" },
+        "isVisible": { "type": "boolean" },
+        "addons": { "type": "array" },
+        "sortOrder": { "type": "number" },
+        "updatedAt": { "type": "string", "maxLength": 64 }
+      },
+      "required": ["id", "slug", "title", "category", "priceAdult", "priceChild", "isVisible"]
+    },
+    "Booking": {
+      "title": "Booking",
+      "description": "Customer tour booking record containing customer PII and payment status",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "bookingRef": { "type": "string", "minLength": 4, "maxLength": 64, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "tourId": { "type": "string", "minLength": 1, "maxLength": 128 },
+        "tourTitle": { "type": "string", "minLength": 1, "maxLength": 300 },
+        "tourImage": { "type": "string", "maxLength": 500000 },
+        "supplierId": { "type": "string", "maxLength": 128 },
+        "supplierName": { "type": "string", "maxLength": 200 },
+        "customerName": { "type": "string", "minLength": 1, "maxLength": 200 },
+        "customerEmail": { "type": "string", "maxLength": 200 },
+        "customerPhone": { "type": "string", "minLength": 3, "maxLength": 50 },
+        "customerLineId": { "type": "string", "maxLength": 128 },
+        "nationality": { "type": "string", "maxLength": 100 },
+        "isForeigner": { "type": "boolean" },
+        "selectedAddons": { "type": "array" },
+        "travelDate": { "type": "string", "minLength": 8, "maxLength": 32 },
+        "pickupTime": { "type": "string", "maxLength": 64 },
+        "pickupHotel": { "type": "string", "minLength": 1, "maxLength": 300 },
+        "pickupZone": { "type": "string", "maxLength": 128 },
+        "pickupZoneFee": { "type": "number" },
+        "roomNumber": { "type": "string", "maxLength": 64 },
+        "sendBackHotel": { "type": "string", "maxLength": 300 },
+        "specialRequests": { "type": "string", "maxLength": 1000 },
+        "adults": { "type": "number" },
+        "children": { "type": "number" },
+        "infants": { "type": "number" },
+        "totalAmount": { "type": "number" },
+        "paymentMethod": { "type": "string", "enum": ["promptpay"] },
+        "promptPayIdUsed": { "type": "string", "maxLength": 64 },
+        "paymentStatus": { "type": "string", "enum": ["pending", "slip_uploaded", "verified", "cancelled", "refunded"] },
+        "orderStatus": { "type": "string", "enum": ["pending", "confirmed", "completed", "cancelled"] },
+        "slipUrl": { "type": "string", "maxLength": 850000 },
+        "slipUploadedAt": { "type": "string", "maxLength": 64 },
+        "ticketImageUrl": { "type": "string", "maxLength": 850000 },
+        "paidAt": { "type": "string", "maxLength": 64 },
+        "createdAt": { "type": "string", "minLength": 10, "maxLength": 64 },
+        "lineNotifySent": { "type": "boolean" },
+        "reminderSent": { "type": "boolean" },
+        "reminderSentAt": { "type": "string", "maxLength": 64 },
+        "notes": { "type": "string", "maxLength": 1000 },
+        "updatedAt": { "type": "string", "maxLength": 64 }
+      },
+      "required": ["id", "bookingRef", "tourId", "tourTitle", "customerName", "customerPhone", "travelDate", "pickupHotel", "adults", "totalAmount", "paymentStatus", "orderStatus", "createdAt"]
+    },
+    "BookingStatus": {
+      "title": "BookingStatus",
+      "description": "Non-PII public lookup projection of a booking by exact bookingRef",
+      "type": "object",
+      "properties": {
+        "bookingRef": { "type": "string", "minLength": 4, "maxLength": 64, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "tourTitle": { "type": "string", "maxLength": 300 },
+        "travelDate": { "type": "string", "maxLength": 32 },
+        "adults": { "type": "number" },
+        "children": { "type": "number" },
+        "infants": { "type": "number" },
+        "totalAmount": { "type": "number" },
+        "paymentStatus": { "type": "string", "enum": ["pending", "slip_uploaded", "verified", "cancelled", "refunded"] },
+        "orderStatus": { "type": "string", "enum": ["pending", "confirmed", "completed", "cancelled"] },
+        "pickupZone": { "type": "string", "maxLength": 128 },
+        "createdAt": { "type": "string", "maxLength": 64 }
+      },
+      "required": ["bookingRef", "tourTitle", "travelDate", "totalAmount", "paymentStatus", "orderStatus"]
+    },
+    "Customer": {
+      "title": "Customer",
+      "description": "CRM customer profile containing PII (admin only)",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "name": { "type": "string", "minLength": 1, "maxLength": 200 },
+        "email": { "type": "string", "maxLength": 200 },
+        "phone": { "type": "string", "minLength": 3, "maxLength": 50 },
+        "lineId": { "type": "string", "maxLength": 128 },
+        "nationality": { "type": "string", "maxLength": 100 },
+        "totalBookings": { "type": "number" },
+        "totalSpent": { "type": "number" },
+        "lastBookingDate": { "type": "string", "maxLength": 64 },
+        "createdAt": { "type": "string", "maxLength": 64 }
+      },
+      "required": ["id", "name", "phone", "totalBookings", "totalSpent", "createdAt"]
+    },
+    "Supplier": {
+      "title": "Supplier",
+      "description": "Tour operator and bank account details (admin only)",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "name": { "type": "string", "minLength": 1, "maxLength": 200 },
+        "code": { "type": "string", "minLength": 1, "maxLength": 64 },
+        "contactPerson": { "type": "string", "maxLength": 200 },
+        "phone": { "type": "string", "maxLength": 50 },
+        "email": { "type": "string", "maxLength": 200 },
+        "lineId": { "type": "string", "maxLength": 128 },
+        "address": { "type": "string", "maxLength": 500 },
+        "bankName": { "type": "string", "maxLength": 128 },
+        "accountNo": { "type": "string", "maxLength": 64 },
+        "accountName": { "type": "string", "maxLength": 200 },
+        "bankAccount": { "type": "object" },
+        "notes": { "type": "string", "maxLength": 1000 },
+        "isActive": { "type": "boolean" },
+        "createdAt": { "type": "string", "maxLength": 64 }
+      },
+      "required": ["id", "name", "code", "isActive"]
+    },
+    "Review": {
+      "title": "Review",
+      "description": "Customer tour review",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "tourId": { "type": "string", "minLength": 1, "maxLength": 128 },
+        "userName": { "type": "string", "minLength": 1, "maxLength": 120 },
+        "userAvatar": { "type": "string", "maxLength": 2000 },
+        "nationality": { "type": "string", "maxLength": 64 },
+        "rating": { "type": "number" },
+        "comment": { "type": "string", "minLength": 1, "maxLength": 2000 },
+        "date": { "type": "string", "maxLength": 32 },
+        "verifiedBooking": { "type": "boolean" },
+        "photos": { "type": "array" },
+        "adminReply": { "type": "string", "maxLength": 2000 },
+        "adminReplyDate": { "type": "string", "maxLength": 32 },
+        "isApproved": { "type": "boolean" }
+      },
+      "required": ["id", "tourId", "userName", "rating", "comment", "date", "verifiedBooking", "isApproved"]
+    },
+    "PublicSettings": {
+      "title": "PublicSettings",
+      "description": "Non-sensitive storefront settings (PromptPay, TAT license, contact info)",
+      "type": "object",
+      "properties": {
+        "siteName": { "type": "string", "maxLength": 200 },
+        "companyName": { "type": "string", "maxLength": 300 },
+        "promptPayId": { "type": "string", "maxLength": 64 },
+        "promptPayName": { "type": "string", "maxLength": 200 },
+        "lineOaId": { "type": "string", "maxLength": 64 },
+        "contactPhone": { "type": "string", "maxLength": 100 },
+        "contactEmail": { "type": "string", "maxLength": 200 },
+        "address": { "type": "string", "maxLength": 500 },
+        "tatLicenseNo": { "type": "string", "maxLength": 64 },
+        "tatLicenseImgUrl": { "type": "string", "maxLength": 850000 },
+        "facebookUrl": { "type": "string", "maxLength": 300 },
+        "facebookMessengerUrl": { "type": "string", "maxLength": 300 },
+        "updatedAt": { "type": "string", "maxLength": 64 }
+      },
+      "required": ["siteName", "promptPayId"]
+    },
+    "PrivateSettings": {
+      "title": "PrivateSettings",
+      "description": "Sensitive admin credentials and LINE messaging tokens (admin only)",
+      "type": "object",
+      "properties": {
+        "adminPin": { "type": "string", "maxLength": 32 },
+        "adminGoogleEmails": { "type": "array" },
+        "adminPermissions": { "type": "array" },
+        "lineMessagingChannelAccessToken": { "type": "string", "maxLength": 500 },
+        "lineMessagingUserId": { "type": "string", "maxLength": 128 },
+        "lineNotifyToken": { "type": "string", "maxLength": 200 },
+        "updatedAt": { "type": "string", "maxLength": 64 }
+      },
+      "required": ["adminGoogleEmails"]
+    },
+    "PublicMedia": {
+      "title": "PublicMedia",
+      "description": "Compressed image payload for payment slips, vouchers, or TAT certificate served by exact key",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "data": { "type": "string", "minLength": 10, "maxLength": 850000 },
+        "mimeType": { "type": "string", "enum": ["image/jpeg", "image/png", "image/webp"] },
+        "createdAt": { "type": "string", "maxLength": 64 }
+      },
+      "required": ["id", "data", "mimeType", "createdAt"]
+    },
+    "LiveChatSession": {
+      "title": "LiveChatSession",
+      "description": "Customer live chat conversation",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "customerName": { "type": "string", "minLength": 1, "maxLength": 200 },
+        "customerPhone": { "type": "string", "maxLength": 50 },
+        "unreadCount": { "type": "number" },
+        "status": { "type": "string", "enum": ["active", "closed"] },
+        "createdAt": { "type": "string", "maxLength": 64 },
+        "updatedAt": { "type": "string", "maxLength": 64 },
+        "messages": { "type": "array" }
+      },
+      "required": ["id", "customerName", "unreadCount", "status", "createdAt", "updatedAt", "messages"]
+    },
+    "AppMetadata": {
+      "title": "AppMetadata",
+      "description": "Sync version timestamps, tombstone deleted ID lists, and visitor analytics",
+      "type": "object",
+      "properties": {
+        "version": { "type": "number" },
+        "updatedAt": { "type": "string", "maxLength": 64 },
+        "deletedTourIds": { "type": "array" },
+        "deletedBookingIds": { "type": "array" },
+        "deletedCustomerIds": { "type": "array" },
+        "deletedReviewIds": { "type": "array" },
+        "deletedSupplierIds": { "type": "array" }
+      }
+    },
+    "AdminRole": {
+      "title": "AdminRole",
+      "description": "Authorized admin user record keyed by Firebase Auth UID",
+      "type": "object",
+      "properties": {
+        "uid": { "type": "string", "minLength": 1, "maxLength": 128 },
+        "email": { "type": "string", "minLength": 3, "maxLength": 200 },
+        "role": { "type": "string", "enum": ["superadmin", "admin"] },
+        "createdAt": { "type": "string", "maxLength": 64 }
+      },
+      "required": ["uid", "email", "role"]
+    }
+  },
+  "firestore": {
+    "/tours/{tourId}": {
+      "schema": { "$ref": "#/entities/Tour" },
+      "description": "Individual Phuket tour catalog items"
+    },
+    "/bookings/{bookingId}": {
+      "schema": { "$ref": "#/entities/Booking" },
+      "description": "Customer bookings (write create by guest or admin, read/update/delete admin only)"
+    },
+    "/booking_status/{bookingRef}": {
+      "schema": { "$ref": "#/entities/BookingStatus" },
+      "description": "Non-PII booking status lookup by exact bookingRef"
+    },
+    "/customers/{customerId}": {
+      "schema": { "$ref": "#/entities/Customer" },
+      "description": "Customer CRM profiles (admin only)"
+    },
+    "/suppliers/{supplierId}": {
+      "schema": { "$ref": "#/entities/Supplier" },
+      "description": "Tour suppliers and bank accounts (admin only)"
+    },
+    "/reviews/{reviewId}": {
+      "schema": { "$ref": "#/entities/Review" },
+      "description": "Tour reviews"
+    },
+    "/config/{docId}": {
+      "schema": { "$ref": "#/entities/PublicSettings" },
+      "description": "App configuration split into config/public and config/private"
+    },
+    "/public_media/{mediaId}": {
+      "schema": { "$ref": "#/entities/PublicMedia" },
+      "description": "Compressed image assets for LINE slips, tickets, and TAT license"
+    },
+    "/live_chat_sessions/{sessionId}": {
+      "schema": { "$ref": "#/entities/LiveChatSession" },
+      "description": "Customer support live chat sessions"
+    },
+    "/metadata/{docId}": {
+      "schema": { "$ref": "#/entities/AppMetadata" },
+      "description": "Sync version timestamps, deleted tombstones, and analytics"
+    },
+    "/admins/{uid}": {
+      "schema": { "$ref": "#/entities/AdminRole" },
+      "description": "Admin role registry"
+    }
+  }
+}

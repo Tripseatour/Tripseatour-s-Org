@@ -1,0 +1,43 @@
+[
+  {
+    "id": "rev-1",
+    "tourId": "tour-1",
+    "userName": "คุณสมชาย และครอบครัว",
+    "nationality": "TH",
+    "rating": 5,
+    "comment": "ประทับใจทริปเกาะพีพีมากครับ เรือใหม่และสะอาดมาก ไกด์ดูแลเอาใจใส่ดี ยอดเงินโอนผ่าน PromptPay QR สะดวก ได้รับ Voucher ยืนยันทาง LINE เร็วมาก เด็กๆ ชอบปิเละลากูนที่สุด!",
+    "date": "2026-08-10",
+    "verifiedBooking": true,
+    "photos": [
+      "https://images.unsplash.com/photo-1537996194471-e657df975ab4?auto=format&fit=crop&w=600&q=80"
+    ],
+    "adminReply": "ขอบพระคุณคุณสมชายและครอบครัวมากครับที่เลือกใช้บริการ Trip Sea Tour Phuket ยินดีต้อนรับกลับมาเที่ยวภูเก็ตอีกครั้งนะครับ!",
+    "adminReplyDate": "2026-08-10",
+    "isApproved": true
+  },
+  {
+    "id": "rev-2",
+    "tourId": "tour-3",
+    "userName": "Alexandre & Elena",
+    "nationality": "RU",
+    "rating": 5,
+    "comment": "Wonderful sunset yacht tour! The BBQ dinner was delicious, and seeing the sunset at Promthep Cape from the catamaran deck was magical. Payment via PromptPay QR was fast.",
+    "date": "2026-08-08",
+    "verifiedBooking": true,
+    "photos": [
+      "https://images.unsplash.com/photo-1569263979104-865ab7cd8d13?auto=format&fit=crop&w=600&q=80"
+    ],
+    "isApproved": true
+  },
+  {
+    "id": "rev-3",
+    "tourId": "tour-5",
+    "userName": "李先生 & 张小姐",
+    "nationality": "ZH",
+    "rating": 5,
+    "comment": "非常有意义的大象保护区之旅！没有骑大象，能给大象做泥巴SPA和洗澡，大象非常快乐。在线预订流程很畅通，在线客服在LINE上很快解答了我们的问题，强烈推荐！",
+    "date": "2026-08-05",
+    "verifiedBooking": true,
+    "isApproved": true
+  }
+]

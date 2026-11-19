@@ -1,0 +1,402 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // Global default-deny safety net
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    // --- Global Helpers ---
+    function incoming() {
+      return request.resource.data;
+    }
+
+    function existing() {
+      return resource.data;
+    }
+
+    function isValidId(id) {
+      return id is string && id.size() >= 1 && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$');
+    }
+
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function isVerifiedUser() {
+      return isSignedIn() && request.auth.token.email_verified == true;
+    }
+
+    function isSuperAdmin() {
+      return isVerifiedUser() && request.auth.token.email == 'asmr9941@gmail.com';
+    }
+
+    function isAdmin() {
+      return isSuperAdmin() || (isVerifiedUser() && exists(/databases/$(database)/documents/admins/$(request.auth.uid)));
+    }
+
+    function isNonEmptyString(val, maxLen) {
+      return val is string && val.size() >= 1 && val.size() <= maxLen;
+    }
+
+    function isOptionalString(val, maxLen) {
+      return val is string && val.size() <= maxLen;
+    }
+
+    function isValidTour(data) {
+      return data.keys().hasAll(['id', 'slug', 'title', 'category', 'priceAdult', 'priceChild', 'isVisible'])
+        && data.keys().hasOnly([
+          'id', 'slug', 'title', 'category', 'categoryLabel', 'description', 'highlights',
+          'priceAdult', 'priceChild', 'priceInfant', 'costAdult', 'costChild',
+          'priceForeignAdult', 'priceForeignChild', 'costForeignAdult', 'costForeignChild',
+          'originalPriceAdult', 'originalPriceChild', 'originalPriceForeignAdult', 'originalPriceForeignChild',
+          'supplierId', 'supplierName', 'duration', 'location', 'pickupAreas', 'pickupZoneConfigs',
+          'included', 'excluded', 'itinerary', 'images', 'rating', 'reviewCount', 'tags',
+          'isFeatured', 'isAvailable', 'isVisible', 'addons', 'sortOrder', 'updatedAt'
+        ])
+        && isValidId(data.id)
+        && isNonEmptyString(data.slug, 128)
+        && data.title is map
+        && data.category in ['island', 'sunset', 'yacht', 'eco', 'sightseeing']
+        && data.priceAdult is number && data.priceAdult >= 0 && data.priceAdult <= 1000000
+        && data.priceChild is number && data.priceChild >= 0 && data.priceChild <= 1000000
+        && data.isVisible is bool
+        && (!('images' in data) || (data.images is list && data.images.size() <= 20))
+        && (!('tags' in data) || (data.tags is list && data.tags.size() <= 30))
+        && (!('location' in data) || isOptionalString(data.location, 300));
+    }
+
+    function isValidBookingData(data) {
+      return data.keys().hasAll([
+          'id', 'bookingRef', 'tourId', 'tourTitle', 'customerName', 'customerPhone',
+          'travelDate', 'pickupHotel', 'adults', 'totalAmount', 'paymentStatus', 'orderStatus', 'createdAt'
+        ])
+        && data.keys().hasOnly([
+          'id', 'bookingRef', 'tourId', 'tourTitle', 'tourImage', 'supplierId', 'supplierName',
+          'customerName', 'customerEmail', 'customerPhone', 'customerLineId', 'nationality',
+          'isForeigner', 'selectedAddons', 'travelDate', 'pickupTime', 'pickupHotel',
+          'pickupZone', 'pickupZoneFee', 'roomNumber', 'sendBackHotel', 'specialRequests',
+          'adults', 'children', 'infants', 'totalAmount', 'paymentMethod', 'promptPayIdUsed',
+          'paymentStatus', 'orderStatus', 'slipUrl', 'slipUploadedAt', 'ticketImageUrl',
+          'paidAt', 'createdAt', 'lineNotifySent', 'reminderSent', 'reminderSentAt', 'notes', 'updatedAt'
+        ])
+        && isValidId(data.id)
+        && isValidId(data.bookingRef)
+        && isNonEmptyString(data.tourId, 128)
+        && isNonEmptyString(data.tourTitle, 300)
+        && isNonEmptyString(data.customerName, 200)
+        && isNonEmptyString(data.customerPhone, 50)
+        && isNonEmptyString(data.travelDate, 32)
+        && isNonEmptyString(data.pickupHotel, 300)
+        && data.adults is number && data.adults >= 1 && data.adults <= 100
+        && data.totalAmount is number && data.totalAmount >= 0 && data.totalAmount <= 10000000
+        && data.paymentStatus in ['pending', 'slip_uploaded', 'verified', 'cancelled', 'refunded']
+        && data.orderStatus in ['pending', 'confirmed', 'completed', 'cancelled']
+        && isNonEmptyString(data.createdAt, 64)
+        && (!('customerEmail' in data) || isOptionalString(data.customerEmail, 200))
+        && (!('slipUrl' in data) || isOptionalString(data.slipUrl, 850000))
+        && (!('ticketImageUrl' in data) || isOptionalString(data.ticketImageUrl, 850000))
+        && (!('tourImage' in data) || isOptionalString(data.tourImage, 500000));
+    }
+
+    function isValidGuestBookingCreate(data) {
+      return isValidBookingData(data)
+        && data.orderStatus == 'pending'
+        && data.paymentStatus in ['pending', 'slip_uploaded']
+        && (!('lineNotifySent' in data) || data.lineNotifySent == false);
+    }
+
+    function isValidBookingStatusDoc(data) {
+      return data.keys().hasAll(['bookingRef', 'tourTitle', 'travelDate', 'totalAmount', 'paymentStatus', 'orderStatus'])
+        && data.keys().hasOnly([
+          'bookingRef', 'tourTitle', 'travelDate', 'adults', 'children', 'infants',
+          'totalAmount', 'paymentStatus', 'orderStatus', 'pickupZone', 'createdAt'
+        ])
+        && isValidId(data.bookingRef)
+        && isNonEmptyString(data.tourTitle, 300)
+        && isNonEmptyString(data.travelDate, 32)
+        && data.totalAmount is number && data.totalAmount >= 0 && data.totalAmount <= 10000000
+        && data.paymentStatus in ['pending', 'slip_uploaded', 'verified', 'cancelled', 'refunded']
+        && data.orderStatus in ['pending', 'confirmed', 'completed', 'cancelled'];
+    }
+
+    function isValidCustomer(data) {
+      return data.keys().hasAll(['id', 'name', 'phone', 'totalBookings', 'totalSpent', 'createdAt'])
+        && data.keys().hasOnly([
+          'id', 'name', 'email', 'phone', 'lineId', 'nationality',
+          'totalBookings', 'totalSpent', 'lastBookingDate', 'createdAt'
+        ])
+        && isValidId(data.id)
+        && isNonEmptyString(data.name, 200)
+        && isNonEmptyString(data.phone, 50)
+        && data.totalBookings is number && data.totalBookings >= 0
+        && data.totalSpent is number && data.totalSpent >= 0
+        && isNonEmptyString(data.createdAt, 64);
+    }
+
+    function isValidSupplier(data) {
+      return data.keys().hasAll(['id', 'name', 'code', 'isActive'])
+        && data.keys().hasOnly([
+          'id', 'name', 'code', 'contactPerson', 'phone', 'email', 'lineId',
+          'address', 'bankName', 'accountNo', 'accountName', 'bankAccount', 'notes', 'isActive', 'createdAt'
+        ])
+        && isValidId(data.id)
+        && isNonEmptyString(data.name, 200)
+        && isNonEmptyString(data.code, 64)
+        && data.isActive is bool;
+    }
+
+    function isValidReview(data) {
+      return data.keys().hasAll(['id', 'tourId', 'userName', 'rating', 'comment', 'date', 'verifiedBooking', 'isApproved'])
+        && data.keys().hasOnly([
+          'id', 'tourId', 'userName', 'userAvatar', 'nationality', 'rating', 'comment',
+          'date', 'verifiedBooking', 'photos', 'adminReply', 'adminReplyDate', 'isApproved'
+        ])
+        && isValidId(data.id)
+        && isNonEmptyString(data.tourId, 128)
+        && isNonEmptyString(data.userName, 120)
+        && data.rating is number && data.rating >= 1 && data.rating <= 5
+        && isNonEmptyString(data.comment, 2000)
+        && isNonEmptyString(data.date, 32)
+        && data.verifiedBooking is bool
+        && data.isApproved is bool
+        && (!('photos' in data) || (data.photos is list && data.photos.size() <= 5));
+    }
+
+    function isValidPublicConfig(data) {
+      return data.keys().hasAll(['siteName', 'promptPayId'])
+        && data.keys().hasOnly([
+          'siteName', 'companyName', 'promptPayId', 'promptPayName', 'lineOaId',
+          'contactPhone', 'contactEmail', 'address', 'tatLicenseNo', 'tatLicenseImgUrl',
+          'facebookUrl', 'facebookMessengerUrl', 'updatedAt'
+        ])
+        && isNonEmptyString(data.siteName, 200)
+        && isNonEmptyString(data.promptPayId, 64)
+        && (!('tatLicenseImgUrl' in data) || isOptionalString(data.tatLicenseImgUrl, 850000));
+    }
+
+    function isValidPrivateConfig(data) {
+      return data.keys().hasAll(['adminGoogleEmails'])
+        && data.keys().hasOnly([
+          'adminPin', 'adminGoogleEmails', 'adminPermissions',
+          'lineMessagingChannelAccessToken', 'lineMessagingUserId', 'lineNotifyToken', 'updatedAt'
+        ])
+        && data.adminGoogleEmails is list && data.adminGoogleEmails.size() <= 50;
+    }
+
+    function isValidPublicMedia(data) {
+      return data.keys().hasAll(['id', 'data', 'mimeType', 'createdAt'])
+        && data.keys().hasOnly(['id', 'data', 'mimeType', 'createdAt'])
+        && isValidId(data.id)
+        && isNonEmptyString(data.data, 850000)
+        && data.mimeType in ['image/jpeg', 'image/png', 'image/webp']
+        && isNonEmptyString(data.createdAt, 64);
+    }
+
+    function isValidLiveChat(data) {
+      return data.keys().hasAll(['id', 'customerName', 'unreadCount', 'status', 'createdAt', 'updatedAt', 'messages'])
+        && data.keys().hasOnly(['id', 'customerName', 'customerPhone', 'unreadCount', 'status', 'createdAt', 'updatedAt', 'messages'])
+        && isValidId(data.id)
+        && isNonEmptyString(data.customerName, 200)
+        && data.unreadCount is number && data.unreadCount >= 0 && data.unreadCount <= 1000
+        && data.status in ['active', 'closed']
+        && data.messages is list && data.messages.size() <= 200;
+    }
+
+    function isValidDeletedIdsDoc(data) {
+      return data.keys().hasOnly([
+          'deletedTourIds', 'deletedBookingIds', 'deletedCustomerIds',
+          'deletedReviewIds', 'deletedSupplierIds', 'updatedAt'
+        ])
+        && (!('deletedTourIds' in data) || (data.deletedTourIds is list && data.deletedTourIds.size() <= 500))
+        && (!('deletedBookingIds' in data) || (data.deletedBookingIds is list && data.deletedBookingIds.size() <= 1000))
+        && (!('deletedCustomerIds' in data) || (data.deletedCustomerIds is list && data.deletedCustomerIds.size() <= 1000))
+        && (!('deletedReviewIds' in data) || (data.deletedReviewIds is list && data.deletedReviewIds.size() <= 500))
+        && (!('deletedSupplierIds' in data) || (data.deletedSupplierIds is list && data.deletedSupplierIds.size() <= 500));
+    }
+
+    function isValidSyncDoc(data) {
+      return data.keys().hasAll(['version', 'updatedAt'])
+        && data.keys().hasOnly([
+          'version', 'updatedAt', 'toursAt', 'bookingsAt',
+          'reviewsAt', 'customersAt', 'suppliersAt', 'settingsAt'
+        ])
+        && data.version is number && data.version >= 1
+        && isNonEmptyString(data.updatedAt, 64);
+    }
+
+    function isValidVisitorAnalytics(data) {
+      return data.keys().hasAll(['totalPageviews', 'totalUniqueVisitors', 'todayPageviews', 'todayUniqueVisitors'])
+        && data.keys().hasOnly([
+          'totalPageviews', 'totalUniqueVisitors', 'todayPageviews', 'todayUniqueVisitors',
+          'yesterdayPageviews', 'yesterdayUniqueVisitors', 'activeNow', 'isRealModeOnly',
+          'liveSessions', 'dailyHistory', 'devices', 'topPages', 'sources', 'recentVisitors', 'lastUpdated'
+        ])
+        && data.totalPageviews is number && data.totalPageviews >= 0
+        && data.totalUniqueVisitors is number && data.totalUniqueVisitors >= 0
+        && data.todayPageviews is number && data.todayPageviews >= 0
+        && data.todayUniqueVisitors is number && data.todayUniqueVisitors >= 0;
+    }
+
+    // --- Connection Check ---
+    match /test/{docId} {
+      allow get: if docId == 'connection';
+    }
+
+    // --- Tours (Public Catalog, Admin Managed) ---
+    match /tours/{tourId} {
+      allow get: if isValidId(tourId) && (existing().isVisible == true || isAdmin());
+      allow list: if resource.data.isVisible == true || isSuperAdmin();
+      allow create: if isAdmin() && isValidId(tourId) && isValidTour(incoming());
+      allow update: if isAdmin() && isValidId(tourId) && isValidTour(incoming())
+        && incoming().id == existing().id
+        && incoming().diff(existing()).affectedKeys().hasOnly([
+          'slug', 'title', 'category', 'categoryLabel', 'description', 'highlights',
+          'priceAdult', 'priceChild', 'priceInfant', 'costAdult', 'costChild',
+          'priceForeignAdult', 'priceForeignChild', 'costForeignAdult', 'costForeignChild',
+          'originalPriceAdult', 'originalPriceChild', 'originalPriceForeignAdult', 'originalPriceForeignChild',
+          'supplierId', 'supplierName', 'duration', 'location', 'pickupAreas', 'pickupZoneConfigs',
+          'included', 'excluded', 'itinerary', 'images', 'rating', 'reviewCount', 'tags',
+          'isFeatured', 'isAvailable', 'isVisible', 'addons', 'sortOrder', 'updatedAt'
+        ]);
+      allow delete: if isAdmin() && isValidId(tourId);
+    }
+
+    // --- Bookings (Guest Create, Admin Read/Update/Delete) ---
+    match /bookings/{bookingId} {
+      allow get: if isAdmin() && isValidId(bookingId);
+      allow list: if isSuperAdmin();
+      allow create: if isValidId(bookingId) && (
+        (isAdmin() && isValidBookingData(incoming())) ||
+        isValidGuestBookingCreate(incoming())
+      );
+      allow update: if isAdmin() && isValidId(bookingId) && isValidBookingData(incoming())
+        && incoming().id == existing().id
+        && incoming().bookingRef == existing().bookingRef
+        && incoming().createdAt == existing().createdAt
+        && (
+          incoming().diff(existing()).affectedKeys().hasOnly(['paymentStatus', 'orderStatus', 'paidAt', 'updatedAt', 'notes']) ||
+          incoming().diff(existing()).affectedKeys().hasOnly(['supplierId', 'supplierName', 'updatedAt']) ||
+          incoming().diff(existing()).affectedKeys().hasOnly(['slipUrl', 'slipUploadedAt', 'paymentStatus', 'updatedAt']) ||
+          incoming().diff(existing()).affectedKeys().hasOnly(['lineNotifySent', 'reminderSent', 'reminderSentAt', 'ticketImageUrl', 'updatedAt'])
+        );
+      allow delete: if isAdmin() && isValidId(bookingId);
+    }
+
+    // --- Non-PII Public Booking Status Lookup (Exact ref only) ---
+    match /booking_status/{bookingRef} {
+      allow get: if isValidId(bookingRef);
+      allow create: if isValidId(bookingRef) && isValidBookingStatusDoc(incoming())
+        && incoming().orderStatus == 'pending'
+        && incoming().paymentStatus in ['pending', 'slip_uploaded'];
+      allow update: if isAdmin() && isValidId(bookingRef) && isValidBookingStatusDoc(incoming())
+        && incoming().bookingRef == existing().bookingRef;
+      allow delete: if isAdmin() && isValidId(bookingRef);
+    }
+
+    // --- Customers CRM (Admin Only - PII Isolated) ---
+    match /customers/{customerId} {
+      allow get: if isAdmin() && isValidId(customerId);
+      allow list: if isSuperAdmin();
+      allow create: if isAdmin() && isValidId(customerId) && isValidCustomer(incoming());
+      allow update: if isAdmin() && isValidId(customerId) && isValidCustomer(incoming())
+        && incoming().id == existing().id
+        && incoming().createdAt == existing().createdAt
+        && incoming().diff(existing()).affectedKeys().hasOnly([
+          'name', 'email', 'phone', 'lineId', 'nationality',
+          'totalBookings', 'totalSpent', 'lastBookingDate'
+        ]);
+      allow delete: if isAdmin() && isValidId(customerId);
+    }
+
+    // --- Suppliers (Admin Only - Bank & Contact PII) ---
+    match /suppliers/{supplierId} {
+      allow get: if isAdmin() && isValidId(supplierId);
+      allow list: if isSuperAdmin();
+      allow create: if isAdmin() && isValidId(supplierId) && isValidSupplier(incoming());
+      allow update: if isAdmin() && isValidId(supplierId) && isValidSupplier(incoming())
+        && incoming().id == existing().id
+        && incoming().diff(existing()).affectedKeys().hasOnly([
+          'name', 'code', 'contactPerson', 'phone', 'email', 'lineId',
+          'address', 'bankName', 'accountNo', 'accountName', 'bankAccount', 'notes', 'isActive'
+        ]);
+      allow delete: if isAdmin() && isValidId(supplierId);
+    }
+
+    // --- Reviews ---
+    match /reviews/{reviewId} {
+      allow get: if isValidId(reviewId) && (existing().isApproved == true || isAdmin());
+      allow list: if resource.data.isApproved == true || isSuperAdmin();
+      allow create: if isValidId(reviewId) && isValidReview(incoming())
+        && incoming().isApproved == true;
+      allow update: if isAdmin() && isValidId(reviewId) && isValidReview(incoming())
+        && incoming().id == existing().id
+        && (
+          incoming().diff(existing()).affectedKeys().hasOnly(['isApproved']) ||
+          incoming().diff(existing()).affectedKeys().hasOnly(['adminReply', 'adminReplyDate']) ||
+          incoming().diff(existing()).affectedKeys().hasOnly(['comment', 'userName', 'rating', 'photos'])
+        );
+      allow delete: if isAdmin() && isValidId(reviewId);
+    }
+
+    // --- App Config (Split Public Storefront vs Private Admin Secrets) ---
+    match /config/{docId} {
+      allow get: if (docId == 'public') || (docId == 'private' && isAdmin());
+      allow list: if isSuperAdmin();
+      allow create, update: if isAdmin() && (
+        (docId == 'public' && isValidPublicConfig(incoming())) ||
+        (docId == 'private' && isValidPrivateConfig(incoming()))
+      );
+      allow delete: if isAdmin() && docId in ['public', 'private'];
+    }
+
+    // --- Public Media (Exact ID lookup only, no listing) ---
+    match /public_media/{mediaId} {
+      allow get: if isValidId(mediaId);
+      allow list: if isSuperAdmin();
+      allow create: if isValidId(mediaId) && isValidPublicMedia(incoming());
+      allow update, delete: if isAdmin() && isValidId(mediaId);
+    }
+
+    // --- Live Chat Sessions ---
+    match /live_chat_sessions/{sessionId} {
+      allow get: if isValidId(sessionId);
+      allow list: if isSuperAdmin();
+      allow create: if isValidId(sessionId) && isValidLiveChat(incoming());
+      allow update: if isValidId(sessionId) && isValidLiveChat(incoming())
+        && incoming().id == existing().id
+        && incoming().createdAt == existing().createdAt
+        && incoming().diff(existing()).affectedKeys().hasOnly([
+          'customerName', 'customerPhone', 'unreadCount', 'status', 'updatedAt', 'messages'
+        ]);
+      allow delete: if isAdmin() && isValidId(sessionId);
+    }
+
+    // --- Metadata (Sync versions, Deleted IDs, Visitor Analytics) ---
+    match /metadata/{docId} {
+      allow get: if (docId == 'sync' || docId == 'visitor_analytics') || (docId == 'deleted_ids' && isAdmin());
+      allow list: if isSuperAdmin();
+      allow create, update: if isValidId(docId) && (
+        (docId == 'deleted_ids' && isAdmin() && isValidDeletedIdsDoc(incoming())) ||
+        (docId == 'sync' && isAdmin() && isValidSyncDoc(incoming())) ||
+        (docId == 'visitor_analytics' && isValidVisitorAnalytics(incoming()))
+      );
+      allow delete: if isAdmin() && isValidId(docId);
+    }
+
+    // --- Admin Role Registry ---
+    match /admins/{uid} {
+      allow get: if isSignedIn() && isValidId(uid) && request.auth.uid == uid;
+      allow list: if isSuperAdmin();
+      allow create, update: if isSuperAdmin()
+        && isValidId(uid)
+        && incoming().keys().hasAll(['uid', 'email', 'role'])
+        && incoming().keys().hasOnly(['uid', 'email', 'role', 'createdAt'])
+        && incoming().uid == uid
+        && isNonEmptyString(incoming().email, 200)
+        && incoming().role in ['superadmin', 'admin'];
+      allow delete: if isSuperAdmin() && isValidId(uid);
+    }
+  }
+}

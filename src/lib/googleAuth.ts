@@ -1,9 +1,7 @@
-import { initializeApp } from 'firebase/app';
-import { getAuth, signInWithPopup, GoogleAuthProvider, onAuthStateChanged, User, signOut } from 'firebase/auth';
-import firebaseConfig from '../../firebase-applet-config.json';
+import { signInWithPopup, GoogleAuthProvider, onAuthStateChanged, User, signOut } from 'firebase/auth';
+import { auth } from './firebase';
 
-const app = initializeApp(firebaseConfig);
-export const auth = getAuth(app);
+export { auth };
 
 const provider = new GoogleAuthProvider();
 provider.addScope('https://www.googleapis.com/auth/spreadsheets');
@@ -54,7 +52,6 @@ export const googleSignIn = async (): Promise<{ user: User; accessToken: string 
       error?.message?.includes('cancelled-popup-request');
 
     if (isCancelled) {
-      // Normal user cancellation - do not treat as an unhandled error
       return null;
     }
     console.warn('Google Sign in exception:', error);

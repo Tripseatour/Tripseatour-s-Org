@@ -7,6 +7,7 @@ import {
 import { Booking, Language, AppSettings } from '../types';
 import { translations } from '../data/translations';
 import { TicketVoucher } from './TicketVoucher';
+import { cloudDbApi, getAuthHeaders } from '../lib/cloudDb';
 
 interface BookingLookupModalProps {
   currentLang: Language;
@@ -87,21 +88,72 @@ export const BookingLookupModal: React.FC<BookingLookupModalProps> = ({
     setSearched(true);
 
     try {
-      // 1. Fetch latest bookings directly from server to ensure newly added multi-bookings are present
-      let latestBookings = bookings;
+      let latestBookings = [...bookings];
+      const trimmed = searchKey.trim();
+
       try {
-        const res = await fetch('/api/bookings', { cache: 'no-store' });
-        if (res.ok) {
-          const serverList: Booking[] = await res.json();
-          if (Array.isArray(serverList) && serverList.length > 0) {
-            latestBookings = serverList;
+        const authHeaders = await getAuthHeaders();
+        const lookupRes = await fetch(`/api/bookings/lookup?q=${encodeURIComponent(trimmed)}`, {
+          cache: 'no-store',
+          headers: authHeaders,
+        }).catch(() => null);
+        if (lookupRes && lookupRes.ok) {
+          const matchedFromServer: Booking[] = await lookupRes.json();
+          if (Array.isArray(matchedFromServer) && matchedFromServer.length > 0) {
+            const existingRefs = new Set(matchedFromServer.map(b => b.bookingRef || b.id));
+            latestBookings = [
+              ...matchedFromServer,
+              ...latestBookings.filter(b => !existingRefs.has(b.bookingRef || b.id)),
+            ];
+          }
+        } else if (authHeaders.Authorization) {
+          const res = await fetch('/api/bookings', { cache: 'no-store', headers: authHeaders }).catch(() => null);
+          if (res && res.ok) {
+            const serverList: Booking[] = await res.json();
+            if (Array.isArray(serverList) && serverList.length > 0) {
+              latestBookings = serverList;
+            }
           }
         }
       } catch (err) {
-        console.warn('Could not fetch server bookings, falling back to state bookings:', err);
+        console.warn('Could not fetch server bookings, checking Firestore booking_status:', err);
       }
 
-      // 2. Perform comprehensive multi-result search
+      // Direct Firestore public status fallback by exact bookingRef
+      const hasLocalOrServerMatch = latestBookings.some(b =>
+        (b.bookingRef || '').toLowerCase().includes(trimmed.toLowerCase()) ||
+        (b.customerPhone || '').replace(/[^a-z0-9]/gi, '').includes(trimmed.replace(/[^a-z0-9]/gi, '')) ||
+        (b.customerName || '').toLowerCase().includes(trimmed.toLowerCase()) ||
+        (b.customerEmail || '').toLowerCase().includes(trimmed.toLowerCase())
+      );
+
+      if (!hasLocalOrServerMatch) {
+        const statusDoc = await cloudDbApi.getBookingStatus(trimmed);
+        if (statusDoc && statusDoc.bookingRef) {
+          latestBookings.unshift({
+            id: statusDoc.bookingRef,
+            bookingRef: statusDoc.bookingRef,
+            tourId: '',
+            tourTitle: statusDoc.tourTitle || 'ทัวร์ภูเก็ต',
+            customerName: 'Booking Reference Verified',
+            customerEmail: '',
+            customerPhone: '-',
+            travelDate: statusDoc.travelDate || '',
+            pickupHotel: '-',
+            pickupZone: statusDoc.pickupZone || 'General Zone',
+            adults: Number(statusDoc.adults) || 1,
+            children: Number(statusDoc.children) || 0,
+            infants: Number(statusDoc.infants) || 0,
+            totalAmount: Number(statusDoc.totalAmount) || 0,
+            paymentMethod: 'promptpay',
+            paymentStatus: (statusDoc.paymentStatus as any) || 'pending',
+            orderStatus: (statusDoc.orderStatus as any) || 'pending',
+            createdAt: statusDoc.createdAt || new Date().toISOString(),
+          });
+        }
+      }
+
+      // Perform comprehensive multi-result search
       executeSearch(searchKey, latestBookings);
     } finally {
       setIsSearching(false);

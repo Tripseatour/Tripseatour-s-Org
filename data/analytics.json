@@ -1,17 +1,12 @@
 {
-  "totalPageviews": 24859,
-  "totalUniqueVisitors": 9423,
-  "todayPageviews": 8,
-  "todayUniqueVisitors": 2,
-  "yesterdayPageviews": 187,
-  "yesterdayUniqueVisitors": 115,
+  "totalPageviews": 24875,
+  "totalUniqueVisitors": 9424,
+  "todayPageviews": 16,
+  "todayUniqueVisitors": 1,
+  "yesterdayPageviews": 8,
+  "yesterdayUniqueVisitors": 2,
   "activeNow": 1,
   "dailyHistory": [
-    {
-      "date": "2026-10-18",
-      "views": 106,
-      "uniques": 65
-    },
     {
       "date": "2026-10-19",
       "views": 147,
@@ -76,18 +71,23 @@
       "date": "2026-11-05",
       "views": 8,
       "uniques": 2
+    },
+    {
+      "date": "2026-11-19",
+      "views": 16,
+      "uniques": 1
     }
   ],
   "devices": {
     "mobile": 16891,
     "desktop": 6940,
-    "tablet": 1028
+    "tablet": 1044
   },
   "topPages": [
     {
       "path": "home",
       "title": "หน้าแรก - ทริปซีทัวร์ ภูเก็ต",
-      "views": 15424
+      "views": 15440
     },
     {
       "path": "how-to-book",
@@ -118,8 +118,8 @@
     },
     {
       "source": "Google Search",
-      "count": 8208,
-      "percentage": 33
+      "count": 8224,
+      "percentage": 33.1
     },
     {
       "source": "Facebook",
@@ -138,6 +138,182 @@
     }
   ],
   "recentVisitors": [
+    {
+      "id": "v-eh61f3u-mvv0gpnb",
+      "timestamp": "2026-11-19T06:26:01.659Z",
+      "device": "tablet",
+      "browser": "Chrome",
+      "os": "Windows",
+      "country": "🇹🇭 ประเทศไทย",
+      "city": "Phuket / Bangkok",
+      "page": "home",
+      "referrer": "Google Search"
+    },
+    {
+      "id": "v-eh61f3u-mvv0gpnb",
+      "timestamp": "2026-11-19T06:25:46.675Z",
+      "device": "tablet",
+      "browser": "Chrome",
+      "os": "Windows",
+      "country": "🇹🇭 ประเทศไทย",
+      "city": "Phuket / Bangkok",
+      "page": "home",
+      "referrer": "Google Search"
+    },
+    {
+      "id": "v-eh61f3u-mvv0gpnb",
+      "timestamp": "2026-11-19T06:25:31.655Z",
+      "device": "tablet",
+      "browser": "Chrome",
+      "os": "Windows",
+      "country": "🇹🇭 ประเทศไทย",
+      "city": "Phuket / Bangkok",
+      "page": "home",
+      "referrer": "Google Search"
+    },
+    {
+      "id": "v-eh61f3u-mvv0gpnb",
+      "timestamp": "2026-11-19T06:25:16.658Z",
+      "device": "tablet",
+      "browser": "Chrome",
+      "os": "Windows",
+      "country": "🇹🇭 ประเทศไทย",
+      "city": "Phuket / Bangkok",
+      "page": "home",
+      "referrer": "Google Search"
+    },
+    {
+      "id": "v-eh61f3u-mvv0gpnb",
+      "timestamp": "2026-11-19T06:25:01.651Z",
+      "device": "tablet",
+      "browser": "Chrome",
+      "os": "Windows",
+      "country": "🇹🇭 ประเทศไทย",
+      "city": "Phuket / Bangkok",
+      "page": "home",
+      "referrer": "Google Search"
+    },
+    {
+      "id": "v-eh61f3u-mvv0gpnb",
+      "timestamp": "2026-11-19T06:24:46.671Z",
+      "device": "tablet",
+      "browser": "Chrome",
+      "os": "Windows",
+      "country": "🇹🇭 ประเทศไทย",
+      "city": "Phuket / Bangkok",
+      "page": "home",
+      "referrer": "Google Search"
+    },
+    {
+      "id": "v-eh61f3u-mvv0gpnb",
+      "timestamp": "2026-11-19T06:24:31.658Z",
+      "device": "tablet",
+      "browser": "Chrome",
+      "os": "Windows",
+      "country": "🇹🇭 ประเทศไทย",
+      "city": "Phuket / Bangkok",
+      "page": "home",
+      "referrer": "Google Search"
+    },
+    {
+      "id": "v-eh61f3u-mvv0gpnb",
+      "timestamp": "2026-11-19T06:24:16.662Z",
+      "device": "tablet",
+      "browser": "Chrome",
+      "os": "Windows",
+      "country": "🇹🇭 ประเทศไทย",
+      "city": "Phuket / Bangkok",
+      "page": "home",
+      "referrer": "Google Search"
+    },
+    {
+      "id": "v-eh61f3u-mvv0gpnb",
+      "timestamp": "2026-11-19T06:24:01.657Z",
+      "device": "tablet",
+      "browser": "Chrome",
+      "os": "Windows",
+      "country": "🇹🇭 ประเทศไทย",
+      "city": "Phuket / Bangkok",
+      "page": "home",
+      "referrer": "Google Search"
+    },
+    {
+      "id": "v-eh61f3u-mvv0gpnb",
+      "timestamp": "2026-11-19T06:23:46.649Z",
+      "device": "tablet",
+      "browser": "Chrome",
+      "os": "Windows",
+      "country": "🇹🇭 ประเทศไทย",
+      "city": "Phuket / Bangkok",
+      "page": "home",
+      "referrer": "Google Search"
+    },
+    {
+      "id": "v-eh61f3u-mvv0gpnb",
+      "timestamp": "2026-11-19T06:23:31.658Z",
+      "device": "tablet",
+      "browser": "Chrome",
+      "os": "Windows",
+      "country": "🇹🇭 ประเทศไทย",
+      "city": "Phuket / Bangkok",
+      "page": "home",
+      "referrer": "Google Search"
+    },
+    {
+      "id": "v-eh61f3u-mvv0gpnb",
+      "timestamp": "2026-11-19T06:23:16.716Z",
+      "device": "tablet",
+      "browser": "Chrome",
+      "os": "Windows",
+      "country": "🇹🇭 ประเทศไทย",
+      "city": "Phuket / Bangkok",
+      "page": "home",
+      "referrer": "Google Search"
+    },
+    {
+      "id": "v-eh61f3u-mvv0gpnb",
+      "timestamp": "2026-11-19T06:23:01.658Z",
+      "device": "tablet",
+      "browser": "Chrome",
+      "os": "Windows",
+      "country": "🇹🇭 ประเทศไทย",
+      "city": "Phuket / Bangkok",
+      "page": "home",
+      "referrer": "Google Search"
+    },
+    {
+      "id": "v-eh61f3u-mvv0gpnb",
+      "timestamp": "2026-11-19T06:22:46.667Z",
+      "device": "tablet",
+      "browser": "Chrome",
+      "os": "Windows",
+      "country": "🇹🇭 ประเทศไทย",
+      "city": "Phuket / Bangkok",
+      "page": "home",
+      "referrer": "Google Search"
+    },
+    {
+      "id": "v-eh61f3u-mvv0gpnb",
+      "timestamp": "2026-11-19T06:22:31.658Z",
+      "device": "tablet",
+      "browser": "Chrome",
+      "os": "Windows",
+      "country": "🇹🇭 ประเทศไทย",
+      "city": "Phuket / Bangkok",
+      "page": "home",
+      "referrer": "Google Search"
+    },
+    {
+      "id": "v-eh61f3u-mvv0gpnb",
+      "timestamp": "2026-11-19T06:22:16.687Z",
+      "device": "tablet",
+      "browser": "Chrome",
+      "os": "Windows",
+      "country": "🇹🇭 ประเทศไทย",
+      "city": "Phuket / Bangkok",
+      "page": "home",
+      "referrer": "Google Search"
+    },
     {
       "id": "v-eh61f3u-mvv0gpnb",
       "timestamp": "2026-11-05T09:38:03.942Z",
@@ -255,11 +431,11 @@
       "referrer": "Facebook"
     }
   ],
-  "lastUpdated": "2026-11-05T09:38:03.942Z",
+  "lastUpdated": "2026-11-19T06:26:01.659Z",
   "liveSessions": [
     {
       "visitorId": "v-eh61f3u-mvv0gpnb",
-      "ipMasked": "2001:fb1:10a:d9e3:98cd:e45e:d635:7cf8",
+      "ipMasked": "2001:fb1:109:b268:2ca2:8187:39fa:7f51",
       "country": "🇹🇭 ประเทศไทย",
       "countryCode": "TH",
       "city": "Phuket / Bangkok",
@@ -272,10 +448,10 @@
       "currentPage": "home",
       "pageTitle": "หน้าแรก - ทริปซีทัวร์ ภูเก็ต",
       "referrer": "Google Search",
-      "firstSeen": "2026-11-05T09:37:48.663Z",
-      "lastPing": "2026-11-05T09:38:03.942Z",
+      "firstSeen": "2026-11-19T06:22:16.687Z",
+      "lastPing": "2026-11-19T06:26:01.659Z",
       "lastPingSecondsAgo": 0,
-      "pageviewsCount": 3
+      "pageviewsCount": 16
     }
   ]
 }

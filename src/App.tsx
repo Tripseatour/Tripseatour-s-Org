@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { Navbar } from './components/Navbar';
 import { Footer } from './components/Footer';
 import { HeroSection } from './components/HeroSection';
@@ -23,7 +23,9 @@ import { translations } from './data/translations';
 import { initialTours, initialBookings, initialReviews, initialCustomers, initialSettings, mockSuppliers } from './data/mockData';
 import { normalizeTours } from './utils/tourNormalizer';
 import { Compass, Sparkles, Filter, Ticket, QrCode, Phone, MessageCircle, ShieldCheck, Clock } from 'lucide-react';
-import { supabaseApi } from './lib/supabase';
+import { cloudDbApi, getAuthHeaders, isFirebaseAdminSignedIn } from './lib/cloudDb';
+import { auth } from './lib/firebase';
+import { onAuthStateChanged, signOut } from 'firebase/auth';
 import { safeSetLocalStorage } from './utils/storage';
 import { trackPageView, fetchVisitorAnalytics } from './utils/visitorTracker';
 import { getAccessToken } from './lib/googleAuth';
@@ -120,6 +122,18 @@ export default function App() {
     }
   });
 
+  const deletedTourIdsRef = useRef<string[]>(deletedTourIds);
+  const deletedBookingIdsRef = useRef<string[]>(deletedBookingIds);
+  const deletedCustomerIdsRef = useRef<string[]>(deletedCustomerIds);
+  const deletedReviewIdsRef = useRef<string[]>(deletedReviewIds);
+  const deletedSupplierIdsRef = useRef<string[]>(deletedSupplierIds);
+
+  useEffect(() => { deletedTourIdsRef.current = deletedTourIds; }, [deletedTourIds]);
+  useEffect(() => { deletedBookingIdsRef.current = deletedBookingIds; }, [deletedBookingIds]);
+  useEffect(() => { deletedCustomerIdsRef.current = deletedCustomerIds; }, [deletedCustomerIds]);
+  useEffect(() => { deletedReviewIdsRef.current = deletedReviewIds; }, [deletedReviewIds]);
+  useEffect(() => { deletedSupplierIdsRef.current = deletedSupplierIds; }, [deletedSupplierIds]);
+
   // Backend Data with localStorage cache and deleted tombstone filter
   const [tours, setTours] = useState<Tour[]>(() => {
     try {
@@ -138,7 +152,7 @@ export default function App() {
       const savedDeleted = localStorage.getItem('tst_deleted_booking_ids');
       const tombstoneList: string[] = savedDeleted ? JSON.parse(savedDeleted) : [];
       const saved = localStorage.getItem('tst_bookings');
-      const loaded: Booking[] = saved ? JSON.parse(saved) : initialBookings;
+      const loaded: Booking[] = saved ? JSON.parse(saved) : [];
       return loaded.filter(b => !tombstoneList.includes(b.id) && !tombstoneList.includes(b.bookingRef));
     } catch {
       return [];
@@ -190,12 +204,15 @@ export default function App() {
     const next = [newSup, ...suppliers.filter(s => s.id !== newSup.id)];
     setSuppliers(next);
     safeSetLocalStorage('tst_suppliers', next);
-    supabaseApi.saveSuppliers(next).catch(() => {});
-    fetch('/api/suppliers', {
+    const authHeaders = await getAuthHeaders();
+    const res = await fetch('/api/suppliers', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: { 'Content-Type': 'application/json', ...authHeaders },
       body: JSON.stringify(newSup)
-    }).catch(() => {});
+    }).catch(() => null);
+    if (!res || !res.ok) {
+      cloudDbApi.saveSuppliers(next).catch(() => {});
+    }
   };
 
   const handleUpdateSupplier = async (id: string, supData: Partial<Supplier>) => {
@@ -203,12 +220,15 @@ export default function App() {
     const next = suppliers.map(s => s.id === id ? { ...s, ...supData } : s);
     setSuppliers(next);
     safeSetLocalStorage('tst_suppliers', next);
-    supabaseApi.saveSuppliers(next).catch(() => {});
-    fetch(`/api/suppliers/${id}`, {
+    const authHeaders = await getAuthHeaders();
+    const res = await fetch(`/api/suppliers/${id}`, {
       method: 'PUT',
-      headers: { 'Content-Type': 'application/json' },
+      headers: { 'Content-Type': 'application/json', ...authHeaders },
       body: JSON.stringify(supData)
-    }).catch(() => {});
+    }).catch(() => null);
+    if (!res || !res.ok) {
+      cloudDbApi.saveSuppliers(next).catch(() => {});
+    }
   };
 
   const handleDeleteSupplier = async (id: string) => {
@@ -220,10 +240,11 @@ export default function App() {
     const next = suppliers.filter(s => s.id !== id);
     setSuppliers(next);
     safeSetLocalStorage('tst_suppliers', next);
-    supabaseApi.saveSuppliers(next).catch(() => {});
+    const authHeaders = await getAuthHeaders();
     try {
       const res = await fetch(`/api/suppliers/${encodeURIComponent(id)}`, {
-        method: 'DELETE'
+        method: 'DELETE',
+        headers: authHeaders
       });
       if (res.ok) {
         const data = await res.json().catch(() => ({}));
@@ -233,8 +254,11 @@ export default function App() {
           setDeletedSupplierIds(merged);
           safeSetLocalStorage('tst_deleted_supplier_ids', merged);
         }
+        return;
       }
     } catch {}
+    cloudDbApi.saveSuppliers(next).catch(() => {});
+    cloudDbApi.saveDeletedIds('deletedSupplierIds', updatedDeletedIds).catch(() => {});
   };
 
   const [settings, setSettings] = useState<AppSettings>(() => {
@@ -340,7 +364,26 @@ export default function App() {
   };
 
   const handleMultiBookingsCreated = (newBookings: Booking[]) => {
-    setBookings(prev => [...newBookings, ...prev]);
+    lastMutationTimeRef.current = Date.now();
+    const nextBookings = [...newBookings, ...bookings];
+    setBookings(nextBookings);
+    safeSetLocalStorage('tst_bookings', nextBookings);
+
+    // Send LINE alerts for any booking that wasn't already notified by server
+    for (const b of newBookings) {
+      if (!b.lineNotifySent) {
+        const lineMsg = `🔔 [มีออเดอร์ใหม่] รหัส ${b.bookingRef}\n` +
+          `📍 ทัวร์: ${b.tourTitle}\n` +
+          `👤 ลูกค้า: ${b.customerName} (${b.customerPhone})\n` +
+          `💰 ยอดชำระ: ฿${b.totalAmount.toLocaleString()}\n` +
+          `📅 วันเดินทาง: ${b.travelDate}\n` +
+          `🏨 โรงแรมรับ: ${b.pickupHotel}${b.roomNumber ? ` (ห้อง ${b.roomNumber})` : ''}\n` +
+          `👥 จำนวน: ผู้ใหญ่ ${b.adults} ท่าน / เด็ก ${b.children || 0} ท่าน\n` +
+          `💳 สถานะ: ${b.paymentStatus === 'slip_uploaded' ? 'แนบสลิปแล้ว (รอตรวจ)' : 'รอชำระเงิน'}`;
+        dispatchLineNotification(lineMsg, b.bookingRef, 'NEW_ORDER', b.tourImage, b.ticketImageUrl, b.slipUrl);
+      }
+    }
+
     showToast(`🎉 จองสำเร็จเรียบร้อยครบทั้ง ${newBookings.length} โปรแกรมทัวร์!`);
   };
   const [syncStatus, setSyncStatus] = useState<'synced' | 'syncing' | 'error'>('synced');
@@ -360,6 +403,8 @@ export default function App() {
         return;
       }
 
+      const authHeaders = await getAuthHeaders();
+
       // 1. Check server version and deleted IDs across all entities
       let serverVersion: number | null = null;
       let serverDeletedTourIds: string[] = [];
@@ -370,8 +415,8 @@ export default function App() {
 
       try {
         const [syncRes, delRes] = await Promise.all([
-          fetch('/api/sync-status', { cache: 'no-store' }).catch(() => null),
-          fetch('/api/deleted-ids', { cache: 'no-store' }).catch(() => null)
+          fetch('/api/sync-status', { cache: 'no-store', headers: authHeaders }).catch(() => null),
+          fetch('/api/deleted-ids', { cache: 'no-store', headers: authHeaders }).catch(() => null)
         ]);
         if (syncRes && syncRes.ok) {
           const syncData = await syncRes.json();
@@ -385,7 +430,18 @@ export default function App() {
           if (Array.isArray(delData.deletedReviewIds)) serverDeletedReviewIds = delData.deletedReviewIds;
           if (Array.isArray(delData.deletedSupplierIds)) serverDeletedSupplierIds = delData.deletedSupplierIds;
         }
-      } catch (e) {}
+      } catch {}
+
+      if (isFirebaseAdminSignedIn()) {
+        const cloudDeleted = await cloudDbApi.getDeletedIds().catch(() => null);
+        if (cloudDeleted) {
+          serverDeletedTourIds = Array.from(new Set([...serverDeletedTourIds, ...cloudDeleted.deletedTourIds]));
+          serverDeletedBookingIds = Array.from(new Set([...serverDeletedBookingIds, ...cloudDeleted.deletedBookingIds]));
+          serverDeletedCustomerIds = Array.from(new Set([...serverDeletedCustomerIds, ...cloudDeleted.deletedCustomerIds]));
+          serverDeletedReviewIds = Array.from(new Set([...serverDeletedReviewIds, ...cloudDeleted.deletedReviewIds]));
+          serverDeletedSupplierIds = Array.from(new Set([...serverDeletedSupplierIds, ...cloudDeleted.deletedSupplierIds]));
+        }
+      }
 
       // Combine local tombstone and server tombstone lists (reading fresh from localStorage to guarantee no stale closures)
       const getStoredList = (key: string): string[] => {
@@ -398,27 +454,32 @@ export default function App() {
       };
 
       const localTourDel = getStoredList('tst_deleted_tour_ids');
-      const latestDeletedTourIds = Array.from(new Set([...deletedTourIds, ...localTourDel, ...serverDeletedTourIds]));
+      const latestDeletedTourIds = Array.from(new Set([...deletedTourIdsRef.current, ...localTourDel, ...serverDeletedTourIds]));
+      deletedTourIdsRef.current = latestDeletedTourIds;
       setDeletedTourIds(latestDeletedTourIds);
       safeSetLocalStorage('tst_deleted_tour_ids', latestDeletedTourIds);
 
       const localBookingDel = getStoredList('tst_deleted_booking_ids');
-      const latestDeletedBookingIds = Array.from(new Set([...deletedBookingIds, ...localBookingDel, ...serverDeletedBookingIds]));
+      const latestDeletedBookingIds = Array.from(new Set([...deletedBookingIdsRef.current, ...localBookingDel, ...serverDeletedBookingIds]));
+      deletedBookingIdsRef.current = latestDeletedBookingIds;
       setDeletedBookingIds(latestDeletedBookingIds);
       safeSetLocalStorage('tst_deleted_booking_ids', latestDeletedBookingIds);
 
       const localCustomerDel = getStoredList('tst_deleted_customer_ids');
-      const latestDeletedCustomerIds = Array.from(new Set([...deletedCustomerIds, ...localCustomerDel, ...serverDeletedCustomerIds]));
+      const latestDeletedCustomerIds = Array.from(new Set([...deletedCustomerIdsRef.current, ...localCustomerDel, ...serverDeletedCustomerIds]));
+      deletedCustomerIdsRef.current = latestDeletedCustomerIds;
       setDeletedCustomerIds(latestDeletedCustomerIds);
       safeSetLocalStorage('tst_deleted_customer_ids', latestDeletedCustomerIds);
 
       const localReviewDel = getStoredList('tst_deleted_review_ids');
-      const latestDeletedReviewIds = Array.from(new Set([...deletedReviewIds, ...localReviewDel, ...serverDeletedReviewIds]));
+      const latestDeletedReviewIds = Array.from(new Set([...deletedReviewIdsRef.current, ...localReviewDel, ...serverDeletedReviewIds]));
+      deletedReviewIdsRef.current = latestDeletedReviewIds;
       setDeletedReviewIds(latestDeletedReviewIds);
       safeSetLocalStorage('tst_deleted_review_ids', latestDeletedReviewIds);
 
       const localSupplierDel = getStoredList('tst_deleted_supplier_ids');
-      const latestDeletedSupplierIds = Array.from(new Set([...deletedSupplierIds, ...localSupplierDel, ...serverDeletedSupplierIds]));
+      const latestDeletedSupplierIds = Array.from(new Set([...deletedSupplierIdsRef.current, ...localSupplierDel, ...serverDeletedSupplierIds]));
+      deletedSupplierIdsRef.current = latestDeletedSupplierIds;
       setDeletedSupplierIds(latestDeletedSupplierIds);
       safeSetLocalStorage('tst_deleted_supplier_ids', latestDeletedSupplierIds);
 
@@ -431,13 +492,13 @@ export default function App() {
 
       // 2. Fetch latest from server APIs
       const [resTours, resBookings, resReviews, resCustomers, resSuppliers, resSettings, resLogs] = await Promise.all([
-        fetch('/api/tours', { cache: 'no-store' }).catch(() => null),
-        fetch('/api/bookings', { cache: 'no-store' }).catch(() => null),
-        fetch('/api/reviews', { cache: 'no-store' }).catch(() => null),
-        fetch('/api/customers', { cache: 'no-store' }).catch(() => null),
-        fetch('/api/suppliers', { cache: 'no-store' }).catch(() => null),
-        fetch('/api/settings', { cache: 'no-store' }).catch(() => null),
-        fetch('/api/line/logs', { cache: 'no-store' }).catch(() => null)
+        fetch('/api/tours', { cache: 'no-store', headers: authHeaders }).catch(() => null),
+        fetch('/api/bookings', { cache: 'no-store', headers: authHeaders }).catch(() => null),
+        fetch('/api/reviews', { cache: 'no-store', headers: authHeaders }).catch(() => null),
+        fetch('/api/customers', { cache: 'no-store', headers: authHeaders }).catch(() => null),
+        fetch('/api/suppliers', { cache: 'no-store', headers: authHeaders }).catch(() => null),
+        fetch('/api/settings', { cache: 'no-store', headers: authHeaders }).catch(() => null),
+        fetch('/api/line/logs', { cache: 'no-store', headers: authHeaders }).catch(() => null)
       ]);
 
       let serverTours: Tour[] | null = null;
@@ -458,9 +519,9 @@ export default function App() {
         if (logs) setLineLogs(logs);
       }
 
-      // Direct fallback ONLY if server API returned null (e.g. server offline / Vercel SPA)
+      // Direct Firebase Firestore fallback ONLY if server API returned null
       if (serverBookings === null) {
-        const directBookings = await supabaseApi.getBookings();
+        const directBookings = await cloudDbApi.getBookings().catch(() => null);
         if (directBookings !== null) {
           serverBookings = directBookings;
         } else {
@@ -473,17 +534,16 @@ export default function App() {
         }
       }
       if (!serverSettings) {
-        const directSettings = await supabaseApi.getSettings();
+        const directSettings = await cloudDbApi.getSettings().catch(() => null);
         if (directSettings) {
-          serverSettings = directSettings;
+          serverSettings = { ...initialSettings, ...directSettings } as AppSettings;
         } else {
           serverSettings = initialSettings;
-          supabaseApi.saveSettings(initialSettings).catch(() => {});
         }
       }
       if (serverTours === null) {
-        const directTours = await supabaseApi.getTours();
-        if (directTours !== null) {
+        const directTours = await cloudDbApi.getTours().catch(() => null);
+        if (directTours !== null && directTours.length > 0) {
           serverTours = directTours.filter(t => !latestDeletedTourIds.includes(t.id) && !latestDeletedTourIds.includes(t.slug));
         } else {
           try {
@@ -495,7 +555,7 @@ export default function App() {
         }
       }
       if (serverCustomers === null) {
-        const directCustomers = await supabaseApi.getCustomers();
+        const directCustomers = await cloudDbApi.getCustomers().catch(() => null);
         if (directCustomers !== null) {
           serverCustomers = directCustomers;
         } else {
@@ -508,7 +568,7 @@ export default function App() {
         }
       }
       if (serverReviews === null) {
-        const directReviews = await supabaseApi.getReviews();
+        const directReviews = await cloudDbApi.getReviews().catch(() => null);
         if (directReviews !== null) {
           serverReviews = directReviews;
         } else {
@@ -521,7 +581,7 @@ export default function App() {
         }
       }
       if (serverSuppliers === null) {
-        const directSuppliers = await supabaseApi.getSuppliers();
+        const directSuppliers = await cloudDbApi.getSuppliers().catch(() => null);
         if (directSuppliers !== null && directSuppliers.length > 0) {
           serverSuppliers = directSuppliers;
         } else {
@@ -572,7 +632,7 @@ export default function App() {
       setSyncStatus('synced');
       setLastSyncedAt(new Date().toLocaleTimeString('th-TH'));
     } catch (err) {
-      console.error('Error loading data from server/Supabase:', err);
+      console.error('Error loading data from server/Firestore:', err);
       setSyncStatus('error');
     }
   }, []);
@@ -596,12 +656,29 @@ export default function App() {
   useEffect(() => {
     loadInitialData();
 
-    // Auto-refresh interval (every 10s) to keep dashboard and orders fully live
+    // Auto-refresh interval (every 20s) when tab is visible
     const interval = setInterval(() => {
+      if (typeof document !== 'undefined' && document.visibilityState === 'hidden') return;
       loadInitialData();
-    }, 10000);
+    }, 20000);
 
     return () => clearInterval(interval);
+  }, [loadInitialData]);
+
+  // Seed Firestore automatically when an authorized Firebase admin signs in on an empty DB
+  const seedPayloadRef = useRef({ tours, suppliers, reviews, settings });
+  useEffect(() => {
+    seedPayloadRef.current = { tours, suppliers, reviews, settings };
+  }, [tours, suppliers, reviews, settings]);
+
+  useEffect(() => {
+    const unsubscribe = onAuthStateChanged(auth, async (user) => {
+      if (user && user.emailVerified) {
+        await cloudDbApi.seedIfFirestoreEmpty(seedPayloadRef.current).catch(() => false);
+        loadInitialData(true);
+      }
+    });
+    return () => unsubscribe();
   }, [loadInitialData]);
 
   // Track pageviews whenever activeView, detailTour, or bookingTour changes, with 15s real-time heartbeat
@@ -771,13 +848,14 @@ export default function App() {
   // Handlers for Booking
   const handleBookingCreated = (newBooking: Booking) => {
     lastMutationTimeRef.current = Date.now();
-    const nextBookings = [newBooking, ...bookings];
+    const nextBookings = [newBooking, ...bookings.filter(b => b.id !== newBooking.id && b.bookingRef !== newBooking.bookingRef)];
     setBookings(nextBookings);
     safeSetLocalStorage('tst_bookings', nextBookings);
 
-    // Local API Persistence
-    supabaseApi.createBooking(newBooking).catch(() => {});
-    supabaseApi.saveBookingsBackup(nextBookings).catch(() => {});
+    // Only write client-side backup if server API did not already persist and notify
+    if (!newBooking.lineNotifySent) {
+      cloudDbApi.saveBookingsBackup(nextBookings).catch(() => {});
+    }
 
     // Realtime Google Sheets Sync
     getAccessToken().then(token => {
@@ -828,46 +906,23 @@ export default function App() {
       const updatedBooking = nextBookings.find(b => b.id === id);
       if (updatedBooking) {
         showToast(`✅ อัปเดตสถานะการจองของ ${updatedBooking.customerName} เรียบร้อยแล้ว`);
-        
-        if (paymentStatus === 'verified') {
-          // Do not send PAYMENT_VERIFIED notification to LINE group as per user request
-          /*
-          const verifiedMsg = `🟢 [ยืนยันชำระเงินสำเร็จ & ออกตั๋ว] รหัส ${updatedBooking.bookingRef}\n` +
-            `📍 ทัวร์: ${updatedBooking.tourTitle}\n` +
-            `👤 ลูกค้า: ${updatedBooking.customerName} (${updatedBooking.customerPhone})\n` +
-            `💰 ยอดรับชำระ: ฿${updatedBooking.totalAmount.toLocaleString()} (PromptPay ยืนยันแล้ว)\n` +
-            `📅 วันเดินทาง: ${updatedBooking.travelDate}\n` +
-            `🏨 โรงแรมรับ: ${updatedBooking.pickupHotel} (ห้อง ${updatedBooking.roomNumber || '-'})\n` +
-            `🎉 ออกตั๋ว E-Ticket E-Voucher เรียบร้อย พร้อมเดินทาง!`;
-          dispatchLineNotification(
-            verifiedMsg, 
-            updatedBooking.bookingRef, 
-            'PAYMENT_VERIFIED', 
-            updatedBooking.tourImage,
-            updatedBooking.ticketImageUrl,
-            updatedBooking.slipUrl
-          );
-          */
-        }
       }
 
-      // Sync to Supabase
-      supabaseApi.updateBooking(id, { 
-        paymentStatus: paymentStatus as any, 
-        orderStatus: (paymentStatus === 'verified' ? 'confirmed' : orderStatus) as any,
-        paidAt: paymentStatus === 'verified' ? new Date().toISOString() : undefined 
-      }).catch(() => {});
-      supabaseApi.saveBookingsBackup(nextBookings).catch(() => {});
-
-      // Sync to Express API
+      const authHeaders = await getAuthHeaders();
       const res = await fetch(`/api/bookings/${id}/status`, {
         method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 'Content-Type': 'application/json', ...authHeaders },
         body: JSON.stringify({ paymentStatus, orderStatus }),
       }).catch(() => null);
       if (res && res.ok) {
         const data = await res.json().catch(() => ({}));
         if (data.version) lastServerVersionRef.current = data.version;
+      } else {
+        cloudDbApi.updateBooking(id, { 
+          paymentStatus: paymentStatus as any, 
+          orderStatus: (paymentStatus === 'verified' ? 'confirmed' : orderStatus) as any,
+          paidAt: paymentStatus === 'verified' ? new Date().toISOString() : undefined 
+        }).catch(() => {});
       }
     } catch (err) {
       console.error(err);
@@ -886,24 +941,22 @@ export default function App() {
         supplierName: resolvedName || undefined
       } : b);
       setBookings(nextBookings);
-      localStorage.setItem('tst_bookings', JSON.stringify(nextBookings));
+      safeSetLocalStorage('tst_bookings', nextBookings);
 
-      // Sync to Supabase
-      supabaseApi.updateBooking(bookingId, { 
-        supplierId: supplierId || null, 
-        supplierName: resolvedName || null 
-      } as any).catch(() => {});
-      supabaseApi.saveBookingsBackup(nextBookings).catch(() => {});
-
-      // Sync to Express API
+      const authHeaders = await getAuthHeaders();
       const res = await fetch(`/api/bookings/${bookingId}`, {
         method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 'Content-Type': 'application/json', ...authHeaders },
         body: JSON.stringify({ supplierId: supplierId || null, supplierName: resolvedName || null }),
       }).catch(() => null);
       if (res && res.ok) {
         const data = await res.json().catch(() => ({}));
         if (data.version) lastServerVersionRef.current = data.version;
+      } else {
+        cloudDbApi.updateBooking(bookingId, { 
+          supplierId: supplierId || null, 
+          supplierName: resolvedName || null 
+        } as any).catch(() => {});
       }
 
       if (supplierId && targetSupplier) {
@@ -925,37 +978,37 @@ export default function App() {
       const idsToExclude = new Set<string>([id, bookingRef, actualId]);
 
       // Record in tombstone list permanently in state & localStorage
-      const updatedDeletedIds = Array.from(new Set([...deletedBookingIds, ...Array.from(idsToExclude)]));
+      const updatedDeletedIds = Array.from(new Set([...deletedBookingIdsRef.current, ...Array.from(idsToExclude)]));
+      deletedBookingIdsRef.current = updatedDeletedIds;
       setDeletedBookingIds(updatedDeletedIds);
       safeSetLocalStorage('tst_deleted_booking_ids', updatedDeletedIds);
 
-      // Functional state update so nothing can resurrect it
-      let remainingBookings: Booking[] = [];
-      setBookings(prev => {
-        remainingBookings = prev.filter(b => !idsToExclude.has(b.id) && !idsToExclude.has(b.bookingRef));
-        safeSetLocalStorage('tst_bookings', remainingBookings);
-        return remainingBookings;
-      });
+      // Compute remaining bookings synchronously BEFORE calling setBookings (avoids React 18 async updater bug)
+      const remainingBookings = bookings.filter(b => !idsToExclude.has(b.id) && !idsToExclude.has(b.bookingRef));
+      setBookings(remainingBookings);
+      safeSetLocalStorage('tst_bookings', remainingBookings);
 
       showToast('🗑️ ลบคำสั่งซื้อทัวร์เรียบร้อยแล้ว');
 
-      // Sync to Supabase (delete from bookings table AND update app_store backup)
-      await Promise.all([
-        supabaseApi.deleteBooking(actualId),
-        supabaseApi.deleteBooking(bookingRef),
-        supabaseApi.saveBookingsBackup(remainingBookings)
-      ]).catch(() => {});
-
-      // Sync to Express API if available
-      const res = await fetch(`/api/bookings/${encodeURIComponent(id)}`, { method: 'DELETE' }).catch(() => null);
+      const authHeaders = await getAuthHeaders();
+      const res = await fetch(`/api/bookings/${encodeURIComponent(id)}`, {
+        method: 'DELETE',
+        headers: authHeaders
+      }).catch(() => null);
       if (res && res.ok) {
         const data = await res.json().catch(() => ({}));
         if (data.version) lastServerVersionRef.current = data.version;
         if (Array.isArray(data.deletedBookingIds)) {
           const merged = Array.from(new Set([...updatedDeletedIds, ...data.deletedBookingIds]));
+          deletedBookingIdsRef.current = merged;
           setDeletedBookingIds(merged);
           safeSetLocalStorage('tst_deleted_booking_ids', merged);
         }
+      } else {
+        await Promise.all([
+          cloudDbApi.deleteBooking(actualId, bookingRef),
+          cloudDbApi.saveDeletedIds('deletedBookingIds', updatedDeletedIds),
+        ]).catch(() => {});
       }
     } catch (err) {
       console.error(err);
@@ -969,18 +1022,17 @@ export default function App() {
       safeSetLocalStorage('tst_settings', newSettings);
       showToast('💾 บันทึกการตั้งค่าแล้ว');
 
-      // Sync to Supabase
-      supabaseApi.saveSettings(newSettings).catch(() => {});
-
-      // Sync to Express API
+      const authHeaders = await getAuthHeaders();
       const res = await fetch('/api/settings', {
         method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 'Content-Type': 'application/json', ...authHeaders },
         body: JSON.stringify(newSettings),
       }).catch(() => null);
       if (res && res.ok) {
         const data = await res.json().catch(() => ({}));
         if (data.version) lastServerVersionRef.current = data.version;
+      } else {
+        cloudDbApi.saveSettings(newSettings).catch(() => {});
       }
     } catch (err) {
       console.error(err);
@@ -995,18 +1047,17 @@ export default function App() {
       safeSetLocalStorage('tst_customers', nextCustomers);
       showToast('💾 อัปเดตข้อมูลลูกค้าใน CRM เรียบร้อยแล้ว');
 
-      // Sync to Supabase
-      supabaseApi.saveCustomers(nextCustomers).catch(() => {});
-
-      // Sync to Express API
+      const authHeaders = await getAuthHeaders();
       const res = await fetch(`/api/customers/${id}`, {
         method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 'Content-Type': 'application/json', ...authHeaders },
         body: JSON.stringify(updatedCustomerData),
       }).catch(() => null);
       if (res && res.ok) {
         const data = await res.json().catch(() => ({}));
         if (data.version) lastServerVersionRef.current = data.version;
+      } else {
+        cloudDbApi.saveCustomers(nextCustomers).catch(() => {});
       }
     } catch (err) {
       console.error(err);
@@ -1016,32 +1067,36 @@ export default function App() {
   const handleDeleteCustomer = async (id: string) => {
     try {
       lastMutationTimeRef.current = Date.now();
-      const updatedDeletedIds = Array.from(new Set([...deletedCustomerIds, id]));
+      const updatedDeletedIds = Array.from(new Set([...deletedCustomerIdsRef.current, id]));
+      deletedCustomerIdsRef.current = updatedDeletedIds;
       setDeletedCustomerIds(updatedDeletedIds);
       safeSetLocalStorage('tst_deleted_customer_ids', updatedDeletedIds);
 
-      let remainingCustomers: Customer[] = [];
-      setCustomers(prev => {
-        remainingCustomers = prev.filter(c => c.id !== id);
-        safeSetLocalStorage('tst_customers', remainingCustomers);
-        return remainingCustomers;
-      });
+      const remainingCustomers = customers.filter(c => c.id !== id);
+      setCustomers(remainingCustomers);
+      safeSetLocalStorage('tst_customers', remainingCustomers);
 
       showToast('🗑️ ลบข้อมูลลูกค้าเรียบร้อยแล้ว');
 
-      // Sync to Supabase
-      supabaseApi.saveCustomers(remainingCustomers).catch(() => {});
-
-      // Sync to Express API
-      const res = await fetch(`/api/customers/${encodeURIComponent(id)}`, { method: 'DELETE' }).catch(() => null);
+      const authHeaders = await getAuthHeaders();
+      const res = await fetch(`/api/customers/${encodeURIComponent(id)}`, {
+        method: 'DELETE',
+        headers: authHeaders
+      }).catch(() => null);
       if (res && res.ok) {
         const data = await res.json().catch(() => ({}));
         if (data.version) lastServerVersionRef.current = data.version;
         if (Array.isArray(data.deletedCustomerIds)) {
           const merged = Array.from(new Set([...updatedDeletedIds, ...data.deletedCustomerIds]));
+          deletedCustomerIdsRef.current = merged;
           setDeletedCustomerIds(merged);
           safeSetLocalStorage('tst_deleted_customer_ids', merged);
         }
+      } else {
+        await Promise.all([
+          cloudDbApi.saveCustomers(remainingCustomers),
+          cloudDbApi.saveDeletedIds('deletedCustomerIds', updatedDeletedIds),
+        ]).catch(() => {});
       }
     } catch (err) {
       console.error(err);
@@ -1067,7 +1122,8 @@ export default function App() {
 
   const handleTrigger24hReminders = async () => {
     try {
-      const res = await fetch('/api/line/trigger-reminders', { method: 'POST' });
+      const authHeaders = await getAuthHeaders();
+      const res = await fetch('/api/line/trigger-reminders', { method: 'POST', headers: authHeaders });
       if (res.ok) {
         const data = await res.json();
         await loadInitialData();
@@ -1082,7 +1138,8 @@ export default function App() {
 
   const handleSendSingleReminder = async (bookingId: string) => {
     try {
-      const res = await fetch(`/api/line/send-reminder/${bookingId}`, { method: 'POST' });
+      const authHeaders = await getAuthHeaders();
+      const res = await fetch(`/api/line/send-reminder/${bookingId}`, { method: 'POST', headers: authHeaders });
       if (res.ok) {
         await loadInitialData();
         showToast('⏰ ส่งแจ้งเตือนเตือนความจำ 24 ชม. เข้า LINE สำเร็จ');
@@ -1103,39 +1160,33 @@ export default function App() {
       };
 
       // Un-tombstone if it was previously in deleted list
-      setDeletedTourIds(prev => {
-        const next = prev.filter(d => d !== stableTour.id && d !== stableTour.slug);
-        safeSetLocalStorage('tst_deleted_tour_ids', next);
-        return next;
-      });
+      const remainingDeleted = deletedTourIdsRef.current.filter(d => d !== stableTour.id && d !== stableTour.slug);
+      deletedTourIdsRef.current = remainingDeleted;
+      setDeletedTourIds(remainingDeleted);
+      safeSetLocalStorage('tst_deleted_tour_ids', remainingDeleted);
 
-      // Avoid duplicates by id or title
-      let nextTours: Tour[] = [];
-      setTours(prev => {
-        const exists = prev.some(t => t.id === stableTour.id || (t.title?.TH && t.title.TH === stableTour.title?.TH));
-        if (exists) {
-          nextTours = prev.map(t => (t.id === stableTour.id || (t.title?.TH && t.title.TH === stableTour.title?.TH)) ? stableTour : t);
-        } else {
-          nextTours = [stableTour, ...prev];
-        }
-        safeSetLocalStorage('tst_tours', nextTours);
-        return nextTours;
-      });
+      // Avoid duplicates by id or title (compute before setTours for React 18 safety)
+      const exists = tours.some(t => t.id === stableTour.id || (t.title?.TH && t.title.TH === stableTour.title?.TH));
+      const nextTours = exists
+        ? tours.map(t => (t.id === stableTour.id || (t.title?.TH && t.title.TH === stableTour.title?.TH)) ? stableTour : t)
+        : [stableTour, ...tours];
+      setTours(nextTours);
+      safeSetLocalStorage('tst_tours', nextTours);
 
       showToast('🏝️ เพิ่มโปรแกรมทัวร์ใหม่เรียบร้อย');
 
-      // Sync to Supabase
-      supabaseApi.saveTours(nextTours.length > 0 ? nextTours : [stableTour, ...tours.filter(t => t.id !== stableTour.id)]).catch(() => {});
-
-      // Sync to Express API
+      const authHeaders = await getAuthHeaders();
       const res = await fetch('/api/tours', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 'Content-Type': 'application/json', ...authHeaders },
         body: JSON.stringify(stableTour),
       }).catch(() => null);
       if (res && res.ok) {
         const data = await res.json().catch(() => ({}));
         if (data.version) lastServerVersionRef.current = data.version;
+      } else {
+        cloudDbApi.saveTour(stableTour).catch(() => {});
+        cloudDbApi.saveDeletedIds('deletedTourIds', remainingDeleted).catch(() => {});
       }
     } catch (err) {
       console.error(err);
@@ -1150,18 +1201,18 @@ export default function App() {
       safeSetLocalStorage('tst_tours', nextTours);
       showToast('💾 บันทึกการแก้ไขโปรแกรมทัวร์เรียบร้อย');
 
-      // Sync to Supabase
-      supabaseApi.saveTours(nextTours).catch(() => {});
-
-      // Sync to Express API
+      const authHeaders = await getAuthHeaders();
       const res = await fetch(`/api/tours/${id}`, {
         method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 'Content-Type': 'application/json', ...authHeaders },
         body: JSON.stringify(updatedTourData),
       }).catch(() => null);
       if (res && res.ok) {
         const data = await res.json().catch(() => ({}));
         if (data.version) lastServerVersionRef.current = data.version;
+      } else {
+        const updatedTour = nextTours.find(t => t.id === id);
+        if (updatedTour) cloudDbApi.saveTour(updatedTour).catch(() => {});
       }
     } catch (err) {
       console.error(err);
@@ -1179,33 +1230,37 @@ export default function App() {
       if (targetTour?.slug) idsToExclude.add(targetTour.slug);
 
       // Record in tombstone list permanently in state & localStorage
-      const updatedDeletedIds = Array.from(new Set([...deletedTourIds, ...Array.from(idsToExclude)]));
+      const updatedDeletedIds = Array.from(new Set([...deletedTourIdsRef.current, ...Array.from(idsToExclude)]));
+      deletedTourIdsRef.current = updatedDeletedIds;
       setDeletedTourIds(updatedDeletedIds);
       safeSetLocalStorage('tst_deleted_tour_ids', updatedDeletedIds);
 
-      // Update tours state immediately using functional setter to guarantee no stale data
-      let remainingTours: Tour[] = [];
-      setTours(prevTours => {
-        remainingTours = prevTours.filter(t => !idsToExclude.has(t.id) && !idsToExclude.has(t.slug));
-        safeSetLocalStorage('tst_tours', remainingTours);
-        return remainingTours;
-      });
+      // Compute remaining tours synchronously BEFORE setTours (avoids React 18 async updater bug)
+      const remainingTours = tours.filter(t => !idsToExclude.has(t.id) && !idsToExclude.has(t.slug));
+      setTours(remainingTours);
+      safeSetLocalStorage('tst_tours', remainingTours);
 
       showToast('🗑️ ลบโปรแกรมทัวร์ถาวรเรียบร้อย');
 
-      // Sync remaining tours to Supabase
-      supabaseApi.saveTours(remainingTours).catch(() => {});
-
-      // Sync to Express API
-      const res = await fetch(`/api/tours/${encodeURIComponent(id)}`, { method: 'DELETE' }).catch(() => null);
+      const authHeaders = await getAuthHeaders();
+      const res = await fetch(`/api/tours/${encodeURIComponent(id)}`, {
+        method: 'DELETE',
+        headers: authHeaders
+      }).catch(() => null);
       if (res && res.ok) {
         const data = await res.json().catch(() => ({}));
         if (data.version) lastServerVersionRef.current = data.version;
         if (Array.isArray(data.deletedTourIds)) {
           const merged = Array.from(new Set([...updatedDeletedIds, ...data.deletedTourIds]));
+          deletedTourIdsRef.current = merged;
           setDeletedTourIds(merged);
           safeSetLocalStorage('tst_deleted_tour_ids', merged);
         }
+      } else {
+        await Promise.all([
+          cloudDbApi.deleteTour(targetTour?.id || id),
+          cloudDbApi.saveDeletedIds('deletedTourIds', updatedDeletedIds),
+        ]).catch(() => {});
       }
     } catch (err) {
       console.error('Delete tour error:', err);
@@ -1225,21 +1280,20 @@ export default function App() {
       setTours(normalized);
       safeSetLocalStorage('tst_tours', normalized);
 
-      // 1. Sync to Supabase KV store
-      supabaseApi.saveTours(normalized).catch((err) => {
-        console.warn('Supabase saveTours error:', err);
-      });
-
-      // 2. Sync to Express API
+      const authHeaders = await getAuthHeaders();
       const res = await fetch('/api/tours/save-all', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 'Content-Type': 'application/json', ...authHeaders },
         body: JSON.stringify({ tours: normalized }),
       }).catch(() => null);
 
       if (res && res.ok) {
         const data = await res.json().catch(() => ({}));
         if (data.version) lastServerVersionRef.current = data.version;
+      } else {
+        cloudDbApi.saveTours(normalized).catch((err) => {
+          console.warn('Firestore saveTours error:', err);
+        });
       }
 
       showToast(`💾 บันทึกและสำรองข้อมูลโปรแกรมทัวร์ทั้งหมด (${normalized.length} รายการ) ลงฐานข้อมูลสำเร็จเรียบร้อย!`);
@@ -1262,11 +1316,11 @@ export default function App() {
       setTours(defaultList);
       safeSetLocalStorage('tst_tours', defaultList);
 
-      // Sync to Supabase
-      supabaseApi.saveTours(defaultList).catch(() => {});
-
-      // Sync to Express
-      await fetch('/api/tours/reset-default', { method: 'POST' }).catch(() => {});
+      const authHeaders = await getAuthHeaders();
+      const res = await fetch('/api/tours/reset-default', { method: 'POST', headers: authHeaders }).catch(() => null);
+      if (!res || !res.ok) {
+        cloudDbApi.saveTours(defaultList).catch(() => {});
+      }
       showToast('🔄 คืนค่าโปรแกรมทัวร์เริ่มต้นเรียบร้อยแล้ว');
     } catch (err) {
       console.error(err);
@@ -1280,17 +1334,18 @@ export default function App() {
       setSuppliers(suppliersToSave);
       safeSetLocalStorage('tst_suppliers', suppliersToSave);
 
-      supabaseApi.saveSuppliers(suppliersToSave).catch(() => {});
-
+      const authHeaders = await getAuthHeaders();
       const res = await fetch('/api/suppliers/save-all', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 'Content-Type': 'application/json', ...authHeaders },
         body: JSON.stringify({ suppliers: suppliersToSave })
       }).catch(() => null);
 
       if (res && res.ok) {
         const data = await res.json().catch(() => ({}));
         if (data.version) lastServerVersionRef.current = data.version;
+      } else {
+        cloudDbApi.saveSuppliers(suppliersToSave).catch(() => {});
       }
 
       showToast(`🏢 บันทึกและสำรองข้อมูลซัพพลายเออร์ทั้งหมด (${suppliersToSave.length} บริษัท) เรียบร้อยแล้ว!`);
@@ -1308,17 +1363,18 @@ export default function App() {
       setCustomers(customersToSave);
       safeSetLocalStorage('tst_customers', customersToSave);
 
-      supabaseApi.saveCustomers(customersToSave).catch(() => {});
-
+      const authHeaders = await getAuthHeaders();
       const res = await fetch('/api/customers/save-all', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 'Content-Type': 'application/json', ...authHeaders },
         body: JSON.stringify({ customers: customersToSave })
       }).catch(() => null);
 
       if (res && res.ok) {
         const data = await res.json().catch(() => ({}));
         if (data.version) lastServerVersionRef.current = data.version;
+      } else {
+        cloudDbApi.saveCustomers(customersToSave).catch(() => {});
       }
 
       showToast(`👥 บันทึกและสำรองข้อมูลลูกค้าทั้งหมด (${customersToSave.length} ราย) เรียบร้อยแล้ว!`);
@@ -1336,17 +1392,18 @@ export default function App() {
       setBookings(bookingsToSave);
       safeSetLocalStorage('tst_bookings', bookingsToSave);
 
-      supabaseApi.saveBookingsBackup(bookingsToSave).catch(() => {});
-
+      const authHeaders = await getAuthHeaders();
       const res = await fetch('/api/bookings/save-all', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 'Content-Type': 'application/json', ...authHeaders },
         body: JSON.stringify({ bookings: bookingsToSave })
       }).catch(() => null);
 
       if (res && res.ok) {
         const data = await res.json().catch(() => ({}));
         if (data.version) lastServerVersionRef.current = data.version;
+      } else {
+        cloudDbApi.saveBookingsBackup(bookingsToSave).catch(() => {});
       }
 
       showToast(`🛍️ บันทึกและสำรองข้อมูลคำสั่งซื้อทั้งหมด (${bookingsToSave.length} รายการ) เรียบร้อยแล้ว!`);
@@ -1374,7 +1431,6 @@ export default function App() {
         const normalized = normalizeTours(bundle.tours);
         setTours(normalized);
         safeSetLocalStorage('tst_tours', normalized);
-        supabaseApi.saveTours(normalized).catch(() => {});
       }
 
       // 2. Suppliers
@@ -1387,40 +1443,43 @@ export default function App() {
       if (Array.isArray(bundle.customers)) {
         setCustomers(bundle.customers);
         safeSetLocalStorage('tst_customers', bundle.customers);
-        supabaseApi.saveCustomers(bundle.customers).catch(() => {});
       }
 
       // 4. Bookings
       if (Array.isArray(bundle.bookings)) {
         setBookings(bundle.bookings);
         safeSetLocalStorage('tst_bookings', bundle.bookings);
-        supabaseApi.saveBookingsBackup(bundle.bookings).catch(() => {});
       }
 
       // 5. Reviews
       if (Array.isArray(bundle.reviews)) {
         setReviews(bundle.reviews);
         safeSetLocalStorage('tst_reviews', bundle.reviews);
-        supabaseApi.saveReviews(bundle.reviews).catch(() => {});
       }
 
       // 6. Settings
       if (bundle.settings && bundle.settings.promptPayId) {
         setSettings(bundle.settings);
         safeSetLocalStorage('tst_settings', bundle.settings);
-        supabaseApi.saveSettings(bundle.settings).catch(() => {});
       }
 
-      // Send to server
+      const authHeaders = await getAuthHeaders();
       const res = await fetch('/api/backup/full-import', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 'Content-Type': 'application/json', ...authHeaders },
         body: JSON.stringify({ data: bundle })
       }).catch(() => null);
 
       if (res && res.ok) {
         const data = await res.json().catch(() => ({}));
         if (data.version) lastServerVersionRef.current = data.version;
+      } else {
+        if (Array.isArray(bundle.tours)) cloudDbApi.saveTours(normalizeTours(bundle.tours)).catch(() => {});
+        if (Array.isArray(bundle.suppliers)) cloudDbApi.saveSuppliers(bundle.suppliers).catch(() => {});
+        if (Array.isArray(bundle.customers)) cloudDbApi.saveCustomers(bundle.customers).catch(() => {});
+        if (Array.isArray(bundle.bookings)) cloudDbApi.saveBookingsBackup(bundle.bookings).catch(() => {});
+        if (Array.isArray(bundle.reviews)) cloudDbApi.saveReviews(bundle.reviews).catch(() => {});
+        if (bundle.settings && bundle.settings.promptPayId) cloudDbApi.saveSettings(bundle.settings).catch(() => {});
       }
 
       showToast('🎉 กู้คืนข้อมูลสำรองทั้งระบบสำเร็จครบถ้วน!');
@@ -1436,9 +1495,10 @@ export default function App() {
   const handleAddReview = async (reviewData: { tourId: string; userName: string; rating: number; comment: string; photo?: string; photos?: string[] }) => {
     try {
       lastMutationTimeRef.current = Date.now();
+      const authHeaders = await getAuthHeaders();
       const res = await fetch('/api/reviews', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 'Content-Type': 'application/json', ...authHeaders },
         body: JSON.stringify(reviewData),
       }).catch(() => null);
 
@@ -1449,13 +1509,12 @@ export default function App() {
           const nextReviews = [created, ...reviews];
           setReviews(nextReviews);
           safeSetLocalStorage('tst_reviews', nextReviews);
-          supabaseApi.saveReviews(nextReviews).catch(() => {});
           showToast('⭐ ขอบพระคุณสำหรับรีวิวครับ!');
           return;
         }
       }
 
-      // Fallback local review creation if offline / Vercel
+      // Fallback local/Firestore review creation if API unavailable
       const photosList = reviewData.photos && reviewData.photos.length > 0
         ? reviewData.photos
         : (reviewData.photo ? [reviewData.photo] : []);
@@ -1475,7 +1534,7 @@ export default function App() {
       const nextReviews = [localReview, ...reviews];
       setReviews(nextReviews);
       safeSetLocalStorage('tst_reviews', nextReviews);
-      supabaseApi.saveReviews(nextReviews).catch(() => {});
+      cloudDbApi.createReview(localReview).catch(() => {});
       showToast('⭐ ขอบพระคุณสำหรับรีวิวครับ!');
     } catch (err) {
       console.error(err);
@@ -1487,19 +1546,21 @@ export default function App() {
     const nextReviews = reviews.map(r => r.id === id ? { ...r, isApproved } : r);
     setReviews(nextReviews);
     safeSetLocalStorage('tst_reviews', nextReviews);
-    supabaseApi.saveReviews(nextReviews).catch(() => {});
     showToast(isApproved ? '✓ อนุมัติการแสดงผลรีวิวแล้ว' : '⏳ ซ่อนรีวิวเรียบร้อย');
     try {
+      const authHeaders = await getAuthHeaders();
       const res = await fetch(`/api/reviews/${id}/status`, {
         method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 'Content-Type': 'application/json', ...authHeaders },
         body: JSON.stringify({ isApproved })
       }).catch(() => null);
       if (res && res.ok) {
         const data = await res.json().catch(() => ({}));
         if (data.version) lastServerVersionRef.current = data.version;
+      } else {
+        cloudDbApi.saveReviews(nextReviews).catch(() => {});
       }
-    } catch (e) {}
+    } catch {}
   };
 
   const handleUpdateReview = async (id: string, updatedFields: Partial<Review>) => {
@@ -1507,69 +1568,83 @@ export default function App() {
     const nextReviews = reviews.map(r => r.id === id ? { ...r, ...updatedFields } : r);
     setReviews(nextReviews);
     safeSetLocalStorage('tst_reviews', nextReviews);
-    supabaseApi.saveReviews(nextReviews).catch(() => {});
     showToast('✏️ แก้ไขข้อมูลรีวิวเรียบร้อยแล้ว');
     try {
+      const authHeaders = await getAuthHeaders();
       const res = await fetch(`/api/reviews/${id}`, {
         method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 'Content-Type': 'application/json', ...authHeaders },
         body: JSON.stringify(updatedFields)
       });
       if (res.ok) {
         const data = await res.json();
         if (data.version) lastServerVersionRef.current = data.version;
+      } else {
+        cloudDbApi.saveReviews(nextReviews).catch(() => {});
       }
-    } catch (e) {}
+    } catch {
+      cloudDbApi.saveReviews(nextReviews).catch(() => {});
+    }
   };
 
   const handleReplyReview = async (id: string, reply: string) => {
     lastMutationTimeRef.current = Date.now();
     const nextReviews = reviews.map(r => r.id === id ? { ...r, adminReply: reply } : r);
     setReviews(nextReviews);
-    localStorage.setItem('tst_reviews', JSON.stringify(nextReviews));
-    supabaseApi.saveReviews(nextReviews).catch(() => {});
+    safeSetLocalStorage('tst_reviews', nextReviews);
     showToast('💬 บันทึกคำตอบกลับรีวิวเรียบร้อย');
     try {
+      const authHeaders = await getAuthHeaders();
       const res = await fetch(`/api/reviews/${id}/reply`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 'Content-Type': 'application/json', ...authHeaders },
         body: JSON.stringify({ reply })
       });
       if (res.ok) {
         const data = await res.json();
         if (data.version) lastServerVersionRef.current = data.version;
+      } else {
+        cloudDbApi.saveReviews(nextReviews).catch(() => {});
       }
-    } catch (e) {}
+    } catch {
+      cloudDbApi.saveReviews(nextReviews).catch(() => {});
+    }
   };
 
   const handleDeleteReview = async (id: string) => {
     try {
       lastMutationTimeRef.current = Date.now();
-      const updatedDeletedIds = Array.from(new Set([...deletedReviewIds, id]));
+      const updatedDeletedIds = Array.from(new Set([...deletedReviewIdsRef.current, id]));
+      deletedReviewIdsRef.current = updatedDeletedIds;
       setDeletedReviewIds(updatedDeletedIds);
       safeSetLocalStorage('tst_deleted_review_ids', updatedDeletedIds);
 
-      let remainingReviews: Review[] = [];
-      setReviews(prev => {
-        remainingReviews = prev.filter(r => r.id !== id);
-        safeSetLocalStorage('tst_reviews', remainingReviews);
-        return remainingReviews;
-      });
-
-      supabaseApi.saveReviews(remainingReviews).catch(() => {});
+      const remainingReviews = reviews.filter(r => r.id !== id);
+      setReviews(remainingReviews);
+      safeSetLocalStorage('tst_reviews', remainingReviews);
       showToast('🗑️ ลบรีวิวเรียบร้อยแล้ว');
 
-      const res = await fetch(`/api/reviews/${encodeURIComponent(id)}`, { method: 'DELETE' });
+      const authHeaders = await getAuthHeaders();
+      const res = await fetch(`/api/reviews/${encodeURIComponent(id)}`, {
+        method: 'DELETE',
+        headers: authHeaders
+      }).catch(() => null);
       if (res && res.ok) {
         const data = await res.json().catch(() => ({}));
         if (data.version) lastServerVersionRef.current = data.version;
         if (Array.isArray(data.deletedReviewIds)) {
           const merged = Array.from(new Set([...updatedDeletedIds, ...data.deletedReviewIds]));
+          deletedReviewIdsRef.current = merged;
           setDeletedReviewIds(merged);
           safeSetLocalStorage('tst_deleted_review_ids', merged);
         }
+      } else {
+        await Promise.all([
+          cloudDbApi.saveReviews(remainingReviews),
+          cloudDbApi.saveDeletedIds('deletedReviewIds', updatedDeletedIds),
+        ]).catch(() => {});
       }
-    } catch (e) {}
+    } catch {}
   };
 
   const handleNavigate = (view: 'home' | 'how-to-book' | 'about-me' | 'admin') => {
@@ -1595,7 +1670,29 @@ export default function App() {
     showToast(`🔓 เข้าสู่ระบบสำเร็จ ยินดีต้อนรับคุณ ${user.name}`);
   };
 
-  const handleAuthenticatePin = (pin: string): boolean => {
+  const handleAuthenticatePin = async (pin: string): Promise<boolean> => {
+    try {
+      const res = await fetch('/api/admin/verify-pin', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ pin }),
+      }).catch(() => null);
+      if (res && res.ok) {
+        const data = await res.json();
+        if (data.authenticated && data.user) {
+          setIsAdminAuthenticated(true);
+          setAdminUser(data.user);
+          localStorage.setItem('tst_admin_auth', 'true');
+          localStorage.setItem('tst_admin_user', JSON.stringify(data.user));
+          setIsAdminAuthModalOpen(false);
+          setActiveView('admin');
+          showToast('🔓 เข้าสู่ระบบแอดมินสำเร็จ');
+          return true;
+        }
+        return false;
+      }
+    } catch {}
+
     const targetPin = settings.adminPin || '1234';
     if (pin === targetPin) {
       setIsAdminAuthenticated(true);
@@ -1616,17 +1713,15 @@ export default function App() {
     return false;
   };
 
-  const handleLogoutAdmin = () => {
+  const handleLogoutAdmin = async () => {
     setIsAdminAuthenticated(false);
     setAdminUser(null);
+    await signOut(auth).catch(() => {});
     try {
       localStorage.removeItem('tst_admin_auth');
       localStorage.removeItem('tst_admin_user');
       sessionStorage.clear();
-      if (typeof window !== 'undefined' && (window as any).google?.accounts?.id) {
-        (window as any).google.accounts.id.disableAutoSelect();
-      }
-    } catch (e) {}
+    } catch {}
     setActiveView('home');
     showToast('🔒 ออกจากระบบและล้างเซสชันแอดมินเรียบร้อยแล้ว');
     setTimeout(() => {

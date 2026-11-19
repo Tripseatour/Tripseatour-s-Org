@@ -10,7 +10,7 @@ import { Currency, formatPrice } from '../utils/currency';
 import { translations } from '../data/translations';
 import { generatePromptPayQRDataUrl } from '../utils/promptpay';
 import { TicketVoucher } from './TicketVoucher';
-import { supabaseApi } from '../lib/supabase';
+import { cloudDbApi } from '../lib/cloudDb';
 import { DEFAULT_PHUKET_PICKUP_ZONES, getEffectivePickupZones, getZoneDisplayName, getZoneTransferStatusLabel } from '../utils/pickupZoneHelper';
 
 interface CartModalProps {
@@ -269,6 +269,7 @@ export const CartModal: React.FC<CartModalProps> = ({
         };
 
         let bookingData: Booking;
+        let apiSucceeded = false;
 
         try {
           const res = await fetch('/api/bookings', {
@@ -279,6 +280,7 @@ export const CartModal: React.FC<CartModalProps> = ({
 
           if (!res.ok) throw new Error('API request failed');
           bookingData = await res.json();
+          apiSucceeded = true;
         } catch {
           // Fallback direct creation
           bookingData = {
@@ -308,7 +310,7 @@ export const CartModal: React.FC<CartModalProps> = ({
             slipUrl: slipFile || undefined,
             slipUploadedAt: slipFile ? new Date().toISOString() : undefined,
             createdAt: new Date().toISOString(),
-            lineNotifySent: true,
+            lineNotifySent: false,
           };
         }
 
@@ -330,11 +332,13 @@ export const CartModal: React.FC<CartModalProps> = ({
           }).catch(() => {});
         }
 
-        // Direct persist to Supabase if available
-        try {
-          await supabaseApi.createBooking(bookingData);
-        } catch (supErr) {
-          console.warn('Supabase sync notice:', supErr);
+        // Direct persist to Firestore only if server API did not already persist
+        if (!apiSucceeded) {
+          try {
+            await cloudDbApi.createBooking(bookingData);
+          } catch (fbErr) {
+            console.warn('Firestore direct fallback notice:', fbErr);
+          }
         }
 
         createdList.push(bookingData);

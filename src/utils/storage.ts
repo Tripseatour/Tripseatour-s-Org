@@ -50,74 +50,109 @@ export async function compressImageBase64(dataUrl: string, maxDim = 900, quality
   });
 }
 
-// Strip very large base64 strings (>50KB) for localStorage storage fallback
+function sanitizeObject(obj: any): any {
+  if (!obj || typeof obj !== 'object') return obj;
+  if (Array.isArray(obj)) {
+    return obj.map(item => sanitizeObject(item));
+  }
+
+  const clone: Record<string, any> = { ...obj };
+
+  // Strip heavy base64 strings (>20KB) from known image fields
+  const imageFields = ['slipUrl', 'ticketImageUrl', 'tatLicenseImgUrl', 'tourImage', 'imageUrl', 'userAvatar'];
+  for (const field of imageFields) {
+    const val = clone[field];
+    if (typeof val === 'string' && val.startsWith('data:image') && val.length > 20000) {
+      clone[field] = field === 'tourImage' || field === 'imageUrl'
+        ? 'https://images.unsplash.com/photo-1507525428034-b723cf961d3e?auto=format&fit=crop&w=800&q=80'
+        : '';
+    }
+  }
+
+  if (Array.isArray(clone.images)) {
+    clone.images = clone.images.map((img: string) => {
+      if (typeof img === 'string' && img.startsWith('data:image') && img.length > 20000) {
+        return 'https://images.unsplash.com/photo-1507525428034-b723cf961d3e?auto=format&fit=crop&w=800&q=80';
+      }
+      return img;
+    });
+  }
+
+  if (Array.isArray(clone.photos)) {
+    clone.photos = clone.photos.map((img: string) => {
+      if (typeof img === 'string' && img.startsWith('data:image') && img.length > 20000) {
+        return '';
+      }
+      return img;
+    }).filter(Boolean);
+  }
+
+  return clone;
+}
+
+// Strip very large base64 strings (>20KB) for localStorage storage fallback
 function sanitizePayloadForLocalStorage(value: any): any {
   if (!value) return value;
-
   try {
     const parsed = typeof value === 'string' ? JSON.parse(value) : value;
-
-    if (Array.isArray(parsed)) {
-      return parsed.map((item) => {
-        if (item && typeof item === 'object') {
-          const clone = { ...item };
-          // If tour has images array with huge base64 strings
-          if (Array.isArray(clone.images)) {
-            clone.images = clone.images.map((img: string) => {
-              if (typeof img === 'string' && img.startsWith('data:image') && img.length > 50000) {
-                // Keep a lightweight placeholder so UI still functions
-                return 'https://images.unsplash.com/photo-1507525428034-b723cf961d3e?auto=format&fit=crop&w=800&q=80';
-              }
-              return img;
-            });
-          }
-          return clone;
-        }
-        return item;
-      });
-    }
-
-    return parsed;
+    return sanitizeObject(parsed);
   } catch {
     return value;
   }
 }
+
+const HEAVY_CACHE_KEYS = [
+  'tst_tours',
+  'tst_settings',
+  'tst_reviews',
+  'tst_customers',
+  'tst_suppliers',
+  'tst_last_tours_saved_at',
+  'tst_tour_draft',
+  'tst_live_chat_draft',
+  'tst_last_active_tab',
+  'local_fallback_bookings',
+];
 
 /**
  * Safely store an item in localStorage without throwing QuotaExceededError
  */
 export function safeSetLocalStorage(key: string, data: any): boolean {
   try {
-    const serialized = typeof data === 'string' ? data : JSON.stringify(data);
+    let serialized = typeof data === 'string' ? data : JSON.stringify(data);
+
+    // Pre-emptively sanitize heavy media blobs if payload exceeds 250KB so localStorage never fills up
+    if (serialized.length > 250000) {
+      const sanitized = sanitizePayloadForLocalStorage(data);
+      serialized = typeof sanitized === 'string' ? sanitized : JSON.stringify(sanitized);
+    }
+
+    // If still > 1.5MB for non-critical heavy caches, skip caching locally (cloud DB is authoritative)
+    if (serialized.length > 1500000 && (key === 'tst_tours' || key === 'tst_settings')) {
+      return false;
+    }
+
     localStorage.setItem(key, serialized);
     return true;
   } catch (err: any) {
     console.warn(`[SafeStorage] localStorage.setItem failed for key "${key}":`, err?.message || err);
 
-    // If quota exceeded, sanitize heavy base64 images and retry
     try {
-      // 1. Clear old non-critical scratch keys
-      const nonCriticalKeys = [
-        'tst_last_tours_saved_at',
-        'tst_tour_draft',
-        'tst_live_chat_draft',
-        'tst_last_active_tab'
-      ];
-      nonCriticalKeys.forEach((k) => {
-        try {
-          localStorage.removeItem(k);
-        } catch (_) {}
+      // Evict heavy cache keys first so critical keys (deleted IDs, bookings, auth) NEVER fail to save
+      HEAVY_CACHE_KEYS.forEach((k) => {
+        if (k !== key) {
+          try {
+            localStorage.removeItem(k);
+          } catch (_) {}
+        }
       });
 
-      // 2. Sanitize payload by removing heavy inline Base64 data
       const sanitized = sanitizePayloadForLocalStorage(data);
-      const reserialized = JSON.stringify(sanitized);
+      const reserialized = typeof sanitized === 'string' ? sanitized : JSON.stringify(sanitized);
 
       localStorage.setItem(key, reserialized);
-      console.log(`[SafeStorage] Successfully saved sanitized version of "${key}" after quota recovery.`);
       return true;
-    } catch (retryErr) {
-      console.warn(`[SafeStorage] Quota exceeded persistently for "${key}". Data is retained in React state and synced to database.`);
+    } catch {
       return false;
     }
   }

@@ -1258,7 +1258,7 @@ export const UniversalDataBackupModal: React.FC<UniversalDataBackupModalProps> =
         <div className="border-t border-slate-800 pt-3 flex items-center justify-between text-xs text-slate-400 shrink-0">
           <span className="flex items-center gap-1.5">
             <ShieldCheck className="w-4 h-4 text-emerald-400" />
-            <span>ซิงค์ตรงกับฐานข้อมูล Supabase และ Local Storage ปลอดภัย 100%</span>
+            <span>ซิงค์ตรงกับฐานข้อมูล Firebase Firestore และ Local Storage ปลอดภัย 100%</span>
           </span>
           <button
             type="button"

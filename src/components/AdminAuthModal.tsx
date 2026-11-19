@@ -1,12 +1,14 @@
 import React, { useState } from 'react';
-import { Lock, ShieldCheck, AlertCircle, ArrowRight, X, CheckCircle2, KeyRound } from 'lucide-react';
+import { Lock, AlertCircle, ArrowRight, X, CheckCircle2, KeyRound } from 'lucide-react';
+import { GoogleAuthProvider, signInWithPopup } from 'firebase/auth';
+import { auth } from '../lib/firebase';
 import { AdminUser } from '../types';
 
 interface AdminAuthModalProps {
   isOpen: boolean;
   onClose: () => void;
   onAuthenticateGoogle: (user: AdminUser) => void;
-  onAuthenticatePin?: (pin: string) => boolean;
+  onAuthenticatePin?: (pin: string) => boolean | Promise<boolean>;
   authorizedEmails?: string[];
 }
 
@@ -27,7 +29,12 @@ export const AdminAuthModal: React.FC<AdminAuthModalProps> = ({
     ? authorizedEmails 
     : ['asmr9941@gmail.com', 'admin@tripseatour.com'];
 
-  const verifyAndLogin = async (emailToVerify: string) => {
+  const verifyAndLogin = async (
+    emailToVerify: string,
+    displayName?: string | null,
+    photoURL?: string | null,
+    idToken?: string | null
+  ) => {
     const cleanEmail = emailToVerify.trim().toLowerCase();
 
     if (!cleanEmail || !cleanEmail.includes('@')) {
@@ -45,14 +52,22 @@ export const AdminAuthModal: React.FC<AdminAuthModalProps> = ({
     setErrorMsg(null);
     setSuccessMsg(null);
 
+    const resolvedName = displayName || (cleanEmail === 'asmr9941@gmail.com' ? 'Super Admin' : cleanEmail.split('@')[0]);
+    const resolvedPicture = photoURL || `https://ui-avatars.com/api/?name=${encodeURIComponent(cleanEmail)}&background=0D9488&color=fff`;
+
     try {
+      const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+      if (idToken) {
+        headers.Authorization = `Bearer ${idToken}`;
+      }
+
       const res = await fetch('/api/admin/verify-google-account', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers,
         body: JSON.stringify({
           email: cleanEmail,
-          name: cleanEmail === 'asmr9941@gmail.com' ? 'Super Admin' : cleanEmail.split('@')[0],
-          picture: `https://ui-avatars.com/api/?name=${encodeURIComponent(cleanEmail)}&background=0D9488&color=fff`
+          name: resolvedName,
+          picture: resolvedPicture
         })
       });
 
@@ -66,13 +81,13 @@ export const AdminAuthModal: React.FC<AdminAuthModalProps> = ({
       } else {
         setErrorMsg(data.message || `⛔ บัญชี Google (${cleanEmail}) ไม่มีสิทธิ์เข้าถึงระบบผู้ดูแล`);
       }
-    } catch (err) {
+    } catch {
       if (lowerAuth.includes(cleanEmail)) {
         const user: AdminUser = {
           email: cleanEmail,
-          name: cleanEmail === 'asmr9941@gmail.com' ? 'Super Admin' : cleanEmail.split('@')[0],
-          picture: `https://ui-avatars.com/api/?name=${encodeURIComponent(cleanEmail)}&background=0D9488&color=fff`,
-          role: cleanEmail === lowerAuth[0] ? 'superadmin' : 'admin',
+          name: resolvedName,
+          picture: resolvedPicture,
+          role: cleanEmail === lowerAuth[0] || cleanEmail === 'asmr9941@gmail.com' ? 'superadmin' : 'admin',
           lastLogin: new Date().toISOString()
         };
         setSuccessMsg(`ยืนยันสิทธิ์ Google Account (${cleanEmail}) เรียบร้อย`);
@@ -88,57 +103,45 @@ export const AdminAuthModal: React.FC<AdminAuthModalProps> = ({
     }
   };
 
-  const handleRealGoogleOAuth = () => {
+  const handleRealGoogleOAuth = async () => {
     setIsLoading(true);
     setErrorMsg(null);
 
-    // Real client ID from project config
-    const realClientId = '457279499176-6h018o420pvjd0qlobijvvbld5jhtdoe.apps.googleusercontent.com';
+    try {
+      const provider = new GoogleAuthProvider();
+      provider.setCustomParameters({ prompt: 'select_account' });
+      const result = await signInWithPopup(auth, provider);
+      const user = result.user;
 
-    if (typeof window !== 'undefined' && (window as any).google?.accounts?.oauth2) {
-      try {
-        const client = (window as any).google.accounts.oauth2.initTokenClient({
-          client_id: realClientId,
-          scope: 'https://www.googleapis.com/auth/userinfo.email https://www.googleapis.com/auth/userinfo.profile',
-          callback: async (tokenResponse: any) => {
-            if (tokenResponse && tokenResponse.access_token) {
-              try {
-                const profileRes = await fetch('https://www.googleapis.com/oauth2/v3/userinfo', {
-                  headers: { Authorization: `Bearer ${tokenResponse.access_token}` }
-                });
-                const profile = await profileRes.json();
-                if (profile && profile.email) {
-                  await verifyAndLogin(profile.email);
-                } else {
-                  setErrorMsg('ไม่สามารถดึงข้อมูลอีเมลจาก Google ได้');
-                  setIsLoading(false);
-                }
-              } catch (err) {
-                setErrorMsg('เกิดข้อผิดพลาดในการดึงข้อมูลโปรไฟล์ Google');
-                setIsLoading(false);
-              }
-            } else {
-              setIsLoading(false);
-            }
-          },
-          error_callback: (error: any) => {
-            console.warn('Google OAuth Popup error:', error);
-            setIsLoading(false);
-            setErrorMsg('เกิดข้อผิดพลาดในการเชื่อมต่อ Google OAuth (กรุณาตรวจสอบว่าลงทะเบียน Authorized Origin ใน Google Cloud Console แล้วหรือใช้รหัส PIN)');
-          }
-        });
-        client.requestAccessToken({ prompt: 'select_account' });
-      } catch (e) {
-        setIsLoading(false);
-        setErrorMsg('ไม่สามารถเปิดป๊อปอัป Google Account Chooser ได้');
+      if (user?.email) {
+        const idToken = await user.getIdToken().catch(() => null);
+        await verifyAndLogin(user.email, user.displayName, user.photoURL, idToken);
+      } else {
+        setErrorMsg('ไม่สามารถดึงข้อมูลอีเมลจากบัญชี Google ได้');
       }
-    } else {
+    } catch (error: any) {
+      const code = error?.code || '';
+      if (code === 'auth/popup-closed-by-user' || code === 'auth/cancelled-popup-request') {
+        // User intentionally closed the popup — do not display error banner
+        return;
+      }
+      if (code === 'auth/unauthorized-domain') {
+        const currentHost = typeof window !== 'undefined' ? window.location.hostname : '';
+        setErrorMsg(
+          `โดเมน "${currentHost}" ยังไม่ได้เพิ่มใน Firebase Authentication -> Settings -> Authorized domains (หรือเข้าสู่ระบบด้วยรหัส PIN ชั่วคราวด้านขวา)`
+        );
+        return;
+      }
+      console.warn('Firebase Google Sign-In error:', error);
+      setErrorMsg(
+        `ไม่สามารถเข้าสู่ระบบด้วย Google ได้ (${code || error?.message || 'Unknown error'}) กรุณาลองใหม่หรือใช้รหัส PIN`
+      );
+    } finally {
       setIsLoading(false);
-      setErrorMsg('Google Sign-In SDK ยังไม่พร้อมใช้งานในระบบขณะนี้');
     }
   };
 
-  const handlePinSubmit = (e: React.FormEvent) => {
+  const handlePinSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!pinInput) {
       setErrorMsg('กรุณากรอกรหัส PIN ความปลอดภัย');
@@ -146,11 +149,16 @@ export const AdminAuthModal: React.FC<AdminAuthModalProps> = ({
     }
 
     if (onAuthenticatePin) {
-      const ok = onAuthenticatePin(pinInput);
-      if (!ok) {
-        setErrorMsg('รหัส PIN ไม่ถูกต้อง โปรดลองใหม่อีกครั้ง');
-      } else {
-        onClose();
+      setIsLoading(true);
+      try {
+        const ok = await onAuthenticatePin(pinInput);
+        if (!ok) {
+          setErrorMsg('รหัส PIN ไม่ถูกต้อง โปรดลองใหม่อีกครั้ง');
+        } else {
+          onClose();
+        }
+      } finally {
+        setIsLoading(false);
       }
     }
   };
