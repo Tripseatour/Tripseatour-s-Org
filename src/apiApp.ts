@@ -814,12 +814,20 @@ async function sendLineNotification(
 
   const tokenCandidate = (overrideToken && !overrideToken.startsWith('SIMULATED'))
     ? overrideToken.trim()
-    : settings.lineMessagingChannelAccessToken?.trim();
+    : (
+        process.env.LINE_CHANNEL_ACCESS_TOKEN?.trim() ||
+        process.env.LINE_MESSAGING_CHANNEL_ACCESS_TOKEN?.trim() ||
+        settings.lineMessagingChannelAccessToken?.trim()
+      );
   const channelToken = (tokenCandidate && tokenCandidate.length > 0 && !tokenCandidate.startsWith('SIMULATED'))
     ? tokenCandidate
     : initialSettings.lineMessagingChannelAccessToken;
 
-  const targetCandidate = overrideTargetId?.trim() || settings.lineMessagingUserId?.trim();
+  const targetCandidate =
+    overrideTargetId?.trim() ||
+    process.env.LINE_USER_ID?.trim() ||
+    process.env.LINE_MESSAGING_USER_ID?.trim() ||
+    settings.lineMessagingUserId?.trim();
   const targetId = (targetCandidate && targetCandidate.length > 0)
     ? targetCandidate
     : initialSettings.lineMessagingUserId;

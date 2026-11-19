@@ -16,6 +16,17 @@
     "isApproved": true
   },
   {
+    "id": "rev-3",
+    "tourId": "tour-5",
+    "userName": "李先生 & 张小姐",
+    "nationality": "ZH",
+    "rating": 5,
+    "comment": "非常有意义的大象保护区之旅！没有骑大象，能给大象做泥巴SPA和洗澡，大象非常快乐。在线预订流程很畅通，在线客服在LINE上很快解答了我们的问题，强烈推荐！",
+    "date": "2026-08-05",
+    "verifiedBooking": true,
+    "isApproved": true
+  },
+  {
     "id": "rev-2",
     "tourId": "tour-3",
     "userName": "Alexandre & Elena",
@@ -27,17 +38,6 @@
     "photos": [
       "https://images.unsplash.com/photo-1569263979104-865ab7cd8d13?auto=format&fit=crop&w=600&q=80"
     ],
-    "isApproved": true
-  },
-  {
-    "id": "rev-3",
-    "tourId": "tour-5",
-    "userName": "李先生 & 张小姐",
-    "nationality": "ZH",
-    "rating": 5,
-    "comment": "非常有意义的大象保护区之旅！没有骑大象，能给大象做泥巴SPA和洗澡，大象非常快乐。在线预订流程很畅通，在线客服在LINE上很快解答了我们的问题，强烈推荐！",
-    "date": "2026-08-05",
-    "verifiedBooking": true,
     "isApproved": true
   }
 ]

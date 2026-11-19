@@ -1,8 +1,39 @@
-import firebaseConfig from '../../firebase-applet-config.json';
+import fs from 'fs';
+import path from 'path';
 
-export const FIRESTORE_PROJECT_ID = firebaseConfig.projectId;
-export const FIRESTORE_DATABASE_ID = firebaseConfig.firestoreDatabaseId || '(default)';
-const API_KEY = firebaseConfig.apiKey;
+interface FirebaseAppletConfig {
+  projectId: string;
+  firestoreDatabaseId?: string;
+  apiKey: string;
+}
+
+const DEFAULT_FIREBASE_CONFIG: FirebaseAppletConfig = {
+  projectId: 'gen-lang-client-0325240090',
+  firestoreDatabaseId: 'ai-studio-tripseatourphuke-9bf47128-91ee-4d53-a5c2-4dd34a872beb',
+  apiKey: 'AIzaSyCkRR0AgpyLbzxbSZ_1tmQyPq0pP4hjslI',
+};
+
+function loadFirebaseConfig(): FirebaseAppletConfig {
+  try {
+    const configPath = path.join(process.cwd(), 'firebase-applet-config.json');
+    if (fs.existsSync(configPath)) {
+      const parsed = JSON.parse(fs.readFileSync(configPath, 'utf8'));
+      if (parsed && parsed.projectId && parsed.apiKey) {
+        return parsed;
+      }
+    }
+  } catch {
+    // Fallback to provisioned public web config
+  }
+  return DEFAULT_FIREBASE_CONFIG;
+}
+
+const firebaseConfig = loadFirebaseConfig();
+
+export const FIRESTORE_PROJECT_ID = process.env.FIREBASE_PROJECT_ID || firebaseConfig.projectId;
+export const FIRESTORE_DATABASE_ID =
+  process.env.FIREBASE_DATABASE_ID || firebaseConfig.firestoreDatabaseId || '(default)';
+const API_KEY = process.env.FIREBASE_API_KEY || firebaseConfig.apiKey;
 const BASE_URL = `https://firestore.googleapis.com/v1/projects/${FIRESTORE_PROJECT_ID}/databases/${FIRESTORE_DATABASE_ID}/documents`;
 
 type FirestoreValue =

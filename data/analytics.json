@@ -1,8 +1,8 @@
 {
-  "totalPageviews": 24875,
-  "totalUniqueVisitors": 9424,
-  "todayPageviews": 16,
-  "todayUniqueVisitors": 1,
+  "totalPageviews": 24894,
+  "totalUniqueVisitors": 9425,
+  "todayPageviews": 35,
+  "todayUniqueVisitors": 2,
   "yesterdayPageviews": 8,
   "yesterdayUniqueVisitors": 2,
   "activeNow": 1,
@@ -74,14 +74,14 @@
     },
     {
       "date": "2026-11-19",
-      "views": 16,
-      "uniques": 1
+      "views": 35,
+      "uniques": 2
     }
   ],
   "devices": {
     "mobile": 16891,
     "desktop": 6940,
-    "tablet": 1044
+    "tablet": 1063
   },
   "topPages": [
     {
@@ -107,7 +107,7 @@
     {
       "path": "admin",
       "title": "แดชบอร์ดแอดมิน",
-      "views": 5
+      "views": 24
     }
   ],
   "sources": [
@@ -118,7 +118,7 @@
     },
     {
       "source": "Google Search",
-      "count": 8224,
+      "count": 8243,
       "percentage": 33.1
     },
     {
@@ -138,6 +138,215 @@
     }
   ],
   "recentVisitors": [
+    {
+      "id": "v-eh61f3u-mvv0gpnb",
+      "timestamp": "2026-11-19T07:17:48.422Z",
+      "device": "tablet",
+      "browser": "Chrome",
+      "os": "Windows",
+      "country": "🇹🇭 ประเทศไทย",
+      "city": "Phuket / Bangkok",
+      "page": "admin",
+      "referrer": "Google Search"
+    },
+    {
+      "id": "v-eh61f3u-mvv0gpnb",
+      "timestamp": "2026-11-19T07:17:33.407Z",
+      "device": "tablet",
+      "browser": "Chrome",
+      "os": "Windows",
+      "country": "🇹🇭 ประเทศไทย",
+      "city": "Phuket / Bangkok",
+      "page": "admin",
+      "referrer": "Google Search"
+    },
+    {
+      "id": "v-eh61f3u-mvv0gpnb",
+      "timestamp": "2026-11-19T07:17:18.408Z",
+      "device": "tablet",
+      "browser": "Chrome",
+      "os": "Windows",
+      "country": "🇹🇭 ประเทศไทย",
+      "city": "Phuket / Bangkok",
+      "page": "admin",
+      "referrer": "Google Search"
+    },
+    {
+      "id": "v-eh61f3u-mvv0gpnb",
+      "timestamp": "2026-11-19T07:17:03.410Z",
+      "device": "tablet",
+      "browser": "Chrome",
+      "os": "Windows",
+      "country": "🇹🇭 ประเทศไทย",
+      "city": "Phuket / Bangkok",
+      "page": "admin",
+      "referrer": "Google Search"
+    },
+    {
+      "id": "v-eh61f3u-mvv0gpnb",
+      "timestamp": "2026-11-19T07:16:48.403Z",
+      "device": "tablet",
+      "browser": "Chrome",
+      "os": "Windows",
+      "country": "🇹🇭 ประเทศไทย",
+      "city": "Phuket / Bangkok",
+      "page": "admin",
+      "referrer": "Google Search"
+    },
+    {
+      "id": "v-eh61f3u-mvv0gpnb",
+      "timestamp": "2026-11-19T07:16:33.416Z",
+      "device": "tablet",
+      "browser": "Chrome",
+      "os": "Windows",
+      "country": "🇹🇭 ประเทศไทย",
+      "city": "Phuket / Bangkok",
+      "page": "admin",
+      "referrer": "Google Search"
+    },
+    {
+      "id": "v-eh61f3u-mvv0gpnb",
+      "timestamp": "2026-11-19T07:16:18.410Z",
+      "device": "tablet",
+      "browser": "Chrome",
+      "os": "Windows",
+      "country": "🇹🇭 ประเทศไทย",
+      "city": "Phuket / Bangkok",
+      "page": "admin",
+      "referrer": "Google Search"
+    },
+    {
+      "id": "v-eh61f3u-mvv0gpnb",
+      "timestamp": "2026-11-19T07:16:03.405Z",
+      "device": "tablet",
+      "browser": "Chrome",
+      "os": "Windows",
+      "country": "🇹🇭 ประเทศไทย",
+      "city": "Phuket / Bangkok",
+      "page": "admin",
+      "referrer": "Google Search"
+    },
+    {
+      "id": "v-eh61f3u-mvv0gpnb",
+      "timestamp": "2026-11-19T07:15:48.405Z",
+      "device": "tablet",
+      "browser": "Chrome",
+      "os": "Windows",
+      "country": "🇹🇭 ประเทศไทย",
+      "city": "Phuket / Bangkok",
+      "page": "admin",
+      "referrer": "Google Search"
+    },
+    {
+      "id": "v-eh61f3u-mvv0gpnb",
+      "timestamp": "2026-11-19T07:15:33.401Z",
+      "device": "tablet",
+      "browser": "Chrome",
+      "os": "Windows",
+      "country": "🇹🇭 ประเทศไทย",
+      "city": "Phuket / Bangkok",
+      "page": "admin",
+      "referrer": "Google Search"
+    },
+    {
+      "id": "v-eh61f3u-mvv0gpnb",
+      "timestamp": "2026-11-19T07:15:18.405Z",
+      "device": "tablet",
+      "browser": "Chrome",
+      "os": "Windows",
+      "country": "🇹🇭 ประเทศไทย",
+      "city": "Phuket / Bangkok",
+      "page": "admin",
+      "referrer": "Google Search"
+    },
+    {
+      "id": "v-eh61f3u-mvv0gpnb",
+      "timestamp": "2026-11-19T07:15:03.410Z",
+      "device": "tablet",
+      "browser": "Chrome",
+      "os": "Windows",
+      "country": "🇹🇭 ประเทศไทย",
+      "city": "Phuket / Bangkok",
+      "page": "admin",
+      "referrer": "Google Search"
+    },
+    {
+      "id": "v-eh61f3u-mvv0gpnb",
+      "timestamp": "2026-11-19T07:14:48.426Z",
+      "device": "tablet",
+      "browser": "Chrome",
+      "os": "Windows",
+      "country": "🇹🇭 ประเทศไทย",
+      "city": "Phuket / Bangkok",
+      "page": "admin",
+      "referrer": "Google Search"
+    },
+    {
+      "id": "v-eh61f3u-mvv0gpnb",
+      "timestamp": "2026-11-19T07:14:33.412Z",
+      "device": "tablet",
+      "browser": "Chrome",
+      "os": "Windows",
+      "country": "🇹🇭 ประเทศไทย",
+      "city": "Phuket / Bangkok",
+      "page": "admin",
+      "referrer": "Google Search"
+    },
+    {
+      "id": "v-eh61f3u-mvv0gpnb",
+      "timestamp": "2026-11-19T07:14:29.600Z",
+      "device": "tablet",
+      "browser": "Chrome",
+      "os": "Windows",
+      "country": "🇹🇭 ประเทศไทย",
+      "city": "Phuket / Bangkok",
+      "page": "admin",
+      "referrer": "Google Search"
+    },
+    {
+      "id": "v-eh61f3u-mvv0gpnb",
+      "timestamp": "2026-11-19T07:14:15.059Z",
+      "device": "tablet",
+      "browser": "Chrome",
+      "os": "Windows",
+      "country": "🇹🇭 ประเทศไทย",
+      "city": "Phuket / Bangkok",
+      "page": "admin",
+      "referrer": "Google Search"
+    },
+    {
+      "id": "v-eh61f3u-mvv0gpnb",
+      "timestamp": "2026-11-19T07:14:08.181Z",
+      "device": "tablet",
+      "browser": "Chrome",
+      "os": "Windows",
+      "country": "🇹🇭 ประเทศไทย",
+      "city": "Phuket / Bangkok",
+      "page": "admin",
+      "referrer": "Google Search"
+    },
+    {
+      "id": "v-eh61f3u-mvv0gpnb",
+      "timestamp": "2026-11-19T07:14:03.402Z",
+      "device": "tablet",
+      "browser": "Chrome",
+      "os": "Windows",
+      "country": "🇹🇭 ประเทศไทย",
+      "city": "Phuket / Bangkok",
+      "page": "admin",
+      "referrer": "Google Search"
+    },
+    {
+      "id": "v-eh61f3u-mvv0gpnb",
+      "timestamp": "2026-11-19T07:14:02.606Z",
+      "device": "tablet",
+      "browser": "Chrome",
+      "os": "Windows",
+      "country": "🇹🇭 ประเทศไทย",
+      "city": "Phuket / Bangkok",
+      "page": "admin",
+      "referrer": "Google Search"
+    },
     {
       "id": "v-eh61f3u-mvv0gpnb",
       "timestamp": "2026-11-19T06:26:01.659Z",
@@ -258,180 +467,9 @@
       "city": "Phuket / Bangkok",
       "page": "home",
       "referrer": "Google Search"
-    },
-    {
-      "id": "v-eh61f3u-mvv0gpnb",
-      "timestamp": "2026-11-19T06:23:16.716Z",
-      "device": "tablet",
-      "browser": "Chrome",
-      "os": "Windows",
-      "country": "🇹🇭 ประเทศไทย",
-      "city": "Phuket / Bangkok",
-      "page": "home",
-      "referrer": "Google Search"
-    },
-    {
-      "id": "v-eh61f3u-mvv0gpnb",
-      "timestamp": "2026-11-19T06:23:01.658Z",
-      "device": "tablet",
-      "browser": "Chrome",
-      "os": "Windows",
-      "country": "🇹🇭 ประเทศไทย",
-      "city": "Phuket / Bangkok",
-      "page": "home",
-      "referrer": "Google Search"
-    },
-    {
-      "id": "v-eh61f3u-mvv0gpnb",
-      "timestamp": "2026-11-19T06:22:46.667Z",
-      "device": "tablet",
-      "browser": "Chrome",
-      "os": "Windows",
-      "country": "🇹🇭 ประเทศไทย",
-      "city": "Phuket / Bangkok",
-      "page": "home",
-      "referrer": "Google Search"
-    },
-    {
-      "id": "v-eh61f3u-mvv0gpnb",
-      "timestamp": "2026-11-19T06:22:31.658Z",
-      "device": "tablet",
-      "browser": "Chrome",
-      "os": "Windows",
-      "country": "🇹🇭 ประเทศไทย",
-      "city": "Phuket / Bangkok",
-      "page": "home",
-      "referrer": "Google Search"
-    },
-    {
-      "id": "v-eh61f3u-mvv0gpnb",
-      "timestamp": "2026-11-19T06:22:16.687Z",
-      "device": "tablet",
-      "browser": "Chrome",
-      "os": "Windows",
-      "country": "🇹🇭 ประเทศไทย",
-      "city": "Phuket / Bangkok",
-      "page": "home",
-      "referrer": "Google Search"
-    },
-    {
-      "id": "v-eh61f3u-mvv0gpnb",
-      "timestamp": "2026-11-05T09:38:03.942Z",
-      "device": "tablet",
-      "browser": "Chrome",
-      "os": "Windows",
-      "country": "🇹🇭 ประเทศไทย",
-      "city": "Phuket / Bangkok",
-      "page": "home",
-      "referrer": "Google Search"
-    },
-    {
-      "id": "v-eh61f3u-mvv0gpnb",
-      "timestamp": "2026-11-05T09:37:51.442Z",
-      "device": "tablet",
-      "browser": "Chrome",
-      "os": "Windows",
-      "country": "🇹🇭 ประเทศไทย",
-      "city": "Phuket / Bangkok",
-      "page": "home",
-      "referrer": "Google Search"
-    },
-    {
-      "id": "v-eh61f3u-mvv0gpnb",
-      "timestamp": "2026-11-05T09:37:48.664Z",
-      "device": "tablet",
-      "browser": "Chrome",
-      "os": "Windows",
-      "country": "🇹🇭 ประเทศไทย",
-      "city": "Phuket / Bangkok",
-      "page": "home",
-      "referrer": "Google Search"
-    },
-    {
-      "id": "v-eh61f3u-mvv0gpnb",
-      "timestamp": "2026-11-05T09:00:27.657Z",
-      "device": "tablet",
-      "browser": "Chrome",
-      "os": "Windows",
-      "country": "🇹🇭 ประเทศไทย",
-      "city": "Phuket / Bangkok",
-      "page": "admin",
-      "referrer": "Google Search"
-    },
-    {
-      "id": "v-eh61f3u-mvv0gpnb",
-      "timestamp": "2026-11-05T09:00:12.653Z",
-      "device": "tablet",
-      "browser": "Chrome",
-      "os": "Windows",
-      "country": "🇹🇭 ประเทศไทย",
-      "city": "Phuket / Bangkok",
-      "page": "admin",
-      "referrer": "Google Search"
-    },
-    {
-      "id": "v-eh61f3u-mvv0gpnb",
-      "timestamp": "2026-11-05T09:00:07.063Z",
-      "device": "tablet",
-      "browser": "Chrome",
-      "os": "Windows",
-      "country": "🇹🇭 ประเทศไทย",
-      "city": "Phuket / Bangkok",
-      "page": "admin",
-      "referrer": "Google Search"
-    },
-    {
-      "id": "v-eh61f3u-mvv0gpnb",
-      "timestamp": "2026-11-05T08:59:57.664Z",
-      "device": "tablet",
-      "browser": "Chrome",
-      "os": "Windows",
-      "country": "🇹🇭 ประเทศไทย",
-      "city": "Phuket / Bangkok",
-      "page": "admin",
-      "referrer": "Google Search"
-    },
-    {
-      "id": "v-eh61f3u-mvv0gpnb",
-      "timestamp": "2026-11-05T08:59:56.893Z",
-      "device": "tablet",
-      "browser": "Chrome",
-      "os": "Windows",
-      "country": "🇹🇭 ประเทศไทย",
-      "city": "Phuket / Bangkok",
-      "page": "admin",
-      "referrer": "Google Search"
-    },
-    {
-      "id": "v-test-123",
-      "timestamp": "2026-10-30T13:28:45.640Z",
-      "device": "mobile",
-      "page": "home",
-      "referrer": "Direct"
-    },
-    {
-      "id": "v-th-8821",
-      "timestamp": "2026-10-30T13:27:36.157Z",
-      "device": "mobile",
-      "page": "home",
-      "referrer": "Google Search"
-    },
-    {
-      "id": "v-th-4190",
-      "timestamp": "2026-10-30T13:26:21.157Z",
-      "device": "desktop",
-      "page": "tour-detail",
-      "referrer": "Direct"
-    },
-    {
-      "id": "v-th-9102",
-      "timestamp": "2026-10-30T13:25:21.157Z",
-      "device": "mobile",
-      "page": "how-to-book",
-      "referrer": "Facebook"
     }
   ],
-  "lastUpdated": "2026-11-19T06:26:01.659Z",
+  "lastUpdated": "2026-11-19T07:17:48.422Z",
   "liveSessions": [
     {
       "visitorId": "v-eh61f3u-mvv0gpnb",
@@ -445,13 +483,13 @@
       "screen": "861x488",
       "language": "th-TH",
       "timezone": "Asia/Bangkok",
-      "currentPage": "home",
-      "pageTitle": "หน้าแรก - ทริปซีทัวร์ ภูเก็ต",
+      "currentPage": "admin",
+      "pageTitle": "แดชบอร์ดแอดมิน",
       "referrer": "Google Search",
-      "firstSeen": "2026-11-19T06:22:16.687Z",
-      "lastPing": "2026-11-19T06:26:01.659Z",
+      "firstSeen": "2026-11-19T07:14:02.605Z",
+      "lastPing": "2026-11-19T07:17:48.422Z",
       "lastPingSecondsAgo": 0,
-      "pageviewsCount": 16
+      "pageviewsCount": 19
     }
   ]
 }
