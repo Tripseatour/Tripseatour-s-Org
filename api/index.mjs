@@ -1,44 +1,9 @@
-var __create = Object.create;
-var __defProp = Object.defineProperty;
-var __getOwnPropDesc = Object.getOwnPropertyDescriptor;
-var __getOwnPropNames = Object.getOwnPropertyNames;
-var __getProtoOf = Object.getPrototypeOf;
-var __hasOwnProp = Object.prototype.hasOwnProperty;
-var __export = (target, all) => {
-  for (var name in all)
-    __defProp(target, name, { get: all[name], enumerable: true });
-};
-var __copyProps = (to, from, except, desc) => {
-  if (from && typeof from === "object" || typeof from === "function") {
-    for (let key of __getOwnPropNames(from))
-      if (!__hasOwnProp.call(to, key) && key !== except)
-        __defProp(to, key, { get: () => from[key], enumerable: !(desc = __getOwnPropDesc(from, key)) || desc.enumerable });
-  }
-  return to;
-};
-var __toESM = (mod, isNodeMode, target) => (target = mod != null ? __create(__getProtoOf(mod)) : {}, __copyProps(
-  // If the importer is in node compatibility mode or this is not an ESM
-  // file that has been converted to a CommonJS file using a Babel-
-  // compatible transform (i.e. "__esModule" has not been set), then set
-  // "default" to the CommonJS "module.exports" for node compatibility.
-  isNodeMode || !mod || !mod.__esModule ? __defProp(target, "default", { value: mod, enumerable: true }) : target,
-  mod
-));
-var __toCommonJS = (mod) => __copyProps(__defProp({}, "__esModule", { value: true }), mod);
-
 // src/apiApp.ts
-var apiApp_exports = {};
-__export(apiApp_exports, {
-  checkAndSend24hReminders: () => checkAndSend24hReminders,
-  default: () => apiApp_default,
-  updateSyncMetadata: () => updateSyncMetadata
-});
-module.exports = __toCommonJS(apiApp_exports);
-var import_express = __toESM(require("express"), 1);
-var import_path2 = __toESM(require("path"), 1);
-var import_fs2 = __toESM(require("fs"), 1);
-var import_genai3 = require("@google/genai");
-var import_qrcode = __toESM(require("qrcode"), 1);
+import express from "express";
+import path2 from "path";
+import fs2 from "fs";
+import { GoogleGenAI as GoogleGenAI3 } from "@google/genai";
+import QRCode from "qrcode";
 
 // src/data/mockData.ts
 var mockSuppliers = [
@@ -5949,7 +5914,7 @@ function normalizeTours(toursList) {
 }
 
 // src/server-handlers/extract-tour-from-image.ts
-var import_genai = require("@google/genai");
+import { GoogleGenAI, ThinkingLevel } from "@google/genai";
 
 // src/utils/llmJsonParser.ts
 function safeParseLlmJson(rawText, fallbackDefault) {
@@ -6317,7 +6282,7 @@ Important:
     const CANDIDATE_MODELS = ["gemini-3.1-flash-lite", "gemini-3.8-flash", "gemini-flash-latest"];
     keyLoop: for (let i = 0; i < apiKeys.length; i++) {
       const activeKey = apiKeys[i];
-      const ai = new import_genai.GoogleGenAI({
+      const ai = new GoogleGenAI({
         apiKey: activeKey,
         httpOptions: {
           headers: {
@@ -6332,7 +6297,7 @@ Important:
             responseMimeType: "application/json"
           };
           if (candidateModel.includes("3.8")) {
-            config.thinkingConfig = { thinkingLevel: import_genai.ThinkingLevel.LOW };
+            config.thinkingConfig = { thinkingLevel: ThinkingLevel.LOW };
           }
           const aiResponse = await ai.models.generateContent({
             model: candidateModel,
@@ -6382,7 +6347,7 @@ Important:
 }
 
 // src/server-handlers/translate-tour.ts
-var import_genai2 = require("@google/genai");
+import { GoogleGenAI as GoogleGenAI2, ThinkingLevel as ThinkingLevel2 } from "@google/genai";
 function getGeminiApiKeys2() {
   const keys = [];
   const addKey = (k) => {
@@ -6479,7 +6444,7 @@ Return ONLY valid JSON in this exact structure without markdown formatting or ba
     if (apiKeys.length > 0) {
       keyLoop: for (let i = 0; i < apiKeys.length; i++) {
         const activeKey = apiKeys[i];
-        const ai = new import_genai2.GoogleGenAI({
+        const ai = new GoogleGenAI2({
           apiKey: activeKey,
           httpOptions: {
             headers: {
@@ -6494,7 +6459,7 @@ Return ONLY valid JSON in this exact structure without markdown formatting or ba
               responseMimeType: "application/json"
             };
             if (candidateModel.includes("3.8")) {
-              config.thinkingConfig = { thinkingLevel: import_genai2.ThinkingLevel.LOW };
+              config.thinkingConfig = { thinkingLevel: ThinkingLevel2.LOW };
             }
             const aiResponse = await ai.models.generateContent({
               model: candidateModel,
@@ -6530,8 +6495,8 @@ Return ONLY valid JSON in this exact structure without markdown formatting or ba
 }
 
 // src/lib/firestoreRest.ts
-var import_fs = __toESM(require("fs"), 1);
-var import_path = __toESM(require("path"), 1);
+import fs from "fs";
+import path from "path";
 var DEFAULT_FIREBASE_CONFIG = {
   projectId: "gen-lang-client-0325240090",
   firestoreDatabaseId: "ai-studio-tripseatourphuke-9bf47128-91ee-4d53-a5c2-4dd34a872beb",
@@ -6539,9 +6504,9 @@ var DEFAULT_FIREBASE_CONFIG = {
 };
 function loadFirebaseConfig() {
   try {
-    const configPath = import_path.default.join(process.cwd(), "firebase-applet-config.json");
-    if (import_fs.default.existsSync(configPath)) {
-      const parsed = JSON.parse(import_fs.default.readFileSync(configPath, "utf8"));
+    const configPath = path.join(process.cwd(), "firebase-applet-config.json");
+    if (fs.existsSync(configPath)) {
+      const parsed = JSON.parse(fs.readFileSync(configPath, "utf8"));
       if (parsed && parsed.projectId && parsed.apiKey) {
         return parsed;
       }
@@ -7104,15 +7069,15 @@ function sanitizeVisitorAnalyticsForFirestore(analytics) {
 }
 
 // src/apiApp.ts
-var app = (0, import_express.default)();
+var app = express();
 var SITE_URL = process.env.APP_URL || "https://tripseatourphuket.vercel.app";
 var IS_VERCEL = Boolean(process.env.VERCEL);
-var LOCAL_DATA_DIR = import_path2.default.join(process.cwd(), "data");
+var LOCAL_DATA_DIR = path2.join(process.cwd(), "data");
 function ensureDataDir() {
   if (IS_VERCEL) return;
   try {
-    if (!import_fs2.default.existsSync(LOCAL_DATA_DIR)) {
-      import_fs2.default.mkdirSync(LOCAL_DATA_DIR, { recursive: true });
+    if (!fs2.existsSync(LOCAL_DATA_DIR)) {
+      fs2.mkdirSync(LOCAL_DATA_DIR, { recursive: true });
     }
   } catch (e) {
     console.warn("Could not create data directory:", e);
@@ -7122,17 +7087,17 @@ function saveLocalFile(filename, data) {
   if (IS_VERCEL) return;
   try {
     ensureDataDir();
-    const filePath = import_path2.default.join(LOCAL_DATA_DIR, filename);
-    import_fs2.default.writeFileSync(filePath, JSON.stringify(data, null, 2), "utf8");
+    const filePath = path2.join(LOCAL_DATA_DIR, filename);
+    fs2.writeFileSync(filePath, JSON.stringify(data, null, 2), "utf8");
   } catch (e) {
     console.warn(`Could not save local file ${filename}:`, e);
   }
 }
 function readLocalFile(filename, defaultValue) {
   try {
-    const filePath = import_path2.default.join(LOCAL_DATA_DIR, filename);
-    if (import_fs2.default.existsSync(filePath)) {
-      const raw = import_fs2.default.readFileSync(filePath, "utf8");
+    const filePath = path2.join(LOCAL_DATA_DIR, filename);
+    if (fs2.existsSync(filePath)) {
+      const raw = fs2.readFileSync(filePath, "utf8");
       if (raw && raw.trim()) {
         return JSON.parse(raw);
       }
@@ -7146,7 +7111,7 @@ function getAiClient() {
   const apiKey = process.env.GEMINI_API_KEY || process.env.VITE_GEMINI_API_KEY;
   if (!apiKey || apiKey.includes("MY_GEMINI_API_KEY")) return null;
   try {
-    return new import_genai3.GoogleGenAI({
+    return new GoogleGenAI3({
       apiKey,
       httpOptions: {
         headers: {
@@ -7159,8 +7124,8 @@ function getAiClient() {
     return null;
   }
 }
-app.use(import_express.default.json({ limit: "50mb" }));
-app.use(import_express.default.urlencoded({ limit: "50mb", extended: true }));
+app.use(express.json({ limit: "50mb" }));
+app.use(express.urlencoded({ limit: "50mb", extended: true }));
 var liveHostUrl = SITE_URL;
 function getRequestHostUrl(req) {
   if (req) {
@@ -9503,7 +9468,7 @@ app.get(["/api/ticket-image", "/api/ticket-image/:ref"], async (req, res) => {
   try {
     const hostUrl = getRequestHostUrl(req);
     const checkUrl = `${hostUrl}/#lookup?ref=${encodeURIComponent(ref)}`;
-    const qrBuffer = await import_qrcode.default.toBuffer(checkUrl, {
+    const qrBuffer = await QRCode.toBuffer(checkUrl, {
       type: "png",
       width: 600,
       margin: 3,
@@ -9703,8 +9668,8 @@ app.all("/api/*", (req, res) => {
   res.status(404).json({ error: `Endpoint not found: ${req.method} ${req.path}` });
 });
 var apiApp_default = app;
-// Annotate the CommonJS export names for ESM import in node:
-0 && (module.exports = {
+export {
   checkAndSend24hReminders,
+  apiApp_default as default,
   updateSyncMetadata
-});
+};

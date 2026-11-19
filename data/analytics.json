@@ -1,8 +1,8 @@
 {
-  "totalPageviews": 24894,
-  "totalUniqueVisitors": 9425,
-  "todayPageviews": 35,
-  "todayUniqueVisitors": 2,
+  "totalPageviews": 24898,
+  "totalUniqueVisitors": 9426,
+  "todayPageviews": 39,
+  "todayUniqueVisitors": 3,
   "yesterdayPageviews": 8,
   "yesterdayUniqueVisitors": 2,
   "activeNow": 1,
@@ -74,14 +74,14 @@
     },
     {
       "date": "2026-11-19",
-      "views": 35,
-      "uniques": 2
+      "views": 39,
+      "uniques": 3
     }
   ],
   "devices": {
     "mobile": 16891,
     "desktop": 6940,
-    "tablet": 1063
+    "tablet": 1067
   },
   "topPages": [
     {
@@ -107,7 +107,7 @@
     {
       "path": "admin",
       "title": "แดชบอร์ดแอดมิน",
-      "views": 24
+      "views": 28
     }
   ],
   "sources": [
@@ -118,7 +118,7 @@
     },
     {
       "source": "Google Search",
-      "count": 8243,
+      "count": 8247,
       "percentage": 33.1
     },
     {
@@ -138,6 +138,50 @@
     }
   ],
   "recentVisitors": [
+    {
+      "id": "v-eh61f3u-mvv0gpnb",
+      "timestamp": "2026-11-19T07:25:24.118Z",
+      "device": "tablet",
+      "browser": "Chrome",
+      "os": "Windows",
+      "country": "🇹🇭 ประเทศไทย",
+      "city": "Phuket / Bangkok",
+      "page": "admin",
+      "referrer": "Google Search"
+    },
+    {
+      "id": "v-eh61f3u-mvv0gpnb",
+      "timestamp": "2026-11-19T07:25:17.553Z",
+      "device": "tablet",
+      "browser": "Chrome",
+      "os": "Windows",
+      "country": "🇹🇭 ประเทศไทย",
+      "city": "Phuket / Bangkok",
+      "page": "admin",
+      "referrer": "Google Search"
+    },
+    {
+      "id": "v-eh61f3u-mvv0gpnb",
+      "timestamp": "2026-11-19T07:25:09.125Z",
+      "device": "tablet",
+      "browser": "Chrome",
+      "os": "Windows",
+      "country": "🇹🇭 ประเทศไทย",
+      "city": "Phuket / Bangkok",
+      "page": "admin",
+      "referrer": "Google Search"
+    },
+    {
+      "id": "v-eh61f3u-mvv0gpnb",
+      "timestamp": "2026-11-19T07:24:59.497Z",
+      "device": "tablet",
+      "browser": "Chrome",
+      "os": "Windows",
+      "country": "🇹🇭 ประเทศไทย",
+      "city": "Phuket / Bangkok",
+      "page": "admin",
+      "referrer": "Google Search"
+    },
     {
       "id": "v-eh61f3u-mvv0gpnb",
       "timestamp": "2026-11-19T07:17:48.422Z",
@@ -423,53 +467,9 @@
       "city": "Phuket / Bangkok",
       "page": "home",
       "referrer": "Google Search"
-    },
-    {
-      "id": "v-eh61f3u-mvv0gpnb",
-      "timestamp": "2026-11-19T06:24:16.662Z",
-      "device": "tablet",
-      "browser": "Chrome",
-      "os": "Windows",
-      "country": "🇹🇭 ประเทศไทย",
-      "city": "Phuket / Bangkok",
-      "page": "home",
-      "referrer": "Google Search"
-    },
-    {
-      "id": "v-eh61f3u-mvv0gpnb",
-      "timestamp": "2026-11-19T06:24:01.657Z",
-      "device": "tablet",
-      "browser": "Chrome",
-      "os": "Windows",
-      "country": "🇹🇭 ประเทศไทย",
-      "city": "Phuket / Bangkok",
-      "page": "home",
-      "referrer": "Google Search"
-    },
-    {
-      "id": "v-eh61f3u-mvv0gpnb",
-      "timestamp": "2026-11-19T06:23:46.649Z",
-      "device": "tablet",
-      "browser": "Chrome",
-      "os": "Windows",
-      "country": "🇹🇭 ประเทศไทย",
-      "city": "Phuket / Bangkok",
-      "page": "home",
-      "referrer": "Google Search"
-    },
-    {
-      "id": "v-eh61f3u-mvv0gpnb",
-      "timestamp": "2026-11-19T06:23:31.658Z",
-      "device": "tablet",
-      "browser": "Chrome",
-      "os": "Windows",
-      "country": "🇹🇭 ประเทศไทย",
-      "city": "Phuket / Bangkok",
-      "page": "home",
-      "referrer": "Google Search"
     }
   ],
-  "lastUpdated": "2026-11-19T07:17:48.422Z",
+  "lastUpdated": "2026-11-19T07:25:24.118Z",
   "liveSessions": [
     {
       "visitorId": "v-eh61f3u-mvv0gpnb",
@@ -486,10 +486,10 @@
       "currentPage": "admin",
       "pageTitle": "แดชบอร์ดแอดมิน",
       "referrer": "Google Search",
-      "firstSeen": "2026-11-19T07:14:02.605Z",
-      "lastPing": "2026-11-19T07:17:48.422Z",
+      "firstSeen": "2026-11-19T07:24:59.497Z",
+      "lastPing": "2026-11-19T07:25:24.118Z",
       "lastPingSecondsAgo": 0,
-      "pageviewsCount": 19
+      "pageviewsCount": 4
     }
   ]
 }
